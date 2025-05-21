@@ -49,6 +49,7 @@ dependencies:
   http: ^0.13.6
   fl_chart: ^1.0.0
   firebase_core: ^3.13.0
+  flutter_pdfium: ^1.0.2
 
 dev_dependencies:
   flutter_test:

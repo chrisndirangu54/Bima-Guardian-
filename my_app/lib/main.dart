@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:my_app/Screens/Policy_report_screen.dart';
+import 'package:my_app/Screens/admin_panel.dart';
 import 'package:my_app/insurance_app.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
@@ -52,7 +54,7 @@ class MyApp extends StatelessWidget {
       home: const InsuranceHomeScreen(),
       routes: {
         '/admin': (context) => const AdminPanel(),
-        '/policy_report': (context) => const PolicyReportScreen(),
+        '/policy_report': (context) => const CoverReportScreen(),
       },
     );
   }

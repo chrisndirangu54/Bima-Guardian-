@@ -2,6 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:my_app/Models/Insured_item.dart';
+import 'package:my_app/Models/company.dart';
+import 'package:my_app/Models/cover.dart';
+import 'package:my_app/Models/field_definition.dart';
+import 'package:my_app/Models/pdf_template.dart';
+import 'package:my_app/Models/policy.dart';
+import 'package:my_app/Screens/cover_screen.dart';
+import 'package:my_app/Screens/pdf_preview.dart';
 import 'package:pdf_render/pdf_render_widgets.dart';
 import 'package:pdf_text/pdf_text.dart';
 import 'package:file_picker/file_picker.dart';
@@ -21,99 +29,9 @@ import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
 
 enum UserRole { admin, regular }
 
-enum PolicyStatus { active, inactive, extended, nearingExpiration, expired }
+enum CoverStatus { active, inactive, extended, nearingExpiration, expired }
 
-class FieldDefinition {
-  final String expectedType;
-  final String? Function(String) validator;
-
-  FieldDefinition({required this.expectedType, required this.validator});
-}
-
-class PDFTemplate {
-  final Map<String, FieldDefinition> fields;
-  final Map<String, String> fieldMappings;
-  final Map<String, Map<String, double>> coordinates;
-
-  PDFTemplate({
-    required this.fields,
-    required this.fieldMappings,
-    required this.coordinates,
-  });
-
-  Map<String, dynamic> toJson() => {
-    'fields': fields.map(
-      (key, value) => MapEntry(key, {'expectedType': value.expectedType}),
-    ),
-    'fieldMappings': fieldMappings,
-    'coordinates': coordinates,
-  };
-
-  factory PDFTemplate.fromJson(Map<String, dynamic> json) => PDFTemplate(
-    fields: (json['fields'] as Map<String, dynamic>).map(
-      (key, value) => MapEntry(
-        key,
-        FieldDefinition(
-          expectedType: value['expectedType'],
-          validator: (v) => null,
-        ),
-      ),
-    ),
-    fieldMappings: Map<String, String>.from(json['fieldMappings']),
-    coordinates: (json['coordinates'] as Map<String, dynamic>).map(
-      (key, value) => MapEntry(key, Map<String, double>.from(value)),
-    ),
-  );
-}
-
-class InsuredItem {
-  final String id;
-  final String type;
-  final Map<String, String> details;
-
-  InsuredItem({required this.id, required this.type, required this.details});
-}
-
-class Policy {
-  final String id;
-  final String type;
-  final String subtype;
-  final String company;
-  PolicyStatus status;
-  final DateTime startDate;
-  DateTime? endDate;
-  final Map<String, String> formData;
-  final double premium;
-  final String billingFrequency;
-
-  Policy({
-    required this.id,
-    required this.type,
-    required this.subtype,
-    required this.company,
-    required this.status,
-    required this.startDate,
-    this.endDate,
-    required this.formData,
-    required this.premium,
-    required this.billingFrequency,
-  });
-
-  Policy copyWith({PolicyStatus? status, DateTime? endDate}) {
-    return Policy(
-      id: id,
-      type: type,
-      subtype: subtype,
-      company: company,
-      status: status ?? this.status,
-      startDate: startDate,
-      endDate: endDate ?? this.endDate,
-      formData: formData,
-      premium: premium,
-      billingFrequency: billingFrequency,
-    );
-  }
-}
+enum ExpectedType { text, number, email, phone, date, custom }
 
 class Quote {
   final String id;
@@ -124,6 +42,10 @@ class Quote {
   final Map<String, String> formData;
   final DateTime generatedAt;
 
+  String? name;
+
+  var pdfTemplateKeys;
+
   Quote({
     required this.id,
     required this.type,
@@ -133,6 +55,8 @@ class Quote {
     required this.formData,
     required this.generatedAt,
   });
+
+  Future<void> toJson() async {}
 }
 
 class InsuranceHomeScreen extends StatefulWidget {
@@ -144,8 +68,10 @@ class InsuranceHomeScreen extends StatefulWidget {
 
 class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
   List<InsuredItem> insuredItems = [];
-  List<Policy> policies = [];
+  List<Cover> covers = [];
   List<Quote> quotes = [];
+  List<Quote> companies = [];
+
   bool isLoading = false;
   Map<String, PDFTemplate> cachedPdfTemplates = {};
   Map<String, String> userDetails = {};
@@ -162,10 +88,67 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
   static const String openAiApiKey = 'your-openai-api-key-here';
   static const String mpesaApiKey = 'your-mpesa-api-key-here';
   static const String stripeSecretKey = 'your-stripe-secret-key-here';
+  List<Policy> policies = [];
 
+  final _formKey = GlobalKey<FormState>();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _ageController = TextEditingController();
+  final TextEditingController _spouseAgeController = TextEditingController();
+  final TextEditingController _childrenCountController =
+      TextEditingController();
+  final TextEditingController _chassisNumberController =
+      TextEditingController();
+  final TextEditingController _kraPinController = TextEditingController();
+  String? _selectedVehicleType;
+  String? _selectedInpatientLimit;
+  List<String> _selectedMedicalServices = [];
+  List<String> _selectedUnderwriters = [];
+  File? _logbookFile;
+  File? _previousPolicyFile;
+
+  final List<String> _vehicleTypes = [
+    'Private',
+    'Commercial',
+    'PSV',
+    'Motorcycle',
+    'Tuk Tuk',
+    'Special Classes',
+  ];
+
+  final List<String> _inpatientLimits = [
+    'KES 500,000',
+    'KES 1,000,000',
+    'KES 2,000,000',
+    'KES 3,000,000',
+    'KES 4,000,000',
+    'KES 5,000,000',
+    'KES 10,000,000',
+  ];
+
+  final List<String> _medicalServices = [
+    'Outpatient',
+    'Dental & Optical',
+    'Maternity',
+  ];
+
+  final List<String> _underwriters = [
+    'Jubilee Health',
+    'Old Mutual',
+    'AAR',
+    'CIC General',
+    'APA',
+    'Madison',
+    'Britam',
+    'First Assurance',
+    'Pacis',
+  ];
+
+  // Updated baseFields to remove vehicle_value, regno, property_value and add health-specific fields
   final Map<String, FieldDefinition> baseFields = {
     'name': FieldDefinition(
-      expectedType: 'text',
+      expectedType: 'Name',
       validator:
           (value) =>
               value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
@@ -191,90 +174,36 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                   ? null
                   : 'Invalid phone number',
     ),
-    'regno': FieldDefinition(
-      expectedType: 'text',
-      validator:
-          (value) =>
-              value.isEmpty || RegExp(r'^[A-Za-z0-9]+$').hasMatch(value)
-                  ? null
-                  : 'Invalid RegNo',
-    ),
-    'vehicle_value': FieldDefinition(
+    'age': FieldDefinition(
       expectedType: 'number',
       validator: (value) {
         if (value.isEmpty) return null;
         int? val = int.tryParse(value);
-        return val != null && val >= 0 ? null : 'Invalid vehicle value';
+        return val != null && val >= 0 && val <= 120 ? null : 'Invalid age';
       },
     ),
-    'property_value': FieldDefinition(
+    'spouse_age': FieldDefinition(
       expectedType: 'number',
       validator: (value) {
         if (value.isEmpty) return null;
         int? val = int.tryParse(value);
-        return val != null && val >= 0 ? null : 'Invalid property value';
+        return val != null && val >= 0 && val <= 120
+            ? null
+            : 'Invalid spouse age';
+      },
+    ),
+    'children_count': FieldDefinition(
+      expectedType: 'number',
+      validator: (value) {
+        if (value.isEmpty) return null;
+        int? val = int.tryParse(value);
+        return val != null && val >= 0 ? null : 'Invalid number of children';
       },
     ),
     'health_condition': FieldDefinition(
       expectedType: 'text',
       validator: (value) => null,
     ),
-  };
-
-  final Map<String, Map<String, Map<String, dynamic>>> policyCalculators = {
-    'auto': {
-      'comprehensive': {
-        'companyA': {
-          'email': 'companyA@example.com',
-          'basePremium': 1000,
-          'factor': 0.05,
-        },
-        'companyB': {
-          'email': 'companyB@example.com',
-          'basePremium': 900,
-          'factor': 0.04,
-        },
-      },
-      'third_party': {
-        'companyA': {
-          'email': 'companyA@example.com',
-          'basePremium': 600,
-          'factor': 0.02,
-        },
-      },
-    },
-    'home': {
-      'fire': {
-        'companyA': {
-          'email': 'companyA@example.com',
-          'basePremium': 800,
-          'factor': 0.03,
-        },
-      },
-      'flood': {
-        'companyA': {
-          'email': 'companyA@example.com',
-          'basePremium': 850,
-          'factor': 0.035,
-        },
-      },
-    },
-    'health': {
-      'inpatient': {
-        'companyA': {
-          'email': 'companyA@example.com',
-          'basePremium': 1200,
-          'factor': 0.06,
-        },
-      },
-      'outpatient': {
-        'companyA': {
-          'email': 'companyA@example.com',
-          'basePremium': 1000,
-          'factor': 0.05,
-        },
-      },
-    },
   };
 
   @override
@@ -289,7 +218,144 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     _startChatbot();
     _checkUserRole();
     _setupFirebaseMessaging();
-    _checkPolicyExpirations();
+    _checkCoverExpirations();
+    _autofillUserDetails();
+  }
+
+  Future<void> _autofillUserDetails() async {
+    if (userDetails.isNotEmpty) {
+      _nameController.text = userDetails['name'] ?? '';
+      _emailController.text = userDetails['email'] ?? '';
+      _phoneController.text = userDetails['phone'] ?? '';
+    }
+    if (selectedInsuredItemId != null) {
+      final item = insuredItems.firstWhere(
+        (i) => i.id == selectedInsuredItemId,
+      );
+      _selectedVehicleType = item.vehicleType;
+      _chassisNumberController.text = item.chassisNumber ?? '';
+      _kraPinController.text = item.kraPin ?? '';
+    }
+  }
+
+  Future<void> _saveUserDetails(Map<String, String> newDetails) async {
+    try {
+      userDetails.addAll(newDetails);
+      final key = encrypt.Key.fromLength(32);
+      final iv = encrypt.IV.fromLength(16);
+      final encrypter = encrypt.Encrypter(encrypt.AES(key));
+      final encrypted = encrypter.encrypt(jsonEncode(userDetails), iv: iv);
+      await secureStorage.write(key: 'user_details', value: encrypted.base64);
+      setState(() {
+        _nameController.text = userDetails['name'] ?? '';
+        _emailController.text = userDetails['email'] ?? '';
+        _phoneController.text = userDetails['phone'] ?? '';
+      });
+    } catch (e) {
+      print('Error saving user details: $e');
+    }
+  }
+
+  Future<void> _loadInsuredItems() async {
+    String? data = await secureStorage.read(key: 'insured_items');
+    if (data != null) {
+      final key = encrypt.Key.fromLength(32);
+      final iv = encrypt.IV.fromLength(16);
+      final encrypter = encrypt.Encrypter(encrypt.AES(key));
+      final decrypted = encrypter.decrypt64(data, iv: iv);
+      setState(() {
+        insuredItems =
+            (jsonDecode(decrypted) as List)
+                .map((item) => InsuredItem.fromJson(item))
+                .toList();
+      });
+    }
+  }
+
+  Future<void> _saveInsuredItems() async {
+    final key = encrypt.Key.fromLength(32);
+    final iv = encrypt.IV.fromLength(16);
+    final encrypter = encrypt.Encrypter(encrypt.AES(key));
+    final encrypted = encrypter.encrypt(
+      jsonEncode(insuredItems.map((item) => item.toJson()).toList()),
+      iv: iv,
+    );
+    await secureStorage.write(key: 'insured_items', value: encrypted.base64);
+  }
+
+  Future<void> _uploadLogbook() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'jpg', 'png'],
+    );
+    if (result != null && result.files.single.path != null) {
+      setState(() {
+        _logbookFile = File(result.files.single.path!);
+      });
+    }
+  }
+
+  Future<void> _uploadPreviousPolicy() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+    );
+    if (result != null && result.files.single.path != null) {
+      setState(() {
+        _previousPolicyFile = File(result.files.single.path!);
+        _autofillFromPreviousPolicy(_previousPolicyFile!);
+      });
+    }
+  }
+
+  Future<void> _autofillFromPreviousPolicy(File pdfFile) async {
+    try {
+      PDFDoc doc = await PDFDoc.fromPath(pdfFile.path);
+      String text = await doc.text;
+      // Simulate extracting data from PDF (in practice, use regex or NLP)
+      // For demo, assume text contains key-value pairs like "Name: John Doe"
+      final lines = text.split('\n');
+      final extracted = <String, String>{};
+      for (var line in lines) {
+        if (line.contains('Name:')) {
+          extracted['name'] = line.split(':').last.trim();
+        }
+        if (line.contains('Email:')) {
+          extracted['email'] = line.split(':').last.trim();
+        }
+        if (line.contains('Phone:')) {
+          extracted['phone'] = line.split(':').last.trim();
+        }
+        if (line.contains('Registration Number:')) {
+          extracted['regno'] = line.split(':').last.trim();
+        }
+        if (line.contains('Vehicle Value:')) {
+          extracted['vehicle_value'] = line.split(':').last.trim();
+        }
+        if (line.contains('Chassis Number:')) {
+          extracted['chassis_number'] = line.split(':').last.trim();
+        }
+        if (line.contains('KRA Pin:')) {
+          extracted['kra_pin'] = line.split(':').last.trim();
+        }
+      }
+      setState(() {
+        _nameController.text = extracted['name'] ?? _nameController.text;
+        _emailController.text = extracted['email'] ?? _emailController.text;
+        _phoneController.text = extracted['phone'] ?? _phoneController.text;
+        _chassisNumberController.text =
+            extracted['chassis_number'] ?? _chassisNumberController.text;
+        _kraPinController.text = extracted['kra_pin'] ?? _kraPinController.text;
+        if (extracted['regno'] != null) {
+          formResponses['regno'] = extracted['regno']!;
+        }
+        if (extracted['vehicle_value'] != null) {
+          formResponses['vehicle_value'] = extracted['vehicle_value']!;
+        }
+      });
+    } catch (e) {
+      print('Error autofilling from previous policy: $e');
+    }
   }
 
   Future<void> _checkUserRole() async {
@@ -309,47 +375,6 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     });
   }
 
-  Future<void> _loadInsuredItems() async {
-    String? data = await secureStorage.read(key: 'insured_items');
-    final key = encrypt.Key.fromLength(32);
-    final iv = encrypt.IV.fromLength(16);
-    final encrypter = encrypt.Encrypter(encrypt.AES(key));
-    final decrypted = encrypter.decrypt64(data!, iv: iv);
-    setState(() {
-      insuredItems =
-          (jsonDecode(decrypted) as List)
-              .map(
-                (item) => InsuredItem(
-                  id: item['id'],
-                  type: item['type'],
-                  details: Map<String, String>.from(item['details']),
-                ),
-              )
-              .toList();
-    });
-  }
-
-  Future<void> _saveInsuredItems() async {
-    final key = encrypt.Key.fromLength(32);
-    final iv = encrypt.IV.fromLength(16);
-    final encrypter = encrypt.Encrypter(encrypt.AES(key));
-    final encrypted = encrypter.encrypt(
-      jsonEncode(
-        insuredItems
-            .map(
-              (item) => {
-                'id': item.id,
-                'type': item.type,
-                'details': item.details,
-              },
-            )
-            .toList(),
-      ),
-      iv: iv,
-    );
-    await secureStorage.write(key: 'insured_items', value: encrypted.base64);
-  }
-
   Future<void> _loadPolicies() async {
     String? data = await secureStorage.read(key: 'policies');
     final key = encrypt.Key.fromLength(32);
@@ -364,48 +389,16 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                   id: item['id'],
                   type: item['type'],
                   subtype: item['subtype'],
-                  company: item['company'],
-                  status: PolicyStatus.values[item['status']],
-                  startDate: DateTime.parse(item['startDate']),
-                  endDate:
-                      item['endDate'] != null
-                          ? DateTime.parse(item['endDate'])
-                          : null,
-                  formData: Map<String, String>.from(item['formData']),
-                  premium: item['premium'].toDouble(),
-                  billingFrequency: item['billingFrequency'],
+                  companyId: item['company'],
+                  status: CoverStatus.values[item['status']],
+                  insuredItemId: '',
+                  coverageType: '',
+                  pdfTemplateKey: '',
+                  endDate: null,
                 ),
               )
               .toList();
     });
-  }
-
-  Future<void> _savePolicies() async {
-    final key = encrypt.Key.fromLength(32);
-    final iv = encrypt.IV.fromLength(16);
-    final encrypter = encrypt.Encrypter(encrypt.AES(key));
-    final encrypted = encrypter.encrypt(
-      jsonEncode(
-        policies
-            .map(
-              (policy) => {
-                'id': policy.id,
-                'type': policy.type,
-                'subtype': policy.subtype,
-                'company': policy.company,
-                'status': policy.status.index,
-                'startDate': policy.startDate.toIso8601String(),
-                'endDate': policy.endDate?.toIso8601String(),
-                'formData': policy.formData,
-                'premium': policy.premium,
-                'billingFrequency': policy.billingFrequency,
-              },
-            )
-            .toList(),
-      ),
-      iv: iv,
-    );
-    await secureStorage.write(key: 'policies', value: encrypted.base64);
   }
 
   Future<void> _loadQuotes() async {
@@ -457,56 +450,56 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     await secureStorage.write(key: 'quotes', value: encrypted.base64);
   }
 
-  Future<void> _checkPolicyExpirations() async {
+  Future<void> _checkCoverExpirations() async {
     final now = DateTime.now();
-    for (var policy in policies) {
-      if (policy.endDate != null) {
-        final daysUntilExpiration = policy.endDate!.difference(now).inDays;
-        if (daysUntilExpiration <= 0 && policy.status != PolicyStatus.expired) {
+    for (var cover in covers) {
+      if (cover.expirationDate != null) {
+        final daysUntilExpiration = cover.expirationDate.difference(now).inDays;
+        if (daysUntilExpiration <= 0 && cover.status != CoverStatus.expired) {
           setState(() {
-            policies =
-                policies
+            covers =
+                covers
                     .map(
-                      (p) =>
-                          p.id == policy.id
-                              ? p.copyWith(status: PolicyStatus.expired)
-                              : p,
+                      (c) =>
+                          c.id == cover.id
+                              ? c.copyWith(status: CoverStatus.expired)
+                              : c,
                     )
                     .toList();
           });
           await FirebaseMessaging.instance.sendMessage(
             to: '/topics/policy_updates',
             data: {
-              'policy_id': policy.id,
-              'message': 'Policy ${policy.id} has expired',
+              'Cover_id': cover.id,
+              'message': 'Policy ${cover.id} has expired',
             },
           );
         } else if (daysUntilExpiration <= 30 &&
-            policy.status != PolicyStatus.nearingExpiration) {
+            cover.status != CoverStatus.nearingExpiration) {
           setState(() {
-            policies =
-                policies
+            covers =
+                covers
                     .map(
-                      (p) =>
-                          p.id == policy.id
-                              ? p.copyWith(
-                                status: PolicyStatus.nearingExpiration,
+                      (c) =>
+                          c.id == cover.id
+                              ? c.copyWith(
+                                status: CoverStatus.nearingExpiration,
                               )
-                              : p,
+                              : c,
                     )
                     .toList();
           });
           await FirebaseMessaging.instance.sendMessage(
             to: '/topics/policy_updates',
             data: {
-              'policy_id': policy.id,
-              'message': 'Policy ${policy.id} is nearing expiration',
+              'policy_id': cover.id,
+              'message': 'Policy ${cover.id} is nearing expiration',
             },
           );
         }
       }
     }
-    await _savePolicies();
+    await _saveCovers();
   }
 
   void _loadChatbotTemplate() {
@@ -515,12 +508,25 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         'start': {
           'message': 'Hi! 😊 Let’s assist you. What would you like to do?',
           'options': [
-            {'text': 'Generate a quote', 'next': 'quote_type'},
+            {'text': 'Generate a quote', 'next': 'vehicle_type'},
             {'text': 'Fill a form', 'next': 'select_item'},
             {'text': 'Explore insurance', 'next': 'insurance'},
             {'text': 'Add insured item', 'next': 'add_item'},
             {'text': 'View policies', 'next': 'view_policies'},
           ],
+        },
+        'vehicle_type': {
+          'message':
+              'Please select your vehicle type:\n' +
+              _vehicleTypes
+                  .asMap()
+                  .entries
+                  .map((e) => '${e.key + 1}. ${e.value}')
+                  .join('\n'),
+          'options':
+              _vehicleTypes
+                  .map((type) => {'text': type, 'next': 'quote_type'})
+                  .toList(),
         },
         'quote_type': {
           'message':
@@ -528,103 +534,165 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
           'options': [
             {'text': 'Auto Insurance', 'next': 'quote_auto_subtype'},
             {'text': 'Home Insurance', 'next': 'quote_home_subtype'},
-            {'text': 'Health Insurance', 'next': 'quote_health_subtype'},
+            {'text': 'Health Insurance', 'next': 'health_inpatient_limit'},
           ],
         },
-        'quote_auto_subtype': {
-          'message': 'Choose a subtype:\n1. Comprehensive\n2. Third Party',
-          'options': [
-            {'text': 'Comprehensive', 'next': 'quote_filling'},
-            {'text': 'Third Party', 'next': 'quote_filling'},
-          ],
-        },
-        'quote_home_subtype': {
-          'message': 'Choose a subtype:\n1. Fire\n2. Flood',
-          'options': [
-            {'text': 'Fire', 'next': 'quote_filling'},
-            {'text': 'Flood', 'next': 'quote_filling'},
-          ],
-        },
-        'quote_health_subtype': {
-          'message': 'Choose a subtype:\n1. Inpatient\n2. Outpatient',
-          'options': [
-            {'text': 'Inpatient', 'next': 'quote_filling'},
-            {'text': 'Outpatient', 'next': 'quote_filling'},
-          ],
-        },
-        'quote_filling': {'fields': [], 'next': 'quote_summary'},
-        'quote_summary': {
+        'health_inpatient_limit': {
           'message':
-              'Here’s your quote:\n{quote}\n1. Accept and pay\n2. Reject\n3. Save as PDF',
-          'options': [
-            {'text': 'Accept and pay', 'next': 'payment_method'},
-            {'text': 'Reject', 'next': 'start'},
-            {'text': 'Save as PDF', 'next': 'quote_pdf'},
+              'Please select your preferred Inpatient Limit:\n' +
+              _inpatientLimits
+                  .asMap()
+                  .entries
+                  .map((e) => '${e.key + 1}. ${e.value}')
+                  .join('\n'),
+          'options':
+              _inpatientLimits
+                  .map(
+                    (limit) => {
+                      'text': limit,
+                      'next': 'health_medical_services',
+                    },
+                  )
+                  .toList(),
+        },
+        'health_medical_services': {
+          'message':
+              'Which medical services would you like included? (Select numbers, e.g., 1,2):\n' +
+              _medicalServices
+                  .asMap()
+                  .entries
+                  .map((e) => '${e.key + 1}. ${e.value}')
+                  .join('\n'),
+          'next': 'health_personal_info',
+        },
+        'health_personal_info': {
+          'fields': [
+            {'name': 'age', 'prompt': 'What is the client’s age?'},
+            {
+              'name': 'has_spouse',
+              'prompt': 'Do you have a spouse? (1. Yes, 2. No)',
+            },
+            {
+              'name': 'spouse_age',
+              'prompt': 'Please provide the spouse’s age:',
+            },
+            {
+              'name': 'has_children',
+              'prompt': 'Do you have children? (1. Yes, 2. No)',
+            },
+            {
+              'name': 'children_count',
+              'prompt': 'How many children would be covered under this policy?',
+            },
           ],
+          'next': 'health_underwriters',
         },
-        'quote_pdf': {
+        'health_underwriters': {
           'message':
-              'Quote PDF generated and saved. Check your documents folder.',
-          'next': 'start',
-        },
-        'payment_method': {
-          'message':
-              'Choose a payment method:\n1. Credit Card (Stripe)\n2. MPESA',
-          'options': [
-            {'text': 'Credit Card', 'next': 'stripe_payment'},
-            {'text': 'MPESA', 'next': 'mpesa_payment'},
-          ],
-        },
-        'stripe_payment': {
-          'message': 'Please enter your credit card details in the form.',
-          'next': 'stripe_confirm',
-        },
-        'stripe_confirm': {
-          'message':
-              'Payment of {amount} via credit card confirmed. Set up auto-billing? (1. Yes, 2. No)',
-          'options': [
-            {'text': 'Yes', 'next': 'stripe_process'},
-            {'text': 'No', 'next': 'stripe_process'},
-          ],
-        },
-        'stripe_process': {
-          'message': 'Payment processed. Policy activated!{auto_billing}',
-          'next': 'start',
-        },
-        'mpesa_payment': {
-          'message': 'Enter your MPESA phone number (e.g., +2547XXXXXXXX):',
-          'next': 'mpesa_confirm',
-        },
-        'mpesa_confirm': {
-          'message':
-              'Payment of {amount} initiated to {phone}. Confirm payment?',
-          'options': [
-            {'text': 'Yes', 'next': 'mpesa_process'},
-            {'text': 'No', 'next': 'start'},
-          ],
-        },
-        'mpesa_process': {
-          'message': 'Payment processed. Policy activated!',
-          'next': 'start',
-        },
-        'select_item': {
-          'message':
-              'Select an insured item or enter new details:\n{items}\n{new_option}',
-          'next': 'pdf_filling',
+              'Select up to three preferred insurance underwriters (e.g., 1,2,3):\n' +
+              _underwriters
+                  .asMap()
+                  .entries
+                  .map((e) => '${e.key + 1}. ${e.value}')
+                  .join('\n'),
+          'next': 'quote_filling',
         },
         'add_item': {
           'message': 'What type of item to insure? (car, home, medical)',
-          'next': 'add_item_details',
+          'next': 'add_vehicle_type',
         },
-        'add_item_details': {'fields': [], 'next': 'add_item_summary'},
-        'add_item_summary': {
-          'message': 'Here’s your item details:\n{fields}\nSave this item?',
+        'add_vehicle_type': {
+          'message':
+              'Please select the vehicle type:\n' +
+              _vehicleTypes
+                  .asMap()
+                  .entries
+                  .map((e) => '${e.key + 1}. ${e.value}')
+                  .join('\n'),
+          'options':
+              _vehicleTypes
+                  .map((type) => {'text': type, 'next': 'add_item_details'})
+                  .toList(),
+        },
+        'add_item_details': {
+          'fields': [
+            {'name': 'name', 'prompt': 'Please enter your name for the item:'},
+            {
+              'name': 'email',
+              'prompt': 'Please enter your email for the item:',
+            },
+            {
+              'name': 'phone',
+              'prompt': 'Please enter your phone for the item:',
+            },
+            {
+              'name': 'chassis_number',
+              'prompt': 'Please enter the chassis number:',
+            },
+            {'name': 'kra_pin', 'prompt': 'Please enter the KRA pin:'},
+            {
+              'name': 'regno',
+              'prompt': 'Please enter the registration number (if applicable):',
+            },
+            {
+              'name': 'vehicle_value',
+              'prompt': 'Please enter the vehicle value (if applicable):',
+            },
+            {
+              'name': 'property_value',
+              'prompt': 'Please enter the property value (if applicable):',
+            },
+          ],
+          'next': 'add_item_upload',
+        },
+        'add_item_upload': {
+          'message':
+              'Please upload the logbook and previous policy (if any):\n1. Upload Logbook\n2. Upload Previous Policy\n3. Skip',
           'options': [
-            {'text': 'Yes', 'next': 'select_item'},
-            {'text': 'No', 'next': 'start'},
+            {'text': 'Upload Logbook', 'next': 'add_item_logbook'},
+            {'text': 'Upload Previous Policy', 'next': 'add_item_policy'},
+            {'text': 'Skip', 'next': 'add_item_summary'},
           ],
         },
+        'add_item_logbook': {
+          'message':
+              'Logbook uploaded. Proceed to upload previous policy or skip?\n1. Upload Previous Policy\n2. Skip',
+          'options': [
+            {'text': 'Upload Previous Policy', 'next': 'add_item_policy'},
+            {'text': 'Skip', 'next': 'add_item_summary'},
+          ],
+        },
+        'add_item_policy': {
+          'message': 'Previous policy uploaded. Proceed to summary?',
+          'next': 'add_item_summary',
+        },
         'pdf_filling': {'fields': [], 'next': 'pdf_summary'},
+        'pdf_upload': {
+          'message':
+              'Before filling the PDF, please upload the logbook and previous policy (if any):\n1. Upload Logbook\n2. Upload Previous Policy\n3. Skip',
+          'options': [
+            {'text': 'Upload Logbook', 'next': 'pdf_logbook'},
+            {'text': 'Upload Previous Policy', 'next': 'pdf_policy'},
+            {'text': 'Skip', 'next': 'pdf_filling_continue'},
+          ],
+        },
+        'pdf_logbook': {
+          'message':
+              'Logbook uploaded. Upload previous policy or skip?\n1. Upload Previous Policy\n2. Skip',
+          'options': [
+            {'text': 'Upload Previous Policy', 'next': 'pdf_policy'},
+            {'text': 'Skip', 'next': 'pdf_filling_continue'},
+          ],
+        },
+        'pdf_policy': {
+          'message': 'Previous policy uploaded. Proceed?',
+          'next': 'pdf_filling_continue',
+        },
+        'pdf_filling_continue': {'fields': [], 'next': 'pdf_summary'},
+        'pdf_missing_fields': {
+          'message': 'Please provide the value for the missing field:',
+          'next': 'pdf_summary',
+        },
         'pdf_summary': {
           'message': 'Here’s what you’ve entered:\n{fields}\nIs this correct?',
           'options': [
@@ -635,58 +703,6 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         'pdf_process': {
           'message':
               'Great! Your form is being processed. You’ll hear back soon.',
-          'next': 'start',
-        },
-        'insurance': {
-          'message':
-              'Choose an insurance type:\n1. Auto Insurance\n2. Home Insurance\n3. Health Insurance',
-          'options': [
-            {'text': 'Auto Insurance', 'next': 'auto_insurance'},
-            {'text': 'Home Insurance', 'next': 'home_insurance'},
-            {'text': 'Health Insurance', 'next': 'health_insurance'},
-          ],
-        },
-        'auto_insurance': {
-          'message':
-              'Auto Insurance details:\n1. Comprehensive\n2. Third Party\nChoose an option or go back (3)',
-          'options': [
-            {'text': 'Comprehensive', 'next': 'quote_type'},
-            {'text': 'Third Party', 'next': 'quote_type'},
-            {'text': 'Back', 'next': 'insurance'},
-          ],
-        },
-        'home_insurance': {
-          'message':
-              'Home Insurance details:\n1. Fire\n2. Flood\nChoose an option or go back (3)',
-          'options': [
-            {'text': 'Fire', 'next': 'quote_type'},
-            {'text': 'Flood', 'next': 'quote_type'},
-            {'text': 'Back', 'next': 'insurance'},
-          ],
-        },
-        'health_insurance': {
-          'message':
-              'Health Insurance details:\n1. Inpatient\n2. Outpatient\nChoose an option or go back (3)',
-          'options': [
-            {'text': 'Inpatient', 'next': 'quote_type'},
-            {'text': 'Outpatient', 'next': 'quote_type'},
-            {'text': 'Back', 'next': 'insurance'},
-          ],
-        },
-        'view_policies': {
-          'message':
-              'Your policies:\n{policies}\nSelect a policy number or go back.',
-          'next': 'policy_details',
-        },
-        'policy_details': {
-          'message': 'Policy Details:\n{details}\nExport as PDF?',
-          'options': [
-            {'text': 'Yes', 'next': 'export_policy'},
-            {'text': 'No', 'next': 'start'},
-          ],
-        },
-        'export_policy': {
-          'message': 'Policy exported as PDF. Check your documents folder.',
           'next': 'start',
         },
       },
@@ -1030,7 +1046,7 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     }
   }
 
-  Future<void> _scheduleStripeAutoBilling(Policy policy) async {
+  Future<void> _scheduleStripeAutoBilling(Cover cover) async {
     try {
       final customerResponse = await http.post(
         Uri.parse('https://api.stripe.com/v1/customers'),
@@ -1039,8 +1055,8 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: {
-          'email': policy.formData['email'],
-          'name': policy.formData['name'],
+          'email': cover.formData!['email'],
+          'name': cover.formData!['name'],
         },
       );
 
@@ -1058,7 +1074,7 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
             'customer': customerId,
             'items[0][price]': 'your-stripe-price-id',
             'billing_cycle_anchor':
-                policy.billingFrequency == 'monthly' ? 'month' : 'year',
+                cover.billingFrequency == 'monthly' ? 'month' : 'year',
           },
         );
 
@@ -1069,16 +1085,16 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
           final encrypter = encrypt.Encrypter(encrypt.AES(key));
           final encrypted = encrypter.encrypt(
             jsonEncode({
-              'policyId': policy.id,
+              'coverId': cover.id,
               'customerId': customerId,
               'subscriptionId': subscription['id'],
-              'amount': policy.premium,
-              'frequency': policy.billingFrequency,
+              'amount': cover.premium,
+              'frequency': cover.billingFrequency,
             }),
             iv: iv,
           );
           await secureStorage.write(
-            key: 'billing_${policy.id}',
+            key: 'billing_${cover.id}',
             value: encrypted.base64,
           );
         }
@@ -1157,23 +1173,128 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
 
     var currentStateData = chatbotTemplate['states'][currentState];
 
-    if (currentState == 'quote_type') {
-      int? choice = int.tryParse(input);
-      if (choice != null &&
-          choice > 0 &&
-          choice <= currentStateData['options'].length) {
+    if (currentState == 'pdf_missing_fields') {
+      final missingFields = formResponses['missing_fields']!.split(',');
+      final currentIndex = int.parse(
+        formResponses['current_missing_field_index']!,
+      );
+      final templateKey = 'default';
+      final template = cachedPdfTemplates[templateKey];
+      final fieldDef = template!.fields[missingFields[currentIndex]]!;
+      final error = fieldDef.validator(input);
+
+      if (error == null) {
+        formResponses[missingFields[currentIndex]] = input;
+        if (currentIndex + 1 < missingFields.length) {
+          setState(() {
+            formResponses['current_missing_field_index'] =
+                (currentIndex + 1).toString();
+            chatMessages.add({
+              'sender': 'bot',
+              'text':
+                  'Please provide the value for ${missingFields[currentIndex + 1]} (Type: ${template.fields[missingFields[currentIndex + 1]]!.expectedType.toString().split('.').last}${template.fields[missingFields[currentIndex + 1]]!.isSuggested ? ', AI-Suggested' : ''}):',
+            });
+          });
+        } else {
+          formResponses.remove('missing_fields');
+          formResponses.remove('current_missing_field_index');
+          File? filledPdf = await _fillPdfTemplate(templateKey, formResponses);
+          if (filledPdf != null && await _previewPdf(filledPdf)) {
+            await _sendEmail(
+              'companyA',
+              formResponses['type'] ?? 'auto',
+              formResponses['subtype'] ?? 'comprehensive',
+              formResponses,
+              filledPdf,
+            );
+          }
+          setState(() {
+            currentState = 'pdf_process';
+            chatMessages.add({
+              'sender': 'bot',
+              'text': chatbotTemplate['states']['pdf_process']['message'],
+            });
+          });
+        }
+      } else {
         setState(() {
-          currentState = currentStateData['options'][choice - 1]['next'];
-          formResponses['type'] = currentStateData['options'][choice -
-                  1]['text']
-              .toLowerCase()
-              .replaceAll(' insurance', '');
           chatMessages.add({
             'sender': 'bot',
             'text':
-                chatbotTemplate['states'][currentState]['message'] +
+                'Error: $error. Please provide a valid value for ${missingFields[currentIndex]} (Type: ${fieldDef.expectedType.toString().split('.').last}${fieldDef.isSuggested ? ', AI-Suggested' : ''}):',
+          });
+        });
+      }
+    } else if (currentState == 'pdf_filling') {
+      if (currentFieldIndex == 0) {
+        setState(() {
+          currentState = 'pdf_upload';
+          chatMessages.add({
+            'sender': 'bot',
+            'text':
+                'Before filling the PDF, please upload the logbook and previous policy (if any):\n1. Upload Logbook\n2. Upload Previous Policy\n3. Skip',
+          });
+        });
+      } else {
+        var fields = currentStateData['fields'];
+        if (currentFieldIndex < fields.length) {
+          var field = fields[currentFieldIndex];
+          String fieldName = field['name'];
+          String? error = baseFields[fieldName]?.validator(input);
+
+          if (error == null) {
+            formResponses[fieldName] = input;
+            currentFieldIndex++;
+            if (currentFieldIndex < fields.length) {
+              setState(() {
+                chatMessages.add({
+                  'sender': 'bot',
+                  'text': fields[currentFieldIndex]['prompt'],
+                });
+              });
+            } else {
+              String summary = formResponses.entries
+                  .map((e) => '${e.key}: ${e.value}')
+                  .join('\n');
+              String nextMessage =
+                  currentStateData['next']['message'].replaceAll(
+                    '{fields}',
+                    summary,
+                  ) +
+                  '\n' +
+                  currentStateData['next']['options']
+                      .asMap()
+                      .entries
+                      .map((e) => '${e.key + 1}. ${e.value['text']}')
+                      .join('\n');
+              setState(() {
+                currentState = 'pdf_summary';
+                chatMessages.add({'sender': 'bot', 'text': nextMessage});
+              });
+            }
+          } else {
+            setState(() {
+              chatMessages.add({
+                'sender': 'bot',
+                'text': 'Error: $error. Please try again.',
+              });
+              chatMessages.add({'sender': 'bot', 'text': field['prompt']});
+            });
+          }
+        }
+      }
+    } else if (currentState == 'vehicle_type') {
+      int? choice = int.tryParse(input);
+      if (choice != null && choice > 0 && choice <= _vehicleTypes.length) {
+        setState(() {
+          formResponses['vehicle_type'] = _vehicleTypes[choice - 1];
+          currentState = 'quote_type';
+          chatMessages.add({
+            'sender': 'bot',
+            'text':
+                currentStateData['options'][choice - 1]['next']['message'] +
                 '\n' +
-                chatbotTemplate['states'][currentState]['options']
+                currentStateData['options'][choice - 1]['next']['options']
                     .asMap()
                     .entries
                     .map((e) => '${e.key + 1}. ${e.value['text']}')
@@ -1183,27 +1304,36 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       } else {
         _showError();
       }
-    } else if (currentState.contains('quote_') &&
-        currentState.endsWith('_subtype')) {
+    } else if (currentState == 'health_inpatient_limit') {
       int? choice = int.tryParse(input);
-      if (choice != null &&
-          choice > 0 &&
-          choice <= currentStateData['options'].length) {
+      if (choice != null && choice > 0 && choice <= _inpatientLimits.length) {
         setState(() {
-          currentState = 'quote_filling';
-          formResponses['subtype'] =
-              currentStateData['options'][choice - 1]['text'].toLowerCase();
-          currentStateData = chatbotTemplate['states']['quote_filling'];
-          currentStateData['fields'] =
-              baseFields.keys
-                  .map(
-                    (key) => {
-                      'name': key,
-                      'prompt':
-                          'Please enter your $key for ${formResponses['type']} quote:',
-                    },
-                  )
-                  .toList();
+          formResponses['inpatient_limit'] = _inpatientLimits[choice - 1];
+          currentState = 'health_medical_services';
+          chatMessages.add({
+            'sender': 'bot',
+            'text': currentStateData['options'][choice - 1]['next']['message'],
+          });
+        });
+      } else {
+        _showError();
+      }
+    } else if (currentState == 'health_medical_services') {
+      final choices =
+          input
+              .split(',')
+              .map((e) => int.tryParse(e.trim()))
+              .where((e) => e != null)
+              .toList();
+      if (choices.every((c) => c! > 0 && c! <= _medicalServices.length)) {
+        setState(() {
+          _selectedMedicalServices =
+              choices.map((c) => _medicalServices[c! - 1]).toList();
+          formResponses['medical_services'] = _selectedMedicalServices.join(
+            ', ',
+          );
+          currentState = 'health_personal_info';
+          currentStateData = chatbotTemplate['states']['health_personal_info'];
           currentFieldIndex = 0;
           chatMessages.add({
             'sender': 'bot',
@@ -1213,61 +1343,51 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       } else {
         _showError();
       }
-    } else if (currentState == 'quote_filling') {
+    } else if (currentState == 'health_personal_info') {
       var fields = currentStateData['fields'];
       if (currentFieldIndex < fields.length) {
         var field = fields[currentFieldIndex];
         String fieldName = field['name'];
-        String? error = baseFields[fieldName]?.validator(input);
+        String? error;
 
-        if (error == null) {
-          formResponses[fieldName] = input;
-          currentFieldIndex++;
-
-          if (currentFieldIndex < fields.length) {
-            setState(() {
-              chatMessages.add({
-                'sender': 'bot',
-                'text': fields[currentFieldIndex]['prompt'],
-              });
-            });
+        if (fieldName == 'has_spouse' || fieldName == 'has_children') {
+          if (input == '1' || input == '2') {
+            formResponses[fieldName] = input == '1' ? 'Yes' : 'No';
+            if (fieldName == 'has_spouse' && input == '2') {
+              currentFieldIndex += 2;
+            } else if (fieldName == 'has_children' && input == '2') {
+              currentFieldIndex += 2;
+            } else {
+              currentFieldIndex++;
+            }
           } else {
-            double premium = await _calculatePremium(
-              formResponses['type']!,
-              formResponses['subtype']!,
-              formResponses,
-            );
-            Quote quote = Quote(
-              id: Uuid().v4(),
-              type: formResponses['type']!,
-              subtype: formResponses['subtype']!,
-              company: 'companyA',
-              premium: premium,
-              formData: Map<String, String>.from(formResponses),
-              generatedAt: DateTime.now(),
-            );
-            quotes.add(quote);
-            await _saveQuotes();
-            selectedQuoteId = quote.id;
-            String quoteSummary =
-                'Type: ${quote.type}\nSubtype: ${quote.subtype}\nPremium: KES ${quote.premium.toStringAsFixed(2)}\nDetails:\n${quote.formData.entries.map((e) => '${e.key}: ${e.value}').join('\n')}';
-            String nextMessage =
-                currentStateData['next']['message'].replaceAll(
-                  '{quote}',
-                  quoteSummary,
-                ) +
-                '\n' +
-                currentStateData['next']['options']
-                    .asMap()
-                    .entries
-                    .map((e) => '${e.key + 1}. ${e.value['text']}')
-                    .join('\n');
-            setState(() {
-              currentState = 'quote_summary';
-              chatMessages.add({'sender': 'bot', 'text': nextMessage});
-            });
+            error = 'Please select 1 for Yes or 2 for No';
           }
         } else {
+          error = baseFields[fieldName]?.validator(input);
+          if (error == null) {
+            formResponses[fieldName] = input;
+            currentFieldIndex++;
+          }
+        }
+
+        if (currentFieldIndex < fields.length) {
+          setState(() {
+            chatMessages.add({
+              'sender': 'bot',
+              'text': fields[currentFieldIndex]['prompt'],
+            });
+          });
+        } else {
+          setState(() {
+            currentState = 'health_underwriters';
+            chatMessages.add({
+              'sender': 'bot',
+              'text': currentStateData['next']['message'],
+            });
+          });
+        }
+        if (error != null) {
           setState(() {
             chatMessages.add({
               'sender': 'bot',
@@ -1277,252 +1397,31 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
           });
         }
       }
-    } else if (currentState == 'quote_summary') {
-      int? choice = int.tryParse(input);
-      if (choice == 1) {
+    } else if (currentState == 'health_underwriters') {
+      final choices =
+          input
+              .split(',')
+              .map((e) => int.tryParse(e.trim()))
+              .where((e) => e != null)
+              .toList();
+      if (choices.length <= 3 &&
+          choices.every((c) => c! > 0 && c! <= _underwriters.length)) {
         setState(() {
-          currentState = 'payment_method';
-          chatMessages.add({
-            'sender': 'bot',
-            'text':
-                currentStateData['next']['message'] +
-                '\n' +
-                currentStateData['next']['options']
-                    .asMap()
-                    .entries
-                    .map((e) => '${e.key + 1}. ${e.value['text']}')
-                    .join('\n'),
-          });
-        });
-      } else if (choice == 2) {
-        setState(() {
-          currentState = 'start';
-          formResponses.clear();
-          selectedQuoteId = null;
-          chatMessages.add({
-            'sender': 'bot',
-            'text':
-                chatbotTemplate['states']['start']['message'] +
-                '\n' +
-                chatbotTemplate['states']['start']['options']
-                    .asMap()
-                    .entries
-                    .map((e) => '${e.key + 1}. ${e.value['text']}')
-                    .join('\n'),
-          });
-        });
-      } else if (choice == 3) {
-        Quote? quote = quotes.firstWhereOrNull((q) => q.id == selectedQuoteId);
-        await _generateQuotePdf(quote!);
-        setState(() {
-          currentState = 'quote_pdf';
-          chatMessages.add({
-            'sender': 'bot',
-            'text': currentStateData['next']['message'],
-          });
-        });
-      } else {
-        _showError();
-      }
-    } else if (currentState == 'payment_method') {
-      int? choice = int.tryParse(input);
-      if (choice == 1) {
-        setState(() {
-          currentState = 'stripe_payment';
-          chatMessages.add({
-            'sender': 'bot',
-            'text': currentStateData['next']['message'],
-          });
-        });
-        Quote? quote = quotes.firstWhereOrNull((q) => q.id == selectedQuoteId);
-        await _initiateStripePayment(quote!.premium, false);
-      } else if (choice == 2) {
-        setState(() {
-          currentState = 'mpesa_payment';
-          chatMessages.add({
-            'sender': 'bot',
-            'text': currentStateData['next']['message'],
-          });
-        });
-      } else {
-        _showError();
-      }
-    } else if (currentState == 'stripe_payment') {
-      setState(() {
-        currentState = 'stripe_confirm';
-        Quote? quote = quotes.firstWhereOrNull((q) => q.id == selectedQuoteId);
-        String message = currentStateData['next']['message'].replaceAll(
-          '{amount}',
-          'KES ${quote!.premium.toStringAsFixed(2)}',
-        );
-        message +=
-            '\n' +
-            currentStateData['next']['options']
-                .asMap()
-                .entries
-                .map((e) => '${e.key + 1}. ${e.value['text']}')
-                .join('\n');
-        chatMessages.add({'sender': 'bot', 'text': message});
-      });
-    } else if (currentState == 'stripe_confirm') {
-      int? choice = int.tryParse(input);
-      Quote? quote = quotes.firstWhereOrNull((q) => q.id == selectedQuoteId);
-      if ((choice == 1 || choice == 2)) {
-        bool autoBilling = choice == 1;
-        Policy policy = Policy(
-          id: Uuid().v4(),
-          type: quote!.type,
-          subtype: quote.subtype,
-          company: quote.company,
-          status: PolicyStatus.active,
-          startDate: DateTime.now(),
-          endDate: DateTime.now().add(Duration(days: 365)),
-          formData: Map<String, String>.from(quote.formData),
-          premium: quote.premium,
-          billingFrequency: 'annually',
-        );
-        policies.add(policy);
-        await _savePolicies();
-        if (autoBilling) {
-          await _scheduleStripeAutoBilling(policy);
-        }
-        await FirebaseMessaging.instance.subscribeToTopic('policy_updates');
-        setState(() {
-          currentState = 'stripe_process';
-          String message = currentStateData['next']['message'].replaceAll(
-            '{auto_billing}',
-            autoBilling ? '\nAuto-billing enabled.' : '',
-          );
-          chatMessages.add({'sender': 'bot', 'text': message});
-        });
-      } else {
-        _showError();
-      }
-    } else if (currentState == 'mpesa_payment') {
-      if (RegExp(r'^\+2547\d{8}$').hasMatch(input)) {
-        Quote? quote = quotes.firstWhereOrNull((q) => q.id == selectedQuoteId);
-        setState(() {
-          currentState = 'mpesa_confirm';
-          formResponses['phone'] = input;
-          String message = currentStateData['next']['message']
-              .replaceAll(
-                '{amount}',
-                'KES ${quote!.premium.toStringAsFixed(2)}',
-              )
-              .replaceAll('{phone}', input);
-          message +=
-              '\n' +
-              currentStateData['next']['options']
-                  .asMap()
-                  .entries
-                  .map((e) => '${e.key + 1}. ${e.value['text']}')
-                  .join('\n');
-          chatMessages.add({'sender': 'bot', 'text': message});
-        });
-      } else {
-        setState(() {
-          chatMessages.add({
-            'sender': 'bot',
-            'text':
-                'Invalid phone number. Please enter a valid MPESA number (e.g., +2547XXXXXXXX).',
-          });
-        });
-      }
-    } else if (currentState == 'mpesa_confirm') {
-      int? choice = int.tryParse(input);
-      if (choice == 1) {
-        Quote? quote = quotes.firstWhereOrNull((q) => q.id == selectedQuoteId);
-        if (await _initiateMpesaPayment(
-          formResponses['phone']!,
-          quote!.premium,
-        )) {
-          Policy policy = Policy(
-            id: Uuid().v4(),
-            type: quote!.type,
-            subtype: quote.subtype,
-            company: quote.company,
-            status: PolicyStatus.active,
-            startDate: DateTime.now(),
-            endDate: DateTime.now().add(Duration(days: 365)),
-            formData: Map<String, String>.from(quote.formData),
-            premium: quote.premium,
-            billingFrequency: 'annually',
-          );
-          policies.add(policy);
-          await _savePolicies();
-          await FirebaseMessaging.instance.subscribeToTopic('policy_updates');
-          setState(() {
-            currentState = 'mpesa_process';
-            chatMessages.add({
-              'sender': 'bot',
-              'text': currentStateData['next']['message'],
-            });
-          });
-        } else {
-          _showError();
-        }
-      } else if (choice == 2) {
-        setState(() {
-          currentState = 'start';
-          formResponses.clear();
-          selectedQuoteId = null;
-          chatMessages.add({
-            'sender': 'bot',
-            'text':
-                chatbotTemplate['states']['start']['message'] +
-                '\n' +
-                chatbotTemplate['states']['start']['options']
-                    .asMap()
-                    .entries
-                    .map((e) => '${e.key + 1}. ${e.value['text']}')
-                    .join('\n'),
-          });
-        });
-      } else {
-        _showError();
-      }
-    } else if (currentState == 'select_item') {
-      int? choice = int.tryParse(input);
-      if (choice != null && choice <= insuredItems.length) {
-        selectedInsuredItemId = insuredItems[choice - 1].id;
-        formResponses = Map<String, String>.from(
-          insuredItems[choice - 1].details,
-        );
-        setState(() {
-          currentState = 'pdf_filling';
-          currentFieldIndex = 0;
+          _selectedUnderwriters =
+              choices.map((c) => _underwriters[c! - 1]).toList();
+          formResponses['underwriters'] = _selectedUnderwriters.join(', ');
+          currentState = 'quote_filling';
+          currentStateData = chatbotTemplate['states']['quote_filling'];
           currentStateData['fields'] =
               baseFields.keys
-                  .map(
-                    (key) => {'name': key, 'prompt': 'Please enter your $key:'},
+                  .where(
+                    (key) =>
+                        !['age', 'spouse_age', 'children_count'].contains(key),
                   )
-                  .toList();
-          chatMessages.add({
-            'sender': 'bot',
-            'text': currentStateData['fields'][0]['prompt'],
-          });
-        });
-      } else if (choice == insuredItems.length + 1) {
-        setState(() {
-          currentState = 'add_item';
-          chatMessages.add({
-            'sender': 'bot',
-            'text': currentStateData['message'],
-          });
-        });
-      } else {
-        _showError();
-      }
-    } else if (currentState == 'add_item') {
-      if (['car', 'home', 'medical'].contains(input.toLowerCase())) {
-        setState(() {
-          currentState = 'add_item_details';
-          currentStateData['fields'] =
-              baseFields.keys
                   .map(
                     (key) => {
                       'name': key,
-                      'prompt': 'Please enter $key for ${input.toLowerCase()}:',
+                      'prompt': 'Please enter your $key for health quote:',
                     },
                   )
                   .toList();
@@ -1531,7 +1430,28 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
             'sender': 'bot',
             'text': currentStateData['fields'][0]['prompt'],
           });
-          formResponses['type'] = input.toLowerCase();
+        });
+      } else {
+        setState(() {
+          chatMessages.add({
+            'sender': 'bot',
+            'text':
+                'You can only select up to three underwriters. Please try again.',
+          });
+        });
+      }
+    } else if (currentState == 'add_vehicle_type') {
+      int? choice = int.tryParse(input);
+      if (choice != null && choice > 0 && choice <= _vehicleTypes.length) {
+        setState(() {
+          formResponses['vehicle_type'] = _vehicleTypes[choice - 1];
+          currentState = 'add_item_details';
+          currentStateData = chatbotTemplate['states']['add_item_details'];
+          currentFieldIndex = 0;
+          chatMessages.add({
+            'sender': 'bot',
+            'text': currentStateData['fields'][0]['prompt'],
+          });
         });
       } else {
         _showError();
@@ -1541,12 +1461,19 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       if (currentFieldIndex < fields.length) {
         var field = fields[currentFieldIndex];
         String fieldName = field['name'];
-        String? error = baseFields[fieldName]?.validator(input);
+        String? error =
+            baseFields[fieldName]?.validator(input) ??
+            (fieldName == 'chassis_number' ||
+                    fieldName == 'kra_pin' ||
+                    fieldName == 'regno' ||
+                    fieldName == 'vehicle_value' ||
+                    fieldName == 'property_value'
+                ? null
+                : 'Invalid input');
 
         if (error == null) {
           formResponses[fieldName] = input;
           currentFieldIndex++;
-
           if (currentFieldIndex < fields.length) {
             setState(() {
               chatMessages.add({
@@ -1555,23 +1482,19 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
               });
             });
           } else {
-            String summary = formResponses.entries
-                .map((e) => '${e.key}: ${e.value}')
-                .join('\n');
-            String nextMessage =
-                currentStateData['next']['message'].replaceAll(
-                  '{fields}',
-                  summary,
-                ) +
-                '\n' +
-                currentStateData['next']['options']
-                    .asMap()
-                    .entries
-                    .map((e) => '${e.key + 1}. ${e.value['text']}')
-                    .join('\n');
             setState(() {
-              currentState = 'add_item_summary';
-              chatMessages.add({'sender': 'bot', 'text': nextMessage});
+              currentState = 'add_item_upload';
+              chatMessages.add({
+                'sender': 'bot',
+                'text':
+                    currentStateData['next']['message'] +
+                    '\n' +
+                    currentStateData['next']['options']
+                        .asMap()
+                        .entries
+                        .map((e) => '${e.key + 1}. ${e.value['text']}')
+                        .join('\n'),
+              });
             });
           }
         } else {
@@ -1584,6 +1507,62 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
           });
         }
       }
+    } else if (currentState == 'add_item_logbook') {
+      int? choice = int.tryParse(input);
+      if (choice == 1) {
+        await _uploadPreviousPolicy();
+        setState(() {
+          currentState = 'add_item_policy';
+          chatMessages.add({
+            'sender': 'bot',
+            'text': currentStateData['options'][0]['next']['message'],
+          });
+        });
+      } else if (choice == 2) {
+        setState(() {
+          currentState = 'add_item_summary';
+          String summary = formResponses.entries
+              .map((e) => '${e.key}: ${e.value}')
+              .join('\n');
+          chatMessages.add({
+            'sender': 'bot',
+            'text':
+                currentStateData['options'][1]['next']['message'].replaceAll(
+                  '{fields}',
+                  summary,
+                ) +
+                '\n' +
+                currentStateData['options'][1]['next']['options']
+                    .asMap()
+                    .entries
+                    .map((e) => '${e.key + 1}. ${e.value['text']}')
+                    .join('\n'),
+          });
+        });
+      } else {
+        _showError();
+      }
+    } else if (currentState == 'add_item_policy') {
+      setState(() {
+        currentState = 'add_item_summary';
+        String summary = formResponses.entries
+            .map((e) => '${e.key}: ${e.value}')
+            .join('\n');
+        chatMessages.add({
+          'sender': 'bot',
+          'text':
+              currentStateData['next']['message'].replaceAll(
+                '{fields}',
+                summary,
+              ) +
+              '\n' +
+              currentStateData['next']['options']
+                  .asMap()
+                  .entries
+                  .map((e) => '${e.key + 1}. ${e.value['text']}')
+                  .join('\n'),
+        });
+      });
     } else if (currentState == 'add_item_summary') {
       int? choice = int.tryParse(input);
       if (choice == 1) {
@@ -1591,13 +1570,31 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
           InsuredItem(
             id: Uuid().v4(),
             type: formResponses['type'] ?? 'unknown',
-            details: Map<String, String>.from(formResponses),
+            vehicleType: formResponses['vehicle_type'] ?? '',
+            details: Map<String, String>.from(formResponses)..removeWhere(
+              (key, _) => [
+                'vehicle_value',
+                'regno',
+                'property_value',
+                'chassis_number',
+                'kra_pin',
+              ].contains(key),
+            ),
+            vehicleValue: formResponses['vehicle_value'],
+            regno: formResponses['regno'],
+            propertyValue: formResponses['property_value'],
+            chassisNumber: formResponses['chassis_number'],
+            kraPin: formResponses['kra_pin'],
+            logbookPath: _logbookFile?.path,
+            previousPolicyPath: _previousPolicyFile?.path,
           ),
         );
         await _saveInsuredItems();
         setState(() {
           currentState = 'select_item';
           formResponses.clear();
+          _logbookFile = null;
+          _previousPolicyFile = null;
           chatMessages.add({
             'sender': 'bot',
             'text': _buildSelectItemMessage(),
@@ -1607,6 +1604,8 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         setState(() {
           currentState = 'start';
           formResponses.clear();
+          _logbookFile = null;
+          _previousPolicyFile = null;
           chatMessages.add({
             'sender': 'bot',
             'text':
@@ -1622,7 +1621,75 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       } else {
         _showError();
       }
-    } else if (currentState == 'pdf_filling') {
+    } else if (currentState == 'pdf_upload') {
+      int? choice = int.tryParse(input);
+      if (choice == 1) {
+        await _uploadLogbook();
+        setState(() {
+          currentState = 'pdf_logbook';
+          chatMessages.add({
+            'sender': 'bot',
+            'text':
+                'Logbook uploaded. Upload previous policy or skip?\n1. Upload Previous Policy\n2. Skip',
+          });
+        });
+      } else if (choice == 2) {
+        await _uploadPreviousPolicy();
+        setState(() {
+          currentState = 'pdf_policy';
+          chatMessages.add({
+            'sender': 'bot',
+            'text': 'Previous policy uploaded. Proceed?',
+          });
+        });
+      } else if (choice == 3) {
+        setState(() {
+          currentState = 'pdf_filling_continue';
+          currentStateData = chatbotTemplate['states']['pdf_filling'];
+          currentFieldIndex = 0;
+          chatMessages.add({
+            'sender': 'bot',
+            'text': currentStateData['fields'][0]['prompt'],
+          });
+        });
+      } else {
+        _showError();
+      }
+    } else if (currentState == 'pdf_logbook') {
+      int? choice = int.tryParse(input);
+      if (choice == 1) {
+        await _uploadPreviousPolicy();
+        setState(() {
+          currentState = 'pdf_policy';
+          chatMessages.add({
+            'sender': 'bot',
+            'text': 'Previous policy uploaded. Proceed?',
+          });
+        });
+      } else if (choice == 2) {
+        setState(() {
+          currentState = 'pdf_filling_continue';
+          currentStateData = chatbotTemplate['states']['pdf_filling'];
+          currentFieldIndex = 0;
+          chatMessages.add({
+            'sender': 'bot',
+            'text': currentStateData['fields'][0]['prompt'],
+          });
+        });
+      } else {
+        _showError();
+      }
+    } else if (currentState == 'pdf_policy') {
+      setState(() {
+        currentState = 'pdf_filling_continue';
+        currentStateData = chatbotTemplate['states']['pdf_filling'];
+        currentFieldIndex = 0;
+        chatMessages.add({
+          'sender': 'bot',
+          'text': currentStateData['fields'][0]['prompt'],
+        });
+      });
+    } else if (currentState == 'pdf_filling_continue') {
       var fields = currentStateData['fields'];
       if (currentFieldIndex < fields.length) {
         var field = fields[currentFieldIndex];
@@ -1632,7 +1699,6 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         if (error == null) {
           formResponses[fieldName] = input;
           currentFieldIndex++;
-
           if (currentFieldIndex < fields.length) {
             setState(() {
               chatMessages.add({
@@ -1670,176 +1736,6 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
           });
         }
       }
-    } else if (currentState == 'pdf_summary') {
-      int? choice = int.tryParse(input);
-      if (choice == 1) {
-        // Corrected call to _fillPdfTemplate with all required arguments
-        File? filledPdf = await _fillPdfTemplate(
-          'default',
-          formResponses,
-          cachedPdfTemplates,
-          baseFields,
-        );
-        if (filledPdf != null) {
-          // Added null check here
-          if (await _previewPdf(filledPdf)) {
-            // Only proceed with preview if PDF was created
-            await _sendEmail(
-              'companyA',
-              formResponses['type'] ?? 'auto',
-              formResponses['subtype'] ?? 'comprehensive',
-              formResponses,
-              filledPdf,
-            );
-          }
-        } else {
-          // Handle case where PDF filling failed
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to generate filled PDF.')),
-          );
-        }
-
-        setState(() {
-          currentState = 'pdf_process';
-          chatMessages.add({
-            'sender': 'bot',
-            'text': currentStateData['next']['message'],
-          });
-        });
-      } else if (choice == 2) {
-        currentFieldIndex = 0;
-        setState(() {
-          currentState = 'pdf_filling';
-          chatMessages.add({
-            'sender': 'bot',
-            'text': currentStateData['fields'][0]['prompt'],
-          });
-        });
-      } else {
-        _showError();
-      }
-    } else if (currentState == 'view_policies') {
-      int? choice = int.tryParse(input);
-      if (choice != null && choice <= policies.length) {
-        Policy policy = policies[choice - 1];
-        String statusColor =
-            policy.status == PolicyStatus.nearingExpiration
-                ? ' (Nearing Expiration - Yellow)'
-                : policy.status == PolicyStatus.expired
-                ? ' (Expired - Red)'
-                : '';
-        String details =
-            'Type: ${policy.type}\nSubtype: ${policy.subtype}\nCompany: ${policy.company}\nStatus: ${policy.status}$statusColor\nStart: ${policy.startDate}\nEnd: ${policy.endDate ?? 'N/A'}\nPremium: KES ${policy.premium.toStringAsFixed(2)}';
-        String nextMessage =
-            currentStateData['message'].replaceAll('{details}', details) +
-            '\n' +
-            currentStateData['next']['options']
-                .asMap()
-                .entries
-                .map((e) => '${e.key + 1}. ${e.value['text']}')
-                .join('\n');
-        setState(() {
-          currentState = 'policy_details';
-          currentFieldIndex = choice;
-          chatMessages.add({'sender': 'bot', 'text': nextMessage});
-        });
-      } else {
-        setState(() {
-          currentState = 'start';
-          chatMessages.add({
-            'sender': 'bot',
-            'text':
-                chatbotTemplate['states']['start']['message'] +
-                '\n' +
-                chatbotTemplate['states']['start']['options']
-                    .asMap()
-                    .entries
-                    .map((e) => '${e.key + 1}. ${e.value['text']}')
-                    .join('\n'),
-          });
-        });
-      }
-    } else if (currentState == 'policy_details') {
-      int? choice = int.tryParse(input);
-      if (choice == 1) {
-        await _exportPolicy(policies[currentFieldIndex - 1]);
-        setState(() {
-          currentState = 'export_policy';
-          chatMessages.add({
-            'sender': 'bot',
-            'text': currentStateData['next']['message'],
-          });
-        });
-      } else {
-        setState(() {
-          currentState = 'start';
-          chatMessages.add({
-            'sender': 'bot',
-            'text':
-                chatbotTemplate['states']['start']['message'] +
-                '\n' +
-                chatbotTemplate['states']['start']['options']
-                    .asMap()
-                    .entries
-                    .map((e) => '${e.key + 1}. ${e.value['text']}')
-                    .join('\n'),
-          });
-        });
-      }
-    } else if (currentStateData['options'] != null) {
-      int? choice = int.tryParse(input);
-      if (choice != null &&
-          choice > 0 &&
-          choice <= currentStateData['options'].length) {
-        var selectedOption = currentStateData['options'][choice - 1];
-        setState(() {
-          currentState = selectedOption['next'];
-          if (currentState == 'select_item') {
-            chatMessages.add({
-              'sender': 'bot',
-              'text': _buildSelectItemMessage(),
-            });
-          } else if (currentState == 'view_policies') {
-            String policyList = policies
-                .asMap()
-                .entries
-                .map((e) {
-                  Policy p = e.value;
-                  String statusColor =
-                      p.status == PolicyStatus.nearingExpiration
-                          ? ' (Nearing Expiration - Yellow)'
-                          : p.status == PolicyStatus.expired
-                          ? ' (Expired - Red)'
-                          : '';
-                  return '${e.key + 1}. ${p.type} - ${p.subtype}$statusColor';
-                })
-                .join('\n');
-            chatMessages.add({
-              'sender': 'bot',
-              'text': currentStateData['message'].replaceAll(
-                '{policies}',
-                policyList.isEmpty ? 'No policies' : policyList,
-              ),
-            });
-          } else {
-            chatMessages.add({
-              'sender': 'bot',
-              'text':
-                  currentStateData['message'] +
-                  '\n' +
-                  currentStateData['options']
-                      .asMap()
-                      .entries
-                      .map((e) => '${e.key + 1}. ${e.value['text']}')
-                      .join('\n'),
-            });
-          }
-        });
-      } else {
-        _showError();
-      }
-    } else {
-      _showError();
     }
 
     chatController.clear();
@@ -1866,44 +1762,67 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     });
   }
 
-  Future<void> _exportPolicy(Policy policy) async {
-    final pdf = pw.Document();
-    pdf.addPage(
-      pw.Page(
-        build:
-            (pw.Context context) => pw.Column(
-              children: [
-                pw.Text('Policy Report', style: pw.TextStyle(fontSize: 24)),
-                pw.SizedBox(height: 20),
-                pw.Text('Type: ${policy.type}'),
-                pw.Text('Subtype: ${policy.subtype}'),
-                pw.Text('Company: ${policy.company}'),
-                pw.Text('Status: ${policy.status}'),
-                pw.Text('Start Date: ${policy.startDate}'),
-                if (policy.endDate != null)
-                  pw.Text('End Date: ${policy.endDate}'),
-                pw.Text('Premium: KES ${policy.premium.toStringAsFixed(2)}'),
-                pw.Text('Billing Frequency: ${policy.billingFrequency}'),
-                pw.SizedBox(height: 20),
-                pw.Text('Form Data:', style: pw.TextStyle(fontSize: 16)),
-                ...policy.formData.entries.map(
-                  (e) => pw.Text('${e.key}: ${e.value}'),
-                ),
-              ],
-            ),
-      ),
+  Future<void> _saveCovers() async {
+    final storage = FlutterSecureStorage();
+    await storage.write(
+      key: 'covers',
+      value: jsonEncode(covers.map((c) => c.toJson()).toList()),
     );
+  }
 
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/policy_${policy.id}.pdf');
-    await file.writeAsBytes(await pdf.save());
+  Future<void> _loadCovers() async {
+    final storage = FlutterSecureStorage();
+    final data = await storage.read(key: 'covers');
+    if (data != null) {
+      setState(() {
+        covers =
+            (jsonDecode(data) as List).map((c) => Cover.fromJson(c)).toList();
+      });
+    }
+  }
+
+  Future<void> _saveCompanies() async {
+    final storage = FlutterSecureStorage();
+    await storage.write(
+      key: 'companies',
+      value: jsonEncode(companies.map((c) => c.toJson()).toList()),
+    );
+  }
+
+  Future<void> _loadCompanies() async {
+    final storage = FlutterSecureStorage();
+    final data = await storage.read(key: 'companies');
+    if (data != null) {
+      setState(() {
+        companies =
+            (jsonDecode(data) as List)
+                .map((c) => Company.fromJson(c))
+                .cast<Quote>()
+                .toList();
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final policyTypes = {
+      'motor': [
+        'commercial',
+        'psv',
+        'psv_uber',
+        'private',
+        'tuk_tuk',
+        'special_classes',
+      ],
+      'medical': ['inpatient', 'outpatient', 'maternity', 'dental', 'optical'],
+      'travel': ['single_trip', 'multi_trip', 'student', 'senior_citizen'],
+      'property': ['residential', 'commercial', 'industrial', 'landlord'],
+      'wiba': ['standard', 'enhanced', 'contractor', 'small_business'],
+    };
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Insurance Form Extractor'),
+        title: const Text('Insurance Cover Selection'),
         actions: [
           if (userRole == UserRole.admin)
             IconButton(
@@ -1918,6 +1837,53 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       ),
       body: Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Select Insurance Cover',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 1.5,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                  ),
+                  itemCount: policyTypes.keys.length,
+                  itemBuilder: (context, index) {
+                    final type = policyTypes.keys.toList()[index];
+                    return Card(
+                      child: InkWell(
+                        onTap:
+                            () => _showSubtypeDialog(
+                              context,
+                              type,
+                              policyTypes[type]!,
+                            ),
+                        child: Center(
+                          child: Text(
+                            type.toUpperCase(),
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
           Expanded(
             child: ListView.builder(
               itemCount: chatMessages.length,
@@ -1965,14 +1931,470 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     );
   }
 
-  Future<void> _savePdfTemplates() async {
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/pdf_templates.json');
-    await file.writeAsString(
-      jsonEncode(
-        cachedPdfTemplates.map((key, value) => MapEntry(key, value.toJson())),
+  // Dialog to select subtype
+  void _showSubtypeDialog(
+    BuildContext context,
+    String type,
+    List<String> subtypes,
+  ) {
+    String subtype = subtypes[0];
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text('Select $type Subtype'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    decoration: InputDecoration(labelText: '$type Subtype'),
+                    value: subtype,
+                    items:
+                        subtypes
+                            .map(
+                              (s) => DropdownMenuItem(
+                                value: s,
+                                child: Text(
+                                  s.replaceAll('_', ' ').toUpperCase(),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                    onChanged:
+                        (value) =>
+                            setDialogState(() => subtype = value ?? subtype),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                    _showCoverageDialog(context, type, subtype);
+                  },
+                  child: const Text('Next'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Dialog to select coverage type
+  void _showCoverageDialog(BuildContext context, String type, String subtype) {
+    String coverageType = 'comprehensive';
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Select Coverage Type'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(
+                      labelText: 'Coverage Type',
+                    ),
+                    value: coverageType,
+                    items:
+                        ['comprehensive', 'third_party']
+                            .map(
+                              (c) => DropdownMenuItem(
+                                value: c,
+                                child: Text(
+                                  c.replaceAll('_', ' ').toUpperCase(),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                    onChanged:
+                        (value) => setDialogState(
+                          () => coverageType = value ?? coverageType,
+                        ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                    _showInsuredItemDialog(
+                      context,
+                      type,
+                      subtype,
+                      coverageType,
+                    );
+                  },
+                  child: const Text('Next'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Dialog to select or create InsuredItem
+  void _showInsuredItemDialog(
+    BuildContext context,
+    String type,
+    String subtype,
+    String coverageType,
+  ) {
+    String? insuredItemId;
+    bool createNew = insuredItems.isEmpty;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Select or Create Insured Item'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!createNew)
+                    DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(
+                        labelText: 'Existing Insured Item',
+                      ),
+                      value: insuredItemId,
+                      items:
+                          insuredItems
+                              .map(
+                                (item) => DropdownMenuItem(
+                                  value: item.id,
+                                  child: Text(
+                                    '${item.details['name'] ?? 'Item'} (${item.vehicleType.isNotEmpty ? item.vehicleType : item.type})',
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                      onChanged:
+                          (value) =>
+                              setDialogState(() => insuredItemId = value),
+                    ),
+                  if (!createNew)
+                    CheckboxListTile(
+                      title: const Text('Create New Insured Item'),
+                      value: createNew,
+                      onChanged:
+                          (value) =>
+                              setDialogState(() => createNew = value ?? false),
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder:
+                            (context) => CoverDetailScreen(
+                              type: type,
+                              subtype: subtype,
+                              coverageType: coverageType,
+                              insuredItem:
+                                  insuredItemId != null
+                                      ? insuredItems.firstWhere(
+                                        (item) => item.id == insuredItemId,
+                                      )
+                                      : null,
+                              onSubmit:
+                                  (details) => _showCompanyDialog(
+                                    context,
+                                    type,
+                                    subtype,
+                                    coverageType,
+                                    details,
+                                  ),
+                            ),
+                      ),
+                    );
+                  },
+                  child: const Text('Next'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Dialog to select company
+  void _showCompanyDialog(
+    BuildContext context,
+    String type,
+    String subtype,
+    String coverageType,
+    Map<String, String> details,
+  ) {
+    // Filter companies with PDF templates supporting the coverage type
+    final eligibleCompanies =
+        companies
+            .where(
+              (c) => c.pdfTemplateKeys.any(
+                (key) => cachedPdfTemplates.containsKey(key),
+              ),
+            )
+            .toList();
+    String companyId =
+        eligibleCompanies.isNotEmpty ? eligibleCompanies[0].id : '';
+    String pdfTemplateKey =
+        eligibleCompanies.isNotEmpty
+            ? eligibleCompanies[0].pdfTemplateKeys[0]
+            : 'default';
+
+    if (eligibleCompanies.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No companies with compatible PDF templates available'),
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Select Insurance Company'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(labelText: 'Company'),
+                    value: companyId,
+                    items:
+                        eligibleCompanies
+                            .map(
+                              (c) => DropdownMenuItem(
+                                value: c.id,
+                                child: Text(c.name!),
+                              ),
+                            )
+                            .toList(),
+                    onChanged:
+                        (value) => setDialogState(() {
+                          companyId = value ?? companyId;
+                          final company = eligibleCompanies.firstWhere(
+                            (c) => c.id == companyId,
+                          );
+                          pdfTemplateKey = company.pdfTemplateKeys[0];
+                        }),
+                  ),
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(
+                      labelText: 'PDF Template',
+                    ),
+                    value: pdfTemplateKey,
+                    items:
+                        eligibleCompanies
+                            .firstWhere((c) => c.id == companyId)
+                            .pdfTemplateKeys
+                            .map(
+                              (key) => DropdownMenuItem(
+                                value: key,
+                                child: Text(key),
+                              ),
+                            )
+                            .toList(),
+                    onChanged:
+                        (value) => setDialogState(
+                          () => pdfTemplateKey = value ?? pdfTemplateKey,
+                        ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                    _handleCoverSubmission(
+                      context,
+                      type,
+                      subtype,
+                      coverageType,
+                      companyId,
+                      pdfTemplateKey,
+                      details,
+                    );
+                  },
+                  child: const Text('Submit'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Handle cover submission
+  Future<void> _handleCoverSubmission(
+    BuildContext context,
+    String type,
+    String subtype,
+    String coverageType,
+    String companyId,
+    String pdfTemplateKey,
+    Map<String, String> details,
+  ) async {
+    InsuredItem insuredItem;
+    if (details['insured_item_id'] != null &&
+        details['insured_item_id']!.isNotEmpty) {
+      insuredItem = insuredItems.firstWhere(
+        (item) => item.id == details['insured_item_id'],
+      );
+    } else {
+      insuredItem = InsuredItem(
+        id: Uuid().v4(),
+        type: type,
+        vehicleType: type == 'motor' ? subtype : '',
+        details: details,
+        vehicleValue: details['vehicle_value'],
+        regno: details['regno'],
+        propertyValue: details['property_value'],
+        chassisNumber: details['chassis_number'],
+        kraPin: details['kra_pin'],
+        logbookPath: details['logbook_path'],
+        previousPolicyPath: details['previous_policy_path'],
+      );
+      setState(() {
+        insuredItems.add(insuredItem);
+      });
+      await _saveInsuredItems();
+    }
+
+    final cover = Cover(
+      id: Uuid().v4(),
+      insuredItemId: insuredItem.id,
+      companyId: companyId,
+      type: type,
+      subtype: subtype,
+      coverageType: coverageType,
+      status: 'pending',
+      expirationDate: DateTime.now().add(const Duration(days: 365)),
+      pdfTemplateKey: pdfTemplateKey,
+      paymentStatus: 'pending',
+      startDate: DateTime.now().add(const Duration(days: 365)),
+      formData: {},
+      premium: null,
+      billingFrequency: null,
+    );
+
+    setState(() {
+      covers.add(cover);
+    });
+    await _saveCovers();
+
+    final pdfFile = await _fillPdfTemplate(pdfTemplateKey, details);
+    if (pdfFile != null && await _previewPdf(pdfFile)) {
+      await _sendEmail(companyId, type, subtype, details, pdfFile);
+    }
+
+    // Initialize payment
+    final paymentStatus = await _initializePayment(
+      cover.id,
+      details['vehicle_value'] ?? details['property_value'] ?? '1000',
+    );
+    setState(() {
+      final index = covers.indexWhere((c) => c.id == cover.id);
+      covers[index] = Cover(
+        id: cover.id,
+        insuredItemId: cover.insuredItemId,
+        companyId: cover.companyId,
+        type: cover.type,
+        subtype: cover.subtype,
+        coverageType: cover.coverageType,
+        status: paymentStatus == 'completed' ? 'active' : 'pending',
+        expirationDate: cover.expirationDate,
+        pdfTemplateKey: cover.pdfTemplateKey,
+        paymentStatus: paymentStatus,
+        formData: {},
+        startDate: DateTime.now().add(const Duration(days: 365)),
+        premium: null,
+        billingFrequency: null,
+      );
+    });
+    await _saveCovers();
+
+    setState(() {
+      currentState = 'pdf_process';
+      chatMessages.add({
+        'sender': 'bot',
+        'text':
+            'Your ${type.toUpperCase()} cover ($subtype, $coverageType) has been created. Payment status: $paymentStatus.',
+      });
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Cover created, PDF processed, payment $paymentStatus'),
       ),
     );
+  }
+
+  // Mock payment initialization
+  Future<String> _initializePayment(String coverId, String amount) async {
+    try {
+      // Mock API call to payment gateway (e.g., Stripe, PayPal)
+      final response = await http.post(
+        Uri.parse('https://api.payment-gateway.com/v1/payments'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer your-payment-api-key',
+        },
+        body: jsonEncode({
+          'coverId': coverId,
+          'amount': double.parse(amount),
+          'currency': 'KES',
+          'description': 'Insurance cover payment',
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return 'completed';
+      } else {
+        return 'failed';
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Payment initialization error: $e');
+      }
+      return 'failed';
+    }
   }
 
   Future<void> _loadCachedPdfTemplates() async {
@@ -1983,19 +2405,6 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       cachedPdfTemplates = data.map(
         (key, value) => MapEntry(key, PDFTemplate.fromJson(value)),
       );
-    }
-  }
-
-  Future<void> _saveUserDetails(Map<String, String> newDetails) async {
-    try {
-      userDetails.addAll(newDetails);
-      final key = encrypt.Key.fromLength(32);
-      final iv = encrypt.IV.fromLength(16);
-      final encrypter = encrypt.Encrypter(encrypt.AES(key));
-      final encrypted = encrypter.encrypt(jsonEncode(userDetails), iv: iv);
-      await secureStorage.write(key: 'user_details', value: encrypted.base64);
-    } catch (e) {
-      print('Error saving user details: $e');
     }
   }
 
@@ -2012,884 +2421,5 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     } catch (e) {
       print('Error loading user details: $e');
     }
-  }
-}
-
-class AdminPanel extends StatefulWidget {
-  const AdminPanel({super.key});
-
-  @override
-  State<AdminPanel> createState() => _AdminPanelState();
-}
-
-class _AdminPanelState extends State<AdminPanel> {
-  List<Policy> policies = [];
-  Map<String, PDFTemplate> cachedPdfTemplates = {};
-  final secureStorage = const FlutterSecureStorage();
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPolicies();
-    _loadCachedPdfTemplates();
-  }
-
-  Future<void> _loadPolicies() async {
-    String? data = await secureStorage.read(key: 'policies');
-    final key = encrypt.Key.fromLength(32);
-    final iv = encrypt.IV.fromLength(16);
-    final encrypter = encrypt.Encrypter(encrypt.AES(key));
-    final decrypted = encrypter.decrypt64(data!, iv: iv);
-    setState(() {
-      policies =
-          (jsonDecode(decrypted) as List)
-              .map(
-                (item) => Policy(
-                  id: item['id'],
-                  type: item['type'],
-                  subtype: item['subtype'],
-                  company: item['company'],
-                  status: PolicyStatus.values[item['status']],
-                  startDate: DateTime.parse(item['startDate']),
-                  endDate:
-                      item['endDate'] != null
-                          ? DateTime.parse(item['endDate'])
-                          : null,
-                  formData: Map<String, String>.from(item['formData']),
-                  premium: item['premium'].toDouble(),
-                  billingFrequency: item['billingFrequency'],
-                ),
-              )
-              .toList();
-    });
-  }
-
-  Future<void> _savePolicies() async {
-    final key = encrypt.Key.fromLength(32);
-    final iv = encrypt.IV.fromLength(16);
-    final encrypter = encrypt.Encrypter(encrypt.AES(key));
-    final encrypted = encrypter.encrypt(
-      jsonEncode(
-        policies
-            .map(
-              (policy) => {
-                'id': policy.id,
-                'type': policy.type,
-                'subtype': policy.subtype,
-                'company': policy.company,
-                'status': policy.status.index,
-                'startDate': policy.startDate.toIso8601String(),
-                'endDate': policy.endDate?.toIso8601String(),
-                'formData': policy.formData,
-                'premium': policy.premium,
-                'billingFrequency': policy.billingFrequency,
-              },
-            )
-            .toList(),
-      ),
-      iv: iv,
-    );
-    await secureStorage.write(key: 'policies', value: encrypted.base64);
-  }
-
-  Future<void> _loadCachedPdfTemplates() async {
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/pdf_templates.json');
-    if (await file.exists()) {
-      final data = jsonDecode(await file.readAsString());
-      cachedPdfTemplates = data.map(
-        (key, value) => MapEntry(key, PDFTemplate.fromJson(value)),
-      );
-    }
-  }
-
-  Future<void> _savePdfTemplates() async {
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/pdf_templates.json');
-    await file.writeAsString(
-      jsonEncode(
-        cachedPdfTemplates.map((key, value) => MapEntry(key, value.toJson())),
-      ),
-    );
-  }
-
-  Future<void> _uploadPdfTemplate() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf'],
-    );
-    if (result != null && result.files.single.path != null) {
-      String filePath = result.files.single.path!;
-      String templateKey = result.files.single.name.split('.').first;
-      final directory = await getApplicationDocumentsDirectory();
-      final templateFile = File(
-        '${directory.path}/pdf_templates/$templateKey.pdf',
-      );
-      await File(filePath).copy(templateFile.path);
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder:
-              (context) => PdfCoordinateEditor(
-                pdfPath: templateFile.path,
-                onSave: (coordinates) {
-                  cachedPdfTemplates[templateKey] = PDFTemplate(
-                    fields: {
-                      'name': FieldDefinition(
-                        expectedType: 'text',
-                        validator:
-                            (value) =>
-                                value.isEmpty ||
-                                        RegExp(
-                                          r'^[A-Za-z\s\-\.]+$',
-                                        ).hasMatch(value)
-                                    ? null
-                                    : 'Invalid name',
-                      ),
-                      'email': FieldDefinition(
-                        expectedType: 'email',
-                        validator:
-                            (value) =>
-                                value.isEmpty ||
-                                        RegExp(
-                                          r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$',
-                                        ).hasMatch(value)
-                                    ? null
-                                    : 'Invalid email',
-                      ),
-                      'phone': FieldDefinition(
-                        expectedType: 'phone',
-                        validator:
-                            (value) =>
-                                value.isEmpty ||
-                                        RegExp(
-                                          r'^[+\d\s\-\(\)]{8,15}$',
-                                        ).hasMatch(value)
-                                    ? null
-                                    : 'Invalid phone number',
-                      ),
-                      'regno': FieldDefinition(
-                        expectedType: 'text',
-                        validator:
-                            (value) =>
-                                value.isEmpty ||
-                                        RegExp(
-                                          r'^[A-Za-z0-9]+$',
-                                        ).hasMatch(value)
-                                    ? null
-                                    : 'Invalid RegNo',
-                      ),
-                      'vehicle_value': FieldDefinition(
-                        expectedType: 'number',
-                        validator: (value) {
-                          if (value.isEmpty) return null;
-                          int? val = int.tryParse(value);
-                          return val != null && val >= 0
-                              ? null
-                              : 'Invalid vehicle value';
-                        },
-                      ),
-                      'property_value': FieldDefinition(
-                        expectedType: 'number',
-                        validator: (value) {
-                          if (value.isEmpty) return null;
-                          int? val = int.tryParse(value);
-                          return val != null && val >= 0
-                              ? null
-                              : 'Invalid property value';
-                        },
-                      ),
-                      'health_condition': FieldDefinition(
-                        expectedType: 'text',
-                        validator: (value) => null,
-                      ),
-                    },
-                    fieldMappings: {
-                      'name': 'ClientName',
-                      'email': 'ClientEmail',
-                      'phone': 'ClientPhone',
-                      'regno': 'RegistrationNumber',
-                      'vehicle_value': 'VehicleValue',
-                      'property_value': 'PropertyValue',
-                      'health_condition': 'HealthCondition',
-                    },
-                    coordinates: coordinates,
-                  );
-                  _savePdfTemplates();
-                  setState(() {});
-                },
-              ),
-        ),
-      );
-    }
-  }
-
-  Future<void> _updatePolicyStatus(
-    Policy policy,
-    PolicyStatus newStatus,
-  ) async {
-    setState(() {
-      policies =
-          policies.map((p) {
-            if (p.id == policy.id) {
-              return Policy(
-                id: p.id,
-                type: p.type,
-                subtype: p.subtype,
-                company: p.company,
-                status: newStatus,
-                startDate: p.startDate,
-                endDate:
-                    newStatus == PolicyStatus.extended
-                        ? p.endDate?.add(Duration(days: 365))
-                        : p.endDate,
-                formData: p.formData,
-                premium: p.premium,
-                billingFrequency: p.billingFrequency,
-              );
-            }
-            return p;
-          }).toList();
-    });
-    await _savePolicies();
-    await FirebaseMessaging.instance.sendMessage(
-      to: '/topics/policy_updates',
-      data: {'policy_id': policy.id, 'new_status': newStatus.toString()},
-    );
-  }
-
-  Future<void> _notifyPolicyExpiration(Policy policy) async {
-    await FirebaseMessaging.instance.sendMessage(
-      to: '/topics/policy_updates',
-      data: {
-        'policy_id': policy.id,
-        'message':
-            'Reminder: Policy ${policy.id} (${policy.type} - ${policy.subtype}) is ${policy.status == PolicyStatus.expired ? 'expired' : 'nearing expiration'}',
-      },
-    );
-  }
-
-  List<charts.FlSpot> _createPolicyTrendDataForFlChart() {
-    // Group policies by year and month
-    final groupedData =
-        groupBy(
-              policies,
-              (Policy p) => DateTime(p.startDate.year, p.startDate.month),
-            ).entries
-            .map((e) => MapEntry(e.key, e.value.length)) // Map date to count
-            .toList();
-
-    // Sort the data by date to ensure the chart is in chronological order
-    groupedData.sort((a, b) => a.key.compareTo(b.key));
-
-    // Convert to FlSpot objects.
-    // x: millisecondsSinceEpoch to represent time on a double axis.
-    // y: policy count.
-    return groupedData.map((entry) {
-      return charts.FlSpot(
-        entry.key.millisecondsSinceEpoch.toDouble(),
-        entry.value.toDouble(),
-      );
-    }).toList();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Admin Panel')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ElevatedButton(
-              onPressed: _uploadPdfTemplate,
-              child: const Text('Upload PDF Template'),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'PDF Templates',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: cachedPdfTemplates.length,
-              itemBuilder: (context, index) {
-                final templateKey = cachedPdfTemplates.keys.elementAt(index);
-                return ListTile(
-                  title: Text(templateKey),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete),
-                    onPressed: () async {
-                      final directory =
-                          await getApplicationDocumentsDirectory();
-                      final file = File(
-                        '${directory.path}/pdf_templates/$templateKey.pdf',
-                      );
-                      if (await file.exists()) {
-                        await file.delete();
-                        setState(() {
-                          cachedPdfTemplates.remove(templateKey);
-                        });
-                        await _savePdfTemplates();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Template $templateKey deleted'),
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Policies',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: policies.length,
-              itemBuilder: (context, index) {
-                final policy = policies[index];
-                return ListTile(
-                  title: Text('${policy.type} - ${policy.subtype}'),
-                  subtitle: Text(
-                    'Status: ${policy.status} | End: ${policy.endDate ?? 'N/A'}',
-                    style: TextStyle(
-                      color:
-                          policy.status == PolicyStatus.nearingExpiration
-                              ? Colors.yellow[800]
-                              : policy.status == PolicyStatus.expired
-                              ? Colors.red
-                              : null,
-                    ),
-                  ),
-                  trailing: DropdownButton<PolicyStatus>(
-                    value: policy.status,
-                    items:
-                        PolicyStatus.values
-                            .map(
-                              (status) => DropdownMenuItem(
-                                value: status,
-                                child: Text(status.toString().split('.').last),
-                              ),
-                            )
-                            .toList(),
-                    onChanged: (newStatus) async {
-                      if (newStatus != null) {
-                        await _updatePolicyStatus(policy, newStatus);
-                        if (newStatus == PolicyStatus.nearingExpiration ||
-                            newStatus == PolicyStatus.expired) {
-                          await _notifyPolicyExpiration(policy);
-                        }
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Policy status updated to $newStatus',
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 20),
-
-            const Text(
-              'Policy Trends',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(
-              height: 200,
-              child: charts.LineChart(
-                // Replaced charts.TimeSeriesChart with LineChart
-                charts.LineChartData(
-                  gridData: const charts.FlGridData(
-                    show: true,
-                  ), // Show grid lines
-                  titlesData: charts.FlTitlesData(
-                    show: true,
-                    rightTitles: const charts.AxisTitles(
-                      sideTitles: charts.SideTitles(showTitles: false),
-                    ),
-                    topTitles: const charts.AxisTitles(
-                      sideTitles: charts.SideTitles(showTitles: false),
-                    ),
-                    bottomTitles: charts.AxisTitles(
-                      // X-axis (Dates)
-                      sideTitles: charts.SideTitles(
-                        showTitles: true,
-                        reservedSize: 30,
-                        getTitlesWidget: (value, meta) {
-                          final date = DateTime.fromMillisecondsSinceEpoch(
-                            value.toInt(),
-                          );
-                          // Format date to show Month/Year for readability
-                          return charts.SideTitleWidget(
-                            space: 8.0,
-                            meta: meta,
-                            child: Text(
-                              '${date.month}/${date.year % 100}',
-                              style: const TextStyle(fontSize: 10),
-                            ), // e.g., 5/24 for May 2024
-                          );
-                        },
-                        interval:
-                            2592000000, // Approximately 1 month in milliseconds for ticks
-                      ),
-                    ),
-                    leftTitles: charts.AxisTitles(
-                      // Y-axis (Policy Count)
-                      sideTitles: charts.SideTitles(
-                        showTitles: true,
-                        reservedSize: 40,
-                        getTitlesWidget: (value, meta) {
-                          return Text(
-                            value.toInt().toString(),
-                            style: const TextStyle(fontSize: 10),
-                          );
-                        },
-                        interval:
-                            1, // Show integer counts, adjust if counts are very high
-                      ),
-                    ),
-                  ),
-                  borderData: charts.FlBorderData(
-                    show: true,
-                    border: Border.all(
-                      color: const Color(0xff37434d),
-                      width: 1,
-                    ),
-                  ),
-                  lineBarsData: [
-                    charts.LineChartBarData(
-                      spots:
-                          _createPolicyTrendDataForFlChart(), // Use the new data function
-                      isCurved: true,
-                      color: Colors.blueAccent, // Color of the line
-                      barWidth: 3,
-                      isStrokeCapRound: true,
-                      dotData: const charts.FlDotData(
-                        show: true,
-                      ), // Show dots on data points
-                      belowBarData: charts.BarAreaData(
-                        show: true,
-                        color: Colors.blueAccent.withOpacity(0.3),
-                      ), // Area below the line
-                    ),
-                  ],
-                  // Optional: Min/Max X and Y values if you want fixed ranges
-                  // minX: _createPolicyTrendDataForFlChart().first.x,
-                  // maxX: _createPolicyTrendDataForFlChart().last.x,
-                  // minY: 0,
-                  // maxY: policies.map((p) => 1).sum.toDouble() + 5, // A bit above max count
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class PdfCoordinateEditor extends StatefulWidget {
-  final String pdfPath;
-  final Function(Map<String, Map<String, double>>) onSave;
-
-  const PdfCoordinateEditor({
-    super.key,
-    required this.pdfPath,
-    required this.onSave,
-  });
-
-  @override
-  State<PdfCoordinateEditor> createState() => _PdfCoordinateEditorState();
-}
-
-class _PdfCoordinateEditorState extends State<PdfCoordinateEditor> {
-  pdf.PdfDocument? _pdfDocument;
-  int _currentPage = 1;
-  String? _selectedField;
-  final Map<String, Map<String, double>> _coordinates = {};
-  final List<String> _fields = [
-    'name',
-    'email',
-    'phone',
-    'regno',
-    'vehicle_value',
-    'property_value',
-    'health_condition',
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPdf();
-  }
-
-  Future<void> _loadPdf() async {
-    try {
-      final file = File(widget.pdfPath);
-      final bytes = await file.readAsBytes();
-      _pdfDocument =
-          (await pdf.PdfDocument.openData(bytes)) as pdf.PdfDocument?;
-      setState(() {});
-    } catch (e) {
-      print('Error loading PDF: $e');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to load PDF: $e')));
-    }
-  }
-
-  void _onTap(Offset position) {
-    if (_selectedField != null) {
-      setState(() {
-        _coordinates[_selectedField!] = {
-          'page': _currentPage.toDouble(),
-          'x': position.dx,
-          'y': position.dy,
-        };
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Coordinates set for $_selectedField on page $_currentPage',
-          ),
-        ),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Edit PDF Coordinates'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.save),
-            onPressed: () {
-              widget.onSave(_coordinates);
-              Navigator.pop(context);
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          DropdownButton<String>(
-            hint: const Text('Select Field'),
-            value: _selectedField,
-            items:
-                _fields
-                    .map(
-                      (field) =>
-                          DropdownMenuItem(value: field, child: Text(field)),
-                    )
-                    .toList(),
-            onChanged: (value) {
-              setState(() {
-                _selectedField = value;
-              });
-            },
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_left),
-                onPressed:
-                    _currentPage > 1
-                        ? () {
-                          setState(() {
-                            _currentPage--;
-                          });
-                        }
-                        : null,
-              ),
-              Text('Page $_currentPage'),
-              IconButton(
-                icon: const Icon(Icons.arrow_right),
-                onPressed:
-                    _pdfDocument != null &&
-                            _currentPage < _pdfDocument!.pageCount
-                        ? () {
-                          setState(() {
-                            _currentPage++;
-                          });
-                        }
-                        : null,
-              ),
-            ],
-          ),
-          Expanded(
-            child:
-                _pdfDocument == null
-                    ? const Center(child: CircularProgressIndicator())
-                    : GestureDetector(
-                      onTapUp: (details) => _onTap(details.localPosition),
-                      child: PdfPreview(
-                        file: File(widget.pdfPath),
-                        initialPage: _currentPage,
-                        allowPinchZoom: true,
-                        allowSwipeNavigation: false,
-                      ),
-                    ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class PolicyReportScreen extends StatefulWidget {
-  const PolicyReportScreen({super.key});
-
-  @override
-  State<PolicyReportScreen> createState() => _PolicyReportScreenState();
-}
-
-class _PolicyReportScreenState extends State<PolicyReportScreen> {
-  List<Policy> policies = [];
-  final secureStorage = const FlutterSecureStorage();
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPolicies();
-  }
-
-  Future<void> _loadPolicies() async {
-    String? data = await secureStorage.read(key: 'policies');
-    final key = encrypt.Key.fromLength(32);
-    final iv = encrypt.IV.fromLength(16);
-    final encrypter = encrypt.Encrypter(encrypt.AES(key));
-    final decrypted = encrypter.decrypt64(data!, iv: iv);
-    setState(() {
-      policies =
-          (jsonDecode(decrypted) as List)
-              .map(
-                (item) => Policy(
-                  id: item['id'],
-                  type: item['type'],
-                  subtype: item['subtype'],
-                  company: item['company'],
-                  status: PolicyStatus.values[item['status']],
-                  startDate: DateTime.parse(item['startDate']),
-                  endDate:
-                      item['endDate'] != null
-                          ? DateTime.parse(item['endDate'])
-                          : null,
-                  formData: Map<String, String>.from(item['formData']),
-                  premium: item['premium'].toDouble(),
-                  billingFrequency: item['billingFrequency'],
-                ),
-              )
-              .toList();
-    });
-  }
-
-  Future<void> _exportAllPolicies() async {
-    final pdf = pw.Document();
-    for (var policy in policies) {
-      pdf.addPage(
-        pw.Page(
-          build:
-              (pw.Context context) => pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
-                    'Policy Report',
-                    style: pw.TextStyle(
-                      fontSize: 24,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
-                  pw.SizedBox(height: 20),
-                  pw.Text('Policy ID: ${policy.id}'),
-                  pw.Text('Type: ${policy.type}'),
-                  pw.Text('Subtype: ${policy.subtype}'),
-                  pw.Text('Company: ${policy.company}'),
-                  pw.Text('Status: ${policy.status}'),
-                  pw.Text('Start Date: ${policy.startDate}'),
-                  if (policy.endDate != null)
-                    pw.Text('End Date: ${policy.endDate}'),
-                  pw.Text('Premium: KES ${policy.premium.toStringAsFixed(2)}'),
-                  pw.Text('Billing Frequency: ${policy.billingFrequency}'),
-                  pw.SizedBox(height: 20),
-                  pw.Text('Form Data:', style: pw.TextStyle(fontSize: 16)),
-                  ...policy.formData.entries.map(
-                    (e) => pw.Text('${e.key}: ${e.value}'),
-                  ),
-                ],
-              ),
-        ),
-      );
-    }
-
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/all_policies_report.pdf');
-    await file.writeAsBytes(await pdf.save());
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('All policies exported as PDF')),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Policy Report'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.download),
-            onPressed: _exportAllPolicies,
-          ),
-        ],
-      ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16.0),
-        itemCount: policies.length,
-        itemBuilder: (context, index) {
-          final policy = policies[index];
-          return Card(
-            child: ListTile(
-              title: Text('${policy.type} - ${policy.subtype}'),
-              subtitle: Text(
-                'Status: ${policy.status}\nEnd: ${policy.endDate ?? 'N/A'}\nPremium: KES ${policy.premium.toStringAsFixed(2)}',
-                style: TextStyle(
-                  color:
-                      policy.status == PolicyStatus.nearingExpiration
-                          ? Colors.yellow[800]
-                          : policy.status == PolicyStatus.expired
-                          ? Colors.red
-                          : null,
-                ),
-              ),
-              trailing: IconButton(
-                icon: const Icon(Icons.picture_as_pdf),
-                onPressed: () async {
-                  final pdf = pw.Document();
-                  pdf.addPage(
-                    pw.Page(
-                      build:
-                          (pw.Context context) => pw.Column(
-                            crossAxisAlignment: pw.CrossAxisAlignment.start,
-                            children: [
-                              pw.Text(
-                                'Policy Report',
-                                style: pw.TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: pw.FontWeight.bold,
-                                ),
-                              ),
-                              pw.SizedBox(height: 20),
-                              pw.Text('Policy ID: ${policy.id}'),
-                              pw.Text('Type: ${policy.type}'),
-                              pw.Text('Subtype: ${policy.subtype}'),
-                              pw.Text('Company: ${policy.company}'),
-                              pw.Text('Status: ${policy.status}'),
-                              pw.Text('Start Date: ${policy.startDate}'),
-                              if (policy.endDate != null)
-                                pw.Text('End Date: ${policy.endDate}'),
-                              pw.Text(
-                                'Premium: KES ${policy.premium.toStringAsFixed(2)}',
-                              ),
-                              pw.Text(
-                                'Billing Frequency: ${policy.billingFrequency}',
-                              ),
-                              pw.SizedBox(height: 20),
-                              pw.Text(
-                                'Form Data:',
-                                style: pw.TextStyle(fontSize: 16),
-                              ),
-                              ...policy.formData.entries.map(
-                                (e) => pw.Text('${e.key}: ${e.value}'),
-                              ),
-                            ],
-                          ),
-                    ),
-                  );
-
-                  final directory = await getApplicationDocumentsDirectory();
-                  final file = File(
-                    '${directory.path}/policy_${policy.id}.pdf',
-                  );
-                  await file.writeAsBytes(await pdf.save());
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Policy ${policy.id} exported as PDF'),
-                    ),
-                  );
-                },
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class PdfPreview extends StatefulWidget {
-  final File file;
-  final int initialPage;
-  final bool allowPinchZoom;
-  final bool allowSwipeNavigation;
-
-  const PdfPreview({
-    super.key,
-    required this.file,
-    this.initialPage = 1,
-    this.allowPinchZoom = true,
-    this.allowSwipeNavigation = true,
-  });
-
-  @override
-  State<PdfPreview> createState() => _PdfPreviewState();
-}
-
-class _PdfPreviewState extends State<PdfPreview> {
-  late Future<pdf.PdfDocument> _pdfDocumentFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _pdfDocumentFuture = pdf.PdfDocument.openFile(widget.file.path);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<pdf.PdfDocument>(
-      future: _pdfDocumentFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          print('Error loading PDF: ${snapshot.error}');
-          return Center(child: Text('Error loading PDF: ${snapshot.error}'));
-        }
-        if (snapshot.data == null) {
-          return const Center(child: Text('PDF data is null'));
-        }
-
-        final pdfDoc = snapshot.data!;
-        return PdfViewer(
-          doc: pdfDoc,
-          // Pass initialPage, zoomSteps, and panEnabled within PdfViewerParams
-          params: PdfViewerParams(panEnabled: widget.allowSwipeNavigation),
-        );
-      },
-    );
   }
 }
