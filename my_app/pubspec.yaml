@@ -19,7 +19,8 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.7.2
+  sdk: '>=2.17.0 <4.0.0' # Supports null safety and SDK 3.7.2
+
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -45,11 +46,24 @@ dependencies:
   mailer: ^6.4.1
   path_provider: ^2.1.5
   pdf_text: ^0.5.0
-  file_picker: ^10.1.9
+  file_picker: ^8.3.2 # Downgraded to avoid win32 conflict
   http: ^0.13.6
   fl_chart: ^1.0.0
   firebase_core: ^3.13.0
-  flutter_pdfium: ^1.0.2
+  shared_preferences: ^2.2.0
+  native_pdf_renderer: ^3.1.0
+  google_fonts: ^4.0.4
+  cloud_firestore: ^5.4.4
+  firebase_auth: ^5.3.1
+  firebase_storage: ^12.3.4
+  carousel_slider: ^5.0.0
+  provider: ^6.0.5
+
+dependency_overrides:
+  uuid: ^4.5.1 # Force uuid 4.5.1 for native_pdf_renderer
+  image: ^4.2.0
+
+
 
 dev_dependencies:
   flutter_test:
@@ -74,9 +88,10 @@ flutter:
   uses-material-design: true
 
   # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  #assets:
+  #  - assets/banners/promo1.jpg
+  #  - assets/banners/promo2.jpg
+  #  - assets/banners/promo3.jpg
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

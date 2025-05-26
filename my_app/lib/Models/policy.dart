@@ -7,7 +7,7 @@ class Policy {
   final String type;
   final String subtype;
   final String coverageType; // e.g., 'third_party', 'comprehensive'
-  final String status;
+  final CoverStatus status;
   final DateTime? endDate;
   final String pdfTemplateKey;
 
@@ -30,7 +30,7 @@ class Policy {
     'type': type,
     'subtype': subtype,
     'coverageType': coverageType,
-    'status': status,
+    'status': status.name,
     'expirationDate': endDate?.toIso8601String(),
     'pdfTemplateKey': pdfTemplateKey,
   };
@@ -42,7 +42,10 @@ class Policy {
     type: json['type'],
     subtype: json['subtype'],
     coverageType: json['coverageType'],
-    status: json['status'],
+    status: CoverStatus.values.firstWhere(
+      (e) => e.name == json['status'],
+      orElse: () => CoverStatus.active,
+    ),
     endDate: DateTime.parse(json['expirationDate']),
     pdfTemplateKey: json['pdfTemplateKey'],
   );

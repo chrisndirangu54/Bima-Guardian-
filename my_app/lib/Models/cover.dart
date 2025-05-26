@@ -1,3 +1,5 @@
+import 'package:my_app/insurance_app.dart';
+
 class Cover {
   final String id;
   final String insuredItemId;
@@ -5,7 +7,7 @@ class Cover {
   final String type;
   final String subtype;
   final String coverageType;
-  final String status; // e.g., 'pending', 'active', 'expired'
+  final CoverStatus status; // e.g., 'pending', 'active', 'expired'
   final DateTime? expirationDate;
   final String pdfTemplateKey;
   final String paymentStatus; // e.g., 'pending', 'completed', 'failed'
@@ -42,7 +44,7 @@ class Cover {
     'type': type,
     'subtype': subtype,
     'coverageType': coverageType,
-    'status': status,
+    'status': status.name,
     'expirationDate': expirationDate!.toIso8601String(),
     'pdfTemplateKey': pdfTemplateKey,
     'paymentStatus': paymentStatus,
@@ -60,7 +62,10 @@ class Cover {
     type: json['type'] as String,
     subtype: json['subtype'] as String,
     coverageType: json['coverageType'] as String,
-    status: json['status'] as String,
+    status: CoverStatus.values.firstWhere(
+      (e) => e.name == json['status'],
+      orElse: () => CoverStatus.active,
+    ),
     expirationDate: DateTime.parse(json['expirationDate'] as String),
     pdfTemplateKey: json['pdfTemplateKey'] as String,
     paymentStatus: json['paymentStatus'] as String,
@@ -83,7 +88,7 @@ class Cover {
     String? type,
     String? subtype,
     String? coverageType,
-    String? status,
+    CoverStatus? status,
     DateTime? expirationDate,
     String? pdfTemplateKey,
     String? paymentStatus,

@@ -1,18 +1,19 @@
-import 'dart:convert';
 import 'dart:io';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:collection/collection.dart';
-import 'package:encrypt/encrypt.dart' as encrypt;
-import 'package:file_picker/file_picker.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:fl_chart/fl_chart.dart' as charts;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:my_app/Models/field_definition.dart';
 import 'package:my_app/Models/pdf_template.dart';
 import 'package:my_app/Models/policy.dart';
-import 'package:my_app/insurance_app.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:my_app/Screens/pdf_editor.dart'; // Import PdfCoordinateEditor
+import 'package:my_app/Screens/pdf_editor.dart';
+import 'package:my_app/insurance_app.dart'; // Import PdfCoordinateEditor
 
 class AdminPanel extends StatefulWidget {
   const AdminPanel({super.key});
@@ -24,7 +25,6 @@ class AdminPanel extends StatefulWidget {
 class _AdminPanelState extends State<AdminPanel> {
   List<Policy> policies = [];
   Map<String, PDFTemplate> cachedPdfTemplates = {};
-  final secureStorage = const FlutterSecureStorage();
 
   @override
   void initState() {
@@ -34,52 +34,325 @@ class _AdminPanelState extends State<AdminPanel> {
   }
 
   Future<void> _loadPolicies() async {
-    String? data = await secureStorage.read(key: 'policies');
-    if (data == null) return;
-    final key = encrypt.Key.fromLength(32);
-    final iv = encrypt.IV.fromLength(16);
-    final encrypter = encrypt.Encrypter(encrypt.AES(key));
-    final decrypted = encrypter.decrypt64(data, iv: iv);
-    setState(() {
-      policies =
-          (jsonDecode(decrypted) as List)
-              .map((item) => Policy.fromJson(item))
-              .toList();
-    });
+    try {
+      final snapshot =
+          await FirebaseFirestore.instance.collection('policies').get();
+
+      setState(() {
+        policies = snapshot.docs
+            .map(
+              (doc) => Policy(
+                id: doc['id'] as String,
+                type: doc['type'] as String,
+                subtype: doc['subtype'] as String,
+                companyId: doc['companyId'] as String,
+                status: CoverStatus.values.firstWhere(
+                  (e) => e.toString() == doc['status'],
+                  orElse: () => CoverStatus.active,
+                ),
+                insuredItemId: doc['insuredItemId'] as String? ?? '',
+                coverageType: doc['coverageType'] as String? ?? '',
+                pdfTemplateKey: doc['pdfTemplateKey'] as String? ?? '',
+                endDate: doc['endDate'] != null
+                    ? (doc['endDate'] as Timestamp).toDate()
+                    : null,
+              ),
+            )
+            .toList();
+      });
+
+      if (policies.isEmpty && kDebugMode) {
+        print('No policies found in Firestore.');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error loading policies: $e');
+      }
+      setState(() {
+        policies = [];
+      });
+    }
   }
 
   Future<void> _savePolicies() async {
-    final key = encrypt.Key.fromLength(32);
-    final iv = encrypt.IV.fromLength(16);
-    final encrypter = encrypt.Encrypter(encrypt.AES(key));
-    final encrypted = encrypter.encrypt(
-      jsonEncode(policies.map((policy) => policy.toJson()).toList()),
-      iv: iv,
-    );
-    await secureStorage.write(key: 'policies', value: encrypted.base64);
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+      for (var policy in policies) {
+        final docRef =
+            FirebaseFirestore.instance.collection('policies').doc(policy.id);
+        batch.set(docRef, {
+          'id': policy.id,
+          'type': policy.type,
+          'subtype': policy.subtype,
+          'companyId': policy.companyId,
+          'status': policy.status.toString(),
+          'insuredItemId': policy.insuredItemId,
+          'coverageType': policy.coverageType,
+          'pdfTemplateKey': policy.pdfTemplateKey,
+          'endDate': policy.endDate != null
+              ? Timestamp.fromDate(policy.endDate!)
+              : null,
+        });
+      }
+      await batch.commit();
+      if (kDebugMode) {
+        print('Policies saved to Firestore.');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error saving policies: $e');
+      }
+    }
   }
 
   Future<void> _loadCachedPdfTemplates() async {
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/pdf_templates.json');
-    if (await file.exists()) {
-      final data = jsonDecode(await file.readAsString());
+    try {
+      final snapshot =
+          await FirebaseFirestore.instance.collection('pdf_templates').get();
+
       setState(() {
-        cachedPdfTemplates = data.map(
-          (key, value) => MapEntry(key, PDFTemplate.fromJson(value)),
+        cachedPdfTemplates = Map.fromEntries(
+          snapshot.docs.map(
+            (doc) => MapEntry(
+              doc.id,
+              PDFTemplate.fromJson(doc.data()),
+            ),
+          ),
         );
+      });
+
+      if (cachedPdfTemplates.isEmpty) {
+        // Initialize default template
+        final defaultTemplate = PDFTemplate(
+          templateKey: 'default',
+          policyType: 'motor',
+          policySubtype: 'comprehensive',
+          coordinates: {
+            'name': {'page': 1.0, 'x': 50.0, 'y': 50.0},
+            'email': {'page': 1.0, 'x': 50.0, 'y': 70.0},
+            'phone': {'page': 1.0, 'x': 50.0, 'y': 90.0},
+          },
+          fields: {
+            'name': FieldDefinition(
+                expectedType: ExpectedType.name,
+                validator: (String) {
+                  return null;
+                }),
+            'email': FieldDefinition(
+                expectedType: ExpectedType.email,
+                validator: (String) {
+                  return null;
+                }),
+            'phone': FieldDefinition(
+                expectedType: ExpectedType.phone,
+                validator: (String) {
+                  return null;
+                }),
+          },
+          fieldMappings: {},
+        );
+        await FirebaseFirestore.instance
+            .collection('pdf_templates')
+            .doc('default')
+            .set(defaultTemplate.toJson());
+        setState(() {
+          cachedPdfTemplates['default'] = defaultTemplate;
+        });
+        if (kDebugMode) {
+          print('Initialized default PDF template in Firestore.');
+        }
+      } else {
+        if (kDebugMode) {
+          print('PDF templates loaded from Firestore.');
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error loading cached PDF templates: $e');
+      }
+      setState(() {
+        cachedPdfTemplates = {};
       });
     }
   }
 
   Future<void> _savePdfTemplates() async {
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/pdf_templates.json');
-    await file.writeAsString(
-      jsonEncode(
-        cachedPdfTemplates.map((key, value) => MapEntry(key, value.toJson())),
-      ),
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+      cachedPdfTemplates.forEach((key, template) {
+        final docRef =
+            FirebaseFirestore.instance.collection('pdf_templates').doc(key);
+        batch.set(docRef, template.toJson());
+      });
+      await batch.commit();
+      if (kDebugMode) {
+        print('PDF templates saved to Firestore.');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error saving PDF templates: $e');
+      }
+    }
+  }
+
+  Future<void> _uploadPdfTemplate() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
     );
+
+    if (result != null && result.files.single.path != null) {
+      String filePath = result.files.single.path!;
+      String templateKey = result.files.single.name.split('.').first;
+
+      // Show policy selection dialog
+      final policyDetails = await _showPolicySelectionDialog(context);
+      if (policyDetails == null) return; // User canceled
+
+      // Upload PDF to Firebase Storage
+      try {
+        final storageRef = FirebaseStorage.instance
+            .ref()
+            .child('pdf_templates/$templateKey.pdf');
+        await storageRef.putFile(File(filePath));
+        final downloadUrl = await storageRef.getDownloadURL();
+
+        // Launch PdfCoordinateEditor
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PdfCoordinateEditor(
+              pdfPath: filePath, // Local path for editing
+              onSave: (coordinates, fieldDefinitions) async {
+                final template = PDFTemplate(
+                  fields: fieldDefinitions,
+                  fieldMappings: fieldDefinitions.map(
+                    (key, value) => MapEntry(key, key),
+                  ),
+                  coordinates: coordinates,
+                  policyType: policyDetails['policyType']!,
+                  policySubtype: policyDetails['policySubtype']!,
+                  templateKey: templateKey,
+                );
+
+                // Save template metadata to Firestore
+                await FirebaseFirestore.instance
+                    .collection('pdf_templates')
+                    .doc(templateKey)
+                    .set(template.toJson());
+
+                setState(() {
+                  cachedPdfTemplates[templateKey] = template;
+                });
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'PDF template "$templateKey" saved successfully',
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      } catch (e) {
+        if (kDebugMode) {
+          print('Error uploading PDF template: $e');
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to upload PDF template: $e'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _updatePolicyStatus(Policy policy, CoverStatus newStatus) async {
+    try {
+      final updatedPolicy = Policy(
+        id: policy.id,
+        insuredItemId: policy.insuredItemId,
+        type: policy.type,
+        subtype: policy.subtype,
+        status: newStatus,
+        endDate: newStatus == CoverStatus.extended
+            ? policy.endDate?.add(Duration(days: 365)) ??
+                DateTime.now().add(Duration(days: 365))
+            : policy.endDate,
+        companyId: policy.companyId,
+        coverageType: policy.coverageType,
+        pdfTemplateKey: policy.pdfTemplateKey,
+      );
+
+      // Update Firestore
+      await FirebaseFirestore.instance
+          .collection('policies')
+          .doc(policy.id)
+          .set({
+        'id': updatedPolicy.id,
+        'type': updatedPolicy.type,
+        'subtype': updatedPolicy.subtype,
+        'companyId': updatedPolicy.companyId,
+        'status': updatedPolicy.status.toString(),
+        'insuredItemId': updatedPolicy.insuredItemId,
+        'coverageType': updatedPolicy.coverageType,
+        'pdfTemplateKey': updatedPolicy.pdfTemplateKey,
+        'endDate': updatedPolicy.endDate != null
+            ? Timestamp.fromDate(updatedPolicy.endDate!)
+            : null,
+      });
+
+      setState(() {
+        policies =
+            policies.map((p) => p.id == policy.id ? updatedPolicy : p).toList();
+      });
+
+      // Send notification
+      await FirebaseMessaging.instance.sendMessage(
+        to: '/topics/policy_updates',
+        data: {'policy_id': policy.id, 'new_status': newStatus.toString()},
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Policy status updated to $newStatus'),
+        ),
+      );
+
+      // Notify expiration if applicable
+      if (newStatus == CoverStatus.nearingExpiration ||
+          newStatus == CoverStatus.expired) {
+        await _notifyPolicyExpiration(updatedPolicy);
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error updating policy status: $e');
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update policy status: $e'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _notifyPolicyExpiration(Policy policy) async {
+    try {
+      await FirebaseMessaging.instance.sendMessage(
+        to: '/topics/policy_updates',
+        data: {
+          'policy_id': policy.id,
+          'message':
+              'Reminder: Policy ${policy.id} (${policy.type} - ${policy.subtype}) is ${policy.status == CoverStatus.expired ? 'expired' : 'nearing expiration'}',
+        },
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error sending policy expiration notification: $e');
+      }
+    }
   }
 
   Future<Map<String, String>?> _showPolicySelectionDialog(
@@ -100,64 +373,145 @@ class _AdminPanelState extends State<AdminPanel> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: const Text('Select Policy Details'),
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              title: Text(
+                'Select Policy Details',
+                style: GoogleFonts.lora(
+                  color: Color(0xFF1B263B),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  DropdownButton<String>(
-                    hint: const Text('Policy Type'),
+                  DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      labelText: 'Policy Type',
+                      labelStyle: GoogleFonts.roboto(color: Color(0xFFD3D3D3)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Color(0xFFD3D3D3)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Color(0xFFD3D3D3)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Color(0xFF8B0000)),
+                      ),
+                    ),
                     value: policyType,
-                    items:
-                        policyTypes
-                            .map(
-                              (type) => DropdownMenuItem(
-                                value: type,
-                                child: Text(type),
-                              ),
-                            )
-                            .toList(),
+                    items: policyTypes
+                        .map(
+                          (type) => DropdownMenuItem(
+                            value: type,
+                            child: Text(
+                              type,
+                              style:
+                                  GoogleFonts.roboto(color: Color(0xFF1B263B)),
+                            ),
+                          ),
+                        )
+                        .toList(),
                     onChanged: (value) {
                       setState(() {
                         policyType = value;
-                        policySubtype = null; // Reset subtype when type changes
+                        policySubtype = null;
                       });
                     },
+                    validator: (value) =>
+                        value == null ? 'Please select a policy type' : null,
                   ),
                   if (policyType != null)
-                    DropdownButton<String>(
-                      hint: const Text('Policy Subtype'),
-                      value: policySubtype,
-                      items:
-                          policySubtypes[policyType]!
-                              .map(
-                                (subtype) => DropdownMenuItem(
-                                  value: subtype,
-                                  child: Text(subtype),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: DropdownButtonFormField<String>(
+                        decoration: InputDecoration(
+                          labelText: 'Policy Subtype',
+                          labelStyle:
+                              GoogleFonts.roboto(color: Color(0xFFD3D3D3)),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Color(0xFFD3D3D3)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Color(0xFFD3D3D3)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Color(0xFF8B0000)),
+                          ),
+                        ),
+                        value: policySubtype,
+                        items: policySubtypes[policyType]!
+                            .map(
+                              (subtype) => DropdownMenuItem(
+                                value: subtype,
+                                child: Text(
+                                  subtype,
+                                  style: GoogleFonts.roboto(
+                                      color: Color(0xFF1B263B)),
                                 ),
-                              )
-                              .toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          policySubtype = value;
-                        });
-                      },
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            policySubtype = value;
+                          });
+                        },
+                        validator: (value) => value == null
+                            ? 'Please select a policy subtype'
+                            : null,
+                      ),
                     ),
                 ],
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
+                  child: Text(
+                    'Cancel',
+                    style: GoogleFonts.roboto(color: Color(0xFFD3D3D3)),
+                  ),
                 ),
-                TextButton(
-                  onPressed:
-                      policyType != null && policySubtype != null
-                          ? () => Navigator.pop(context, {
-                            'policyType': policyType!,
-                            'policySubtype': policySubtype!,
-                          })
-                          : null,
-                  child: const Text('Confirm'),
+                ElevatedButton(
+                  onPressed: () {
+                    if (policyType != null && policySubtype != null) {
+                      Navigator.pop(context, {
+                        'policyType': policyType!,
+                        'policySubtype': policySubtype!,
+                      });
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Please select both policy type and subtype',
+                            style: GoogleFonts.roboto(color: Colors.white),
+                          ),
+                          backgroundColor: Color(0xFF8B0000),
+                        ),
+                      );
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFF8B0000),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Confirm',
+                    style: GoogleFonts.roboto(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ),
               ],
             );
@@ -167,109 +521,11 @@ class _AdminPanelState extends State<AdminPanel> {
     );
   }
 
-  Future<void> _uploadPdfTemplate() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf'],
-    );
-
-    if (result != null && result.files.single.path != null) {
-      String filePath = result.files.single.path!;
-      String templateKey = result.files.single.name.split('.').first;
-
-      // Show policy selection dialog
-      final policyDetails = await _showPolicySelectionDialog(context);
-      if (policyDetails == null) return; // User canceled
-
-      final directory = await getApplicationDocumentsDirectory();
-      final templateFile = File(
-        '${directory.path}/pdf_templates/$templateKey.pdf',
-      );
-      await File(filePath).copy(templateFile.path);
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder:
-              (context) => PdfCoordinateEditor(
-                pdfPath: templateFile.path,
-                onSave: (coordinates, fieldDefinitions) {
-                  setState(() {
-                    cachedPdfTemplates[templateKey] = PDFTemplate(
-                      fields: fieldDefinitions,
-                      fieldMappings: fieldDefinitions.map(
-                        (key, value) => MapEntry(key, key),
-                      ),
-                      coordinates: coordinates,
-                      policyType: policyDetails['policyType']!,
-                      policySubtype: policyDetails['policySubtype']!,
-                      templateKey: templateKey,
-                    );
-                  });
-                  _savePdfTemplates();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'PDF template "$templateKey" saved successfully',
-                      ),
-                    ),
-                  );
-                },
-              ),
-        ),
-      );
-    }
-  }
-
-  Future<void> _updatePolicyStatus(Policy policy, CoverStatus newStatus) async {
-    setState(() {
-      policies =
-          policies.map((p) {
-            if (p.id == policy.id) {
-              return Policy(
-                id: p.id,
-                insuredItemId: p.insuredItemId,
-                type: p.type,
-                subtype: p.subtype,
-                status: newStatus,
-                endDate:
-                    newStatus == CoverStatus.extended
-                        ? p.endDate?.add(Duration(days: 365)) ??
-                            DateTime.now().add(Duration(days: 365))
-                        : p.endDate,
-
-                companyId: p.companyId,
-                coverageType: p.coverageType,
-                pdfTemplateKey: '',
-              );
-            }
-            return p;
-          }).toList();
-    });
-    await _savePolicies();
-    await FirebaseMessaging.instance.sendMessage(
-      to: '/topics/policy_updates',
-      data: {'policy_id': policy.id, 'new_status': newStatus.toString()},
-    );
-  }
-
-  Future<void> _notifyPolicyExpiration(Policy policy) async {
-    await FirebaseMessaging.instance.sendMessage(
-      to: '/topics/policy_updates',
-      data: {
-        'policy_id': policy.id,
-        'message':
-            'Reminder: Policy ${policy.id} (${policy.type} - ${policy.subtype}) is ${policy.status == CoverStatus.expired ? 'expired' : 'nearing expiration'}',
-      },
-    );
-  }
-
   List<charts.FlSpot> _createPolicyTrendDataForFlChart() {
-    final groupedData =
-        groupBy(
-          policies,
-          (Policy p) => DateTime(p.endDate!.year, p.endDate!.month),
-        ).entries.map((e) => MapEntry(e.key, e.value.length)).toList();
+    final groupedData = groupBy(
+      policies.where((p) => p.endDate != null),
+      (Policy p) => DateTime(p.endDate!.year, p.endDate!.month),
+    ).entries.map((e) => MapEntry(e.key, e.value.length)).toList();
 
     groupedData.sort((a, b) => a.key.compareTo(b.key));
 
@@ -284,7 +540,18 @@ class _AdminPanelState extends State<AdminPanel> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Admin Panel')),
+      appBar: AppBar(
+        title: Text(
+          'Admin Panel',
+          style: GoogleFonts.lora(
+            color: Color(0xFF1B263B),
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        backgroundColor: Colors.white,
+        elevation: 0,
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -292,12 +559,28 @@ class _AdminPanelState extends State<AdminPanel> {
           children: [
             ElevatedButton(
               onPressed: _uploadPdfTemplate,
-              child: const Text('Upload PDF Template'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color(0xFF8B0000),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text(
+                'Upload PDF Template',
+                style: GoogleFonts.roboto(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ),
             const SizedBox(height: 20),
-            const Text(
+            Text(
               'PDF Templates',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: GoogleFonts.lora(
+                color: Color(0xFF1B263B),
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             ListView.builder(
               shrinkWrap: true,
@@ -309,24 +592,39 @@ class _AdminPanelState extends State<AdminPanel> {
                 return ListTile(
                   title: Text(
                     '$templateKey (${template.policyType} - ${template.policySubtype})',
+                    style: GoogleFonts.roboto(color: Color(0xFF1B263B)),
                   ),
                   trailing: IconButton(
-                    icon: const Icon(Icons.delete),
+                    icon: const Icon(
+                      Icons.delete,
+                      color: Color(0xFF8B0000),
+                    ),
                     onPressed: () async {
-                      final directory =
-                          await getApplicationDocumentsDirectory();
-                      final file = File(
-                        '${directory.path}/pdf_templates/$templateKey.pdf',
-                      );
-                      if (await file.exists()) {
-                        await file.delete();
+                      try {
+                        // Delete from Firestore
+                        await FirebaseFirestore.instance
+                            .collection('pdf_templates')
+                            .doc(templateKey)
+                            .delete();
+                        // Delete from Firebase Storage
+                        await FirebaseStorage.instance
+                            .ref('pdf_templates/$templateKey.pdf')
+                            .delete();
                         setState(() {
                           cachedPdfTemplates.remove(templateKey);
                         });
-                        await _savePdfTemplates();
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text('Template $templateKey deleted'),
+                          ),
+                        );
+                      } catch (e) {
+                        if (kDebugMode) {
+                          print('Error deleting template $templateKey: $e');
+                        }
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Failed to delete template: $e'),
                           ),
                         );
                       }
@@ -336,9 +634,13 @@ class _AdminPanelState extends State<AdminPanel> {
               },
             ),
             const SizedBox(height: 20),
-            const Text(
+            Text(
               'Policies',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: GoogleFonts.lora(
+                color: Color(0xFF1B263B),
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             ListView.builder(
               shrinkWrap: true,
@@ -347,43 +649,37 @@ class _AdminPanelState extends State<AdminPanel> {
               itemBuilder: (context, index) {
                 final policy = policies[index];
                 return ListTile(
-                  title: Text('${policy.type} - ${policy.subtype}'),
+                  title: Text(
+                    '${policy.type} - ${policy.subtype}',
+                    style: GoogleFonts.roboto(color: Color(0xFF1B263B)),
+                  ),
                   subtitle: Text(
-                    'Status: ${policy.status} | End: ${policy.endDate ?? 'N/A'}',
-                    style: TextStyle(
-                      color:
-                          policy.status == CoverStatus.nearingExpiration
-                              ? Colors.yellow[800]
-                              : policy.status == CoverStatus.expired
-                              ? Colors.red
-                              : null,
+                    'Status: ${policy.status} | End: ${policy.endDate?.toString() ?? 'N/A'}',
+                    style: GoogleFonts.roboto(
+                      color: policy.status == CoverStatus.nearingExpiration
+                          ? Colors.yellow[800]
+                          : policy.status == CoverStatus.expired
+                              ? Color(0xFF8B0000)
+                              : Color(0xFFD3D3D3),
                     ),
                   ),
                   trailing: DropdownButton<CoverStatus>(
                     value: policy.status,
-                    items:
-                        CoverStatus.values
-                            .map(
-                              (status) => DropdownMenuItem(
-                                value: status,
-                                child: Text(status.toString().split('.').last),
-                              ),
-                            )
-                            .toList(),
+                    items: CoverStatus.values
+                        .map(
+                          (status) => DropdownMenuItem(
+                            value: status,
+                            child: Text(
+                              status.toString().split('.').last,
+                              style:
+                                  GoogleFonts.roboto(color: Color(0xFF1B263B)),
+                            ),
+                          ),
+                        )
+                        .toList(),
                     onChanged: (newStatus) async {
                       if (newStatus != null) {
                         await _updatePolicyStatus(policy, newStatus);
-                        if (newStatus == CoverStatus.nearingExpiration ||
-                            newStatus == CoverStatus.expired) {
-                          await _notifyPolicyExpiration(policy);
-                        }
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Policy status updated to $newStatus',
-                            ),
-                          ),
-                        );
                       }
                     },
                   ),
@@ -391,9 +687,13 @@ class _AdminPanelState extends State<AdminPanel> {
               },
             ),
             const SizedBox(height: 20),
-            const Text(
+            Text(
               'Policy Trends',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: GoogleFonts.lora(
+                color: Color(0xFF1B263B),
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             SizedBox(
               height: 200,
@@ -421,11 +721,14 @@ class _AdminPanelState extends State<AdminPanel> {
                             meta: meta,
                             child: Text(
                               '${date.month}/${date.year % 100}',
-                              style: const TextStyle(fontSize: 10),
+                              style: GoogleFonts.roboto(
+                                color: Color(0xFF1B263B),
+                                fontSize: 10,
+                              ),
                             ),
                           );
                         },
-                        interval: 2592000000,
+                        interval: 2592000000, // Approx 30 days
                       ),
                     ),
                     leftTitles: charts.AxisTitles(
@@ -435,7 +738,10 @@ class _AdminPanelState extends State<AdminPanel> {
                         getTitlesWidget: (value, meta) {
                           return Text(
                             value.toInt().toString(),
-                            style: const TextStyle(fontSize: 10),
+                            style: GoogleFonts.roboto(
+                              color: Color(0xFF1B263B),
+                              fontSize: 10,
+                            ),
                           );
                         },
                         interval: 1,
@@ -445,7 +751,7 @@ class _AdminPanelState extends State<AdminPanel> {
                   borderData: charts.FlBorderData(
                     show: true,
                     border: Border.all(
-                      color: const Color(0xff37434d),
+                      color: Color(0xFF1B263B),
                       width: 1,
                     ),
                   ),
@@ -453,13 +759,13 @@ class _AdminPanelState extends State<AdminPanel> {
                     charts.LineChartBarData(
                       spots: _createPolicyTrendDataForFlChart(),
                       isCurved: true,
-                      color: Colors.blueAccent,
+                      color: Color(0xFF8B0000),
                       barWidth: 3,
                       isStrokeCapRound: true,
                       dotData: const charts.FlDotData(show: true),
                       belowBarData: charts.BarAreaData(
                         show: true,
-                        color: Colors.blueAccent.withOpacity(0.3),
+                        color: Color(0xFF8B0000).withOpacity(0.3),
                       ),
                     ),
                   ],

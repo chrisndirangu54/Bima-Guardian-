@@ -1,12 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:my_app/Models/field_definition.dart';
 import 'package:my_app/Screens/pdf_preview.dart';
 import 'package:pdf_render/pdf_render.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
-import 'package:flutter_pdfium/flutter_pdfium.dart'; // Hypothetical pdfium plugin
 
 class PdfCoordinateEditor extends StatefulWidget {
   final String pdfPath;
@@ -43,6 +44,9 @@ class _PdfCoordinateEditorState extends State<PdfCoordinateEditor> {
   ];
   static const String layoutLmApiUrl = 'your-layoutlmv3-api-url-here';
   static const String openAiApiKey = 'your-openai-api-key-here';
+  final MethodChannel platform = const MethodChannel(
+    'com.example.myapp/pdfExtractor',
+  );
 
   @override
   void initState() {
@@ -66,13 +70,28 @@ class _PdfCoordinateEditorState extends State<PdfCoordinateEditor> {
 
   Future<void> _extractFieldsWithAI() async {
     try {
+      // Check if running on web
+      if (kIsWeb) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'SOTA AI extraction (LayoutLMv3) is not fully supported on web due to file system limitations. Falling back to GPT-based extraction.',
+            ),
+          ),
+        );
+        await _extractFieldsWithGpt(); // Fallback to GPT for web
+        return;
+      }
+
+      // --- Code for non-web platforms (mobile, desktop) ---
       final directory = await getTemporaryDirectory();
       final pdfImages = <String>[];
+
       for (int i = 1; i <= _pdfDocument!.pageCount; i++) {
-        final page = _pdfDocument!.getPage(i);
-        final pageContent = await page.render();
+        final page = await _pdfDocument!.getPage(i);
+        final pageContent = await page.render(); // pageContent is PdfPageImage
         final imagePath = '${directory.path}/page_$i.png';
-        await File(imagePath).writeAsBytes(pageContent.bytes);
+        await File(imagePath).writeAsBytes(pageContent.pixels);
         pdfImages.add(imagePath);
       }
 
@@ -97,7 +116,7 @@ class _PdfCoordinateEditorState extends State<PdfCoordinateEditor> {
           _suggestedFields = suggestedFields;
           _fieldDefinitions.addAll({
             for (var field in suggestedFields)
-              field['name']: FieldDefinition(
+              field['name'] as String: FieldDefinition(
                 expectedType: ExpectedType.values.firstWhere(
                   (e) => e.toString().split('.').last == field['type'],
                   orElse: () => ExpectedType.custom,
@@ -121,7 +140,7 @@ class _PdfCoordinateEditorState extends State<PdfCoordinateEditor> {
           });
           _coordinates.addAll({
             for (var field in suggestedFields)
-              field['name']: {
+              field['name'] as String: {
                 'page': field['page'].toDouble(),
                 'x': field['x'].toDouble(),
                 'y': field['y'].toDouble(),
@@ -129,8 +148,9 @@ class _PdfCoordinateEditorState extends State<PdfCoordinateEditor> {
           });
           _fields.addAll(
             suggestedFields
-                .map((f) => f['name'])
-                .where((name) => !_fields.contains(name)),
+                .map((f) => f['name'] as String)
+                .where((name) => !_fields.contains(name))
+                .toList(),
           );
         });
         ScaffoldMessenger.of(context).showSnackBar(
@@ -139,6 +159,7 @@ class _PdfCoordinateEditorState extends State<PdfCoordinateEditor> {
           ),
         );
       } else {
+        // If LayoutLMv3 API fails, fall back to GPT
         await _extractFieldsWithGpt();
       }
     } catch (e) {
@@ -146,37 +167,27 @@ class _PdfCoordinateEditorState extends State<PdfCoordinateEditor> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('SOTA AI extraction failed: $e')));
+      // If SOTA AI extraction fails (e.g., network error, API issue), fall back to GPT
       await _extractFieldsWithGpt();
     }
   }
 
   Future<void> _extractFieldsWithGpt() async {
     try {
-      // Initialize pdfium for text extraction with bounding boxes
-      final pdfiumDoc = await PdfiumDocument.open(widget.pdfPath);
-      final textWithPositions = <Map<String, dynamic>>[];
+      // Use the platform channel to get text with bounds from native code
+      final List<Map<String, dynamic>> textWithPositions =
+          await _extractTextAndBoundsNative(widget.pdfPath);
 
-      for (int i = 1; i <= pdfiumDoc.pageCount; i++) {
-        final page = await pdfiumDoc.getPage(
-          i - 1,
-        ); // pdfium uses 0-based indexing
-        final textElements =
-            await page
-                .getTextWithBounds(); // Hypothetical method from flutter_pdfium
-
-        for (var element in textElements) {
-          textWithPositions.add({
-            'page': i,
-            'text': element.text,
-            'x': element.bounds.left.toDouble(),
-            'y': element.bounds.top.toDouble(),
-            'width': (element.bounds.right - element.bounds.left).toDouble(),
-            'height': (element.bounds.bottom - element.bounds.top).toDouble(),
-          });
-        }
-        page.close();
+      if (textWithPositions.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Failed to extract text with positions from PDF via native code.',
+            ),
+          ),
+        );
+        return;
       }
-      pdfiumDoc.close();
 
       // Send accurate text and bounding box data to OpenAI API
       final response = await http.post(
@@ -212,7 +223,8 @@ class _PdfCoordinateEditorState extends State<PdfCoordinateEditor> {
           _suggestedFields = suggestedFields;
           _fieldDefinitions.addAll({
             for (var field in suggestedFields)
-              field['name']: FieldDefinition(
+              field['name'] as String: FieldDefinition(
+                // Ensure key is String
                 expectedType: ExpectedType.values.firstWhere(
                   (e) => e.toString().split('.').last == field['type'],
                   orElse: () => ExpectedType.custom,
@@ -237,7 +249,8 @@ class _PdfCoordinateEditorState extends State<PdfCoordinateEditor> {
           });
           _coordinates.addAll({
             for (var field in suggestedFields)
-              field['name']: {
+              field['name'] as String: {
+                // Ensure key is String
                 'page': field['page'].toDouble(),
                 'x': field['x'].toDouble(),
                 'y': field['y'].toDouble(),
@@ -245,8 +258,9 @@ class _PdfCoordinateEditorState extends State<PdfCoordinateEditor> {
           });
           _fields.addAll(
             suggestedFields
-                .map((f) => f['name'])
-                .where((name) => !_fields.contains(name)),
+                .map((f) => f['name'] as String)
+                .where((name) => !_fields.contains(name))
+                .toList(),
           );
         });
         ScaffoldMessenger.of(context).showSnackBar(
@@ -266,6 +280,25 @@ class _PdfCoordinateEditorState extends State<PdfCoordinateEditor> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('GPT extraction failed: $e')));
+    }
+  }
+
+  // New method to communicate with native code
+  Future<List<Map<String, dynamic>>> _extractTextAndBoundsNative(
+    String pdfPath,
+  ) async {
+    try {
+      final List<dynamic>? result = await platform.invokeMethod(
+        'getTextWithBounds',
+        {'pdfPath': pdfPath},
+      );
+      // Ensure the list elements are cast to the correct type
+      return result?.cast<Map<String, dynamic>>() ?? [];
+    } on PlatformException catch (e) {
+      if (kDebugMode) {
+        print("Failed to get text bounds from native: '${e.message}'.");
+      }
+      return [];
     }
   }
 
@@ -336,6 +369,9 @@ class _PdfCoordinateEditorState extends State<PdfCoordinateEditor> {
         };
       case ExpectedType.custom:
         return (value) => null;
+      case ExpectedType.name:
+        // TODO: Handle this case.
+        throw UnimplementedError();
     }
   }
 
