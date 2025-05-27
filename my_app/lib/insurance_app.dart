@@ -33,7 +33,7 @@ import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
 import 'package:google_fonts/google_fonts.dart'; // For elegant typography
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:provider/provider.dart';
-// Add this import
+import 'package:url_launcher/url_launcher.dart'; // Correct import for url_launcher
 
 enum UserRole { admin, regular }
 
@@ -114,6 +114,7 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
   static const String mpesaApiKey = 'your-mpesa-api-key-here';
   static const String stripeSecretKey = 'your-stripe-secret-key-here';
   List<Policy> policies = [];
+  static const String paystackSecretKey = 'your-paystack-secret-key-here';
 
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
@@ -1949,7 +1950,7 @@ Future<bool> _initiatePaystackPayment(double amount, bool autoBilling) async {
       body: jsonEncode({
         'amount': (amount * 100).toInt(),  // Amount in kobo (100 kobo = 1 Naira)
         'currency': 'KES',
-        'email': userEmail,  // The email of the user
+        'email': userDetails['email'] ?? '',  // The email of the user
         'callback_url': 'https://your-callback-url.com', // Callback after payment
       }),
     );
@@ -1960,7 +1961,7 @@ Future<bool> _initiatePaystackPayment(double amount, bool autoBilling) async {
       final paymentUrl = transaction['data']['authorization_url'];
 
       // Open the Paystack payment page in a browser (or webview in the app)
-      await launch(paymentUrl);
+      await launchUrlString(paymentUrl);
 
       return true;
     } else {
@@ -2003,7 +2004,7 @@ Future<void> _schedulePaystackAutoBilling(Cover cover) async {
         },
         body: jsonEncode({
           'name': '${cover.id}_plan',
-          'amount': (cover.premium * 100).toInt(),  // Amount in kobo
+          'amount': (cover.premium! * 100).toInt(),  // Amount in kobo
           'interval': cover.billingFrequency == 'monthly' ? 'monthly' : 'yearly',
         }),
       );
@@ -2057,56 +2058,77 @@ Future<void> _schedulePaystackAutoBilling(Cover cover) async {
   }
 }
 
+Future<void> _autofillDMVICWebsiteForMotorInsurance(
+    String registrationNumber, String vehicleType, BuildContext context) async {
+  // Open the DMVIC website in a WebView
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => DMVICWebViewPage(
+        registrationNumber: registrationNumber,
+        vehicleType: vehicleType,
+      ),
+    ),
+  );
+}
 
-  Future<void> _sendEmail(
+Future<void> _sendEmail(
     String company,
     String insuranceType,
     String insuranceSubtype,
     Map<String, String> formData,
     File filledPdf,
-  ) async {
-    final smtpServer = gmail(
-      'your-email@gmail.com',
-      'your-app-specific-password',
+    String registrationNumber,
+    String vehicleType,
+) async {
+  if (insuranceType == 'motor') {
+    // Trigger the autofill method when insurance type is motor
+    await _autofillDMVICWebsiteForMotorInsurance(registrationNumber, vehicleType);
+  }
+
+  // Step 8: Send email logic (this part remains unchanged)
+  final smtpServer = gmail(
+    'your-email@gmail.com',
+    'your-app-specific-password',
+  );
+
+  final message = mailer.Message()
+    ..from = const mailer.Address('your-email@gmail.com', 'Insurance App')
+    ..recipients.add(
+      policyCalculators[insuranceType]![insuranceSubtype]!['companyA']![
+          'email'],
+    )
+    ..subject =
+        'Insurance Form Submission: $insuranceSubtype ($insuranceType)'
+    ..html =
+        '<h3>Form Submission Details</h3><ul>${formData.entries.map((e) => '<li>${e.key}: ${e.value}</li>').join('')}</ul>'
+    ..attachments.add(
+      mailer.FileAttachment(filledPdf, fileName: 'filled_form.pdf'),
     );
 
-    final message = mailer.Message()
-      ..from = const mailer.Address('your-email@gmail.com', 'Insurance App')
-      ..recipients.add(
-        policyCalculators[insuranceType]![insuranceSubtype]!['companyA']![
-            'email'],
-      )
-      ..subject =
-          'Insurance Form Submission: $insuranceSubtype ($insuranceType)'
-      ..html =
-          '<h3>Form Submission Details</h3><ul>${formData.entries.map((e) => '<li>${e.key}: ${e.value}</li>').join('')}</ul>'
-      ..attachments.add(
-        mailer.FileAttachment(filledPdf, fileName: 'filled_form.pdf'),
-      );
-
-    try {
-      final sendReport = await mailer.send(message, smtpServer);
-      if (kDebugMode) {
-        print('Email sent: ${sendReport.toString()}');
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Form details and PDF sent to company email'),
-        ),
-      );
-      _logAction(
-        'Email sent to $company for $insuranceSubtype ($insuranceType)',
-      );
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error sending email: $e');
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Failed to send email')));
-      _logAction('Email failed: $e');
+  try {
+    final sendReport = await mailer.send(message, smtpServer);
+    if (kDebugMode) {
+      print('Email sent: ${sendReport.toString()}');
     }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Form details and PDF sent to company email'),
+      ),
+    );
+    _logAction(
+      'Email sent to $company for $insuranceSubtype ($insuranceType)',
+    );
+  } catch (e) {
+    if (kDebugMode) {
+      print('Error sending email: $e');
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Failed to send email')));
+    _logAction('Email failed: $e');
   }
+}
 
   void _logAction(String action) async {
     final directory = await getApplicationDocumentsDirectory();
@@ -2414,6 +2436,15 @@ Future<void> _schedulePaystackAutoBilling(Cover cover) async {
         if (quotePdf != null) {
           await _sendEmail(
             quote.company,
+            quote.type,
+            quote.subtype,
+            quote.formData,
+            quotePdf,
+            quote.formData['regno'] ?? '', // Provide registrationNumber if available
+            quote.formData['vehicle_type'] ?? '', // Provide vehicleType if available
+          );
+        }
+,
             quote.type,
             quote.subtype,
             quote.formData,
@@ -2753,6 +2784,8 @@ Future<void> _schedulePaystackAutoBilling(Cover cover) async {
             quote.subtype,
             quote.formData,
             quotePdf,
+            quote.formData['regno'] ?? '', // Provide registrationNumber if available
+            quote.formData['vehicle_type'] ?? '', // Provide vehicleType if available
           );
         }
       } else if (choice == 2) {
