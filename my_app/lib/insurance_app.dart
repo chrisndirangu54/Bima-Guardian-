@@ -1938,79 +1938,96 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     }
   }
 
-  Future<bool> _initiateStripePayment(double amount, bool autoBilling) async {
-    try {
-      final response = await http.post(
-        Uri.parse('https://api.stripe.com/v1/payment_intents'),
-        headers: {
-          'Authorization': 'Bearer $stripeSecretKey',
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: {
-          'amount': (amount * 100).toInt().toString(),
-          'currency': 'kes',
-          'payment_method_types[]': 'card',
-        },
-      );
+Future<bool> _initiatePaystackPayment(double amount, bool autoBilling) async {
+  try {
+    final response = await http.post(
+      Uri.parse('https://api.paystack.co/transaction/initialize'),
+      headers: {
+        'Authorization': 'Bearer $paystackSecretKey',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'amount': (amount * 100).toInt(),  // Amount in kobo (100 kobo = 1 Naira)
+        'currency': 'KES',
+        'email': userEmail,  // The email of the user
+        'callback_url': 'https://your-callback-url.com', // Callback after payment
+      }),
+    );
 
-      if (response.statusCode == 200) {
-        final paymentIntent = jsonDecode(response.body);
-        await Stripe.instance.initPaymentSheet(
-          paymentSheetParameters: SetupPaymentSheetParameters(
-            paymentIntentClientSecret: paymentIntent['client_secret'],
-            merchantDisplayName: 'Insurance App',
-          ),
-        );
-        await Stripe.instance.presentPaymentSheet();
-        return true;
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Stripe Payment Failed: ${response.body}')),
-        );
-        return false;
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('Stripe payment error: $e');
-      }
+    if (response.statusCode == 200) {
+      final transaction = jsonDecode(response.body);
+      final accessCode = transaction['data']['access_code'];
+      final paymentUrl = transaction['data']['authorization_url'];
+
+      // Open the Paystack payment page in a browser (or webview in the app)
+      await launch(paymentUrl);
+
+      return true;
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Paystack Payment Failed: ${response.body}')),
+      );
       return false;
     }
+  } catch (e) {
+    if (kDebugMode) {
+      print('Paystack payment error: $e');
+    }
+    return false;
   }
+}
 
-  Future<void> _scheduleStripeAutoBilling(Cover cover) async {
-    try {
-      final customerResponse = await http.post(
-        Uri.parse('https://api.stripe.com/v1/customers'),
+Future<void> _schedulePaystackAutoBilling(Cover cover) async {
+  try {
+    final customerResponse = await http.post(
+      Uri.parse('https://api.paystack.co/customer'),
+      headers: {
+        'Authorization': 'Bearer $paystackSecretKey',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'email': cover.formData!['email'],
+        'first_name': cover.formData!['name'],
+      }),
+    );
+
+    if (customerResponse.statusCode == 200) {
+      final customer = jsonDecode(customerResponse.body);
+      final customerId = customer['data']['id'];
+
+      final planResponse = await http.post(
+        Uri.parse('https://api.paystack.co/plan'),
         headers: {
-          'Authorization': 'Bearer $stripeSecretKey',
-          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': 'Bearer $paystackSecretKey',
+          'Content-Type': 'application/json',
         },
-        body: {
-          'email': cover.formData!['email'],
-          'name': cover.formData!['name'],
-        },
+        body: jsonEncode({
+          'name': '${cover.id}_plan',
+          'amount': (cover.premium * 100).toInt(),  // Amount in kobo
+          'interval': cover.billingFrequency == 'monthly' ? 'monthly' : 'yearly',
+        }),
       );
 
-      if (customerResponse.statusCode == 200) {
-        final customer = jsonDecode(customerResponse.body);
-        final customerId = customer['id'];
+      if (planResponse.statusCode == 200) {
+        final plan = jsonDecode(planResponse.body);
+        final planId = plan['data']['id'];
 
         final subscriptionResponse = await http.post(
-          Uri.parse('https://api.stripe.com/v1/subscriptions'),
+          Uri.parse('https://api.paystack.co/subscription'),
           headers: {
-            'Authorization': 'Bearer $stripeSecretKey',
-            'Content-Type': 'application/x-www-form-urlencoded',
+            'Authorization': 'Bearer $paystackSecretKey',
+            'Content-Type': 'application/json',
           },
-          body: {
+          body: jsonEncode({
             'customer': customerId,
-            'items[0][price]': 'your-stripe-price-id',
-            'billing_cycle_anchor':
-                cover.billingFrequency == 'monthly' ? 'month' : 'year',
-          },
+            'plan': planId,
+          }),
         );
 
         if (subscriptionResponse.statusCode == 200) {
           final subscription = jsonDecode(subscriptionResponse.body);
+          final subscriptionId = subscription['data']['id'];
+
           final key = encrypt.Key.fromLength(32);
           final iv = encrypt.IV.fromLength(16);
           final encrypter = encrypt.Encrypter(encrypt.AES(key));
@@ -2018,25 +2035,28 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
             jsonEncode({
               'coverId': cover.id,
               'customerId': customerId,
-              'subscriptionId': subscription['id'],
+              'subscriptionId': subscriptionId,
               'amount': cover.premium,
               'frequency': cover.billingFrequency,
             }),
             iv: iv,
           );
+
           await secureStorage.write(
             key: 'billing_${cover.id}',
             value: encrypted.base64,
           );
         }
       }
-    } catch (e) {
-      print('Stripe auto-billing error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to set up auto-billing: $e')),
-      );
     }
+  } catch (e) {
+    print('Paystack auto-billing error: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to set up auto-billing: $e')),
+    );
   }
+}
+
 
   Future<void> _sendEmail(
     String company,
