@@ -15,6 +15,7 @@ import 'package:my_app/Providers/theme_provider.dart';
 import 'package:my_app/Screens/cover_screen.dart';
 import 'package:my_app/Screens/notifications_screen.dart';
 import 'package:my_app/Screens/pdf_preview.dart';
+import 'package:my_app/Services/webview.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf_text/pdf_text.dart';
 import 'package:file_picker/file_picker.dart';
@@ -29,7 +30,6 @@ import 'package:encrypt/encrypt.dart' as encrypt;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
-import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
 import 'package:google_fonts/google_fonts.dart'; // For elegant typography
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:provider/provider.dart';
@@ -1961,7 +1961,7 @@ Future<bool> _initiatePaystackPayment(double amount, bool autoBilling) async {
       final paymentUrl = transaction['data']['authorization_url'];
 
       // Open the Paystack payment page in a browser (or webview in the app)
-      await launchUrlString(paymentUrl);
+      await launchUrl(Uri.parse(paymentUrl));
 
       return true;
     } else {
@@ -2083,7 +2083,7 @@ Future<void> _sendEmail(
 ) async {
   if (insuranceType == 'motor') {
     // Trigger the autofill method when insurance type is motor
-    await _autofillDMVICWebsiteForMotorInsurance(registrationNumber, vehicleType);
+    await _autofillDMVICWebsiteForMotorInsurance(registrationNumber, vehicleType, context);
   }
 
   // Step 8: Send email logic (this part remains unchanged)
@@ -2442,13 +2442,6 @@ Future<void> _sendEmail(
             quotePdf,
             quote.formData['regno'] ?? '', // Provide registrationNumber if available
             quote.formData['vehicle_type'] ?? '', // Provide vehicleType if available
-          );
-        }
-,
-            quote.type,
-            quote.subtype,
-            quote.formData,
-            quotePdf,
           );
         }
       } else if (choice == 2) {
@@ -3448,6 +3441,8 @@ Future<void> _sendEmail(
               formResponses['subtype'] ?? 'comprehensive',
               formResponses,
               filledPdf,
+              formResponses['regno'] ?? '', // Provide registrationNumber if available
+              formResponses['vehicle_type'] ?? '', // Provide vehicleType if available
             );
           }
           setState(() {
@@ -3484,6 +3479,8 @@ Future<void> _sendEmail(
             formResponses['subtype'] ?? 'comprehensive',
             formResponses,
             filledPdf,
+            formResponses['regno'] ?? '', // Provide registrationNumber if available
+            formResponses['vehicle_type'] ?? '', // Provide vehicleType if available
           );
         }
         setState(() {
@@ -4733,7 +4730,15 @@ Widget build(BuildContext context) {
           context,
         );
         if (pdfFile != null && await _previewPdf(pdfFile)) {
-          await _sendEmail(companyId, type, subtype, details, pdfFile);
+          await _sendEmail(
+            companyId,
+            type,
+            subtype,
+            details,
+            pdfFile,
+            details['regno'] ?? '',
+            details['vehicle_type'] ?? '',
+          );
         } else {
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -4755,7 +4760,15 @@ Widget build(BuildContext context) {
         // Optionally, generate a fallback PDF
         pdfFile = await _generateFallbackPdf(type, subtype, details);
         if (pdfFile != null) {
-          await _sendEmail(companyId, type, subtype, details, pdfFile);
+          await _sendEmail(
+            companyId,
+            type,
+            subtype,
+            details,
+            pdfFile,
+            details['regno'] ?? '',
+            details['vehicle_type'] ?? '',
+          );
         }
       }
 

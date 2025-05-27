@@ -61,6 +61,7 @@ dependencies:
   url_launcher: ^6.3.1
   webview_flutter_android: ^4.7.0
   webview_flutter: ^4.13.0
+  webview_flutter_platform_interface: ^2.13.0
 
 dependency_overrides:
   uuid: ^4.5.1 # Force uuid 4.5.1 for native_pdf_renderer
