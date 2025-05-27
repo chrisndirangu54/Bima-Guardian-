@@ -33,7 +33,7 @@ class _CoverReportScreenState extends State<CoverReportScreen> {
     final key = encrypt.Key.fromLength(32);
     final iv = encrypt.IV.fromLength(16);
     final encrypter = encrypt.Encrypter(encrypt.AES(key));
-    final decrypted = encrypter.decrypt64(data, iv: iv);
+    final decrypted = encrypter.decrypt64(data!, iv: iv);
     setState(() {
       covers =
           (jsonDecode(decrypted) as List)

@@ -3,7 +3,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:my_app/Models/Insured_item.dart';
 import 'package:my_app/Models/field_definition.dart';
-import 'package:my_app/insurance_app.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';

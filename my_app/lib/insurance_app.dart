@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -775,7 +774,7 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     final key = encrypt.Key.fromLength(32);
     final iv = encrypt.IV.fromLength(16);
     final encrypter = encrypt.Encrypter(encrypt.AES(key));
-    final decrypted = encrypter.decrypt64(data, iv: iv);
+    final decrypted = encrypter.decrypt64(data!, iv: iv);
     setState(() {
       insuredItems = (jsonDecode(decrypted) as List)
           .map((item) => InsuredItem.fromJson(item))

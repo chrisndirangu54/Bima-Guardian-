@@ -15,7 +15,7 @@ class PDFTemplate {
     required this.coordinates,
     required this.policyType,
     required this.policySubtype,
-    required this.templateKey,
+    required this.templateKey, String? coverageType,
   });
 
   Map<String, dynamic> toJson() => {
