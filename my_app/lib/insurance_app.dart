@@ -133,6 +133,8 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
   List<String> _selectedUnderwriters = [];
   File? _logbookFile;
   File? _previousPolicyFile;
+  List<String> trendingTopics = [];
+  List<String> blogPosts = [];
 
   static const Color blueGreen = Color(0xFF26A69A);
   static const Color orange = Color(0xFFFFA726);
@@ -724,7 +726,8 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     _loadPolicies();
     _loadQuotes();
     _loadNotifications(); // Add this
-
+    fetchTrendingTopics();
+    fetchBlogPosts();
     _loadChatbotTemplate();
     _startChatbot();
     _checkUserRole();
@@ -769,18 +772,16 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
 
   Future<void> _loadInsuredItems() async {
     String? data = await secureStorage.read(key: 'insured_items');
-    if (data != null) {
-      final key = encrypt.Key.fromLength(32);
-      final iv = encrypt.IV.fromLength(16);
-      final encrypter = encrypt.Encrypter(encrypt.AES(key));
-      final decrypted = encrypter.decrypt64(data, iv: iv);
-      setState(() {
-        insuredItems = (jsonDecode(decrypted) as List)
-            .map((item) => InsuredItem.fromJson(item))
-            .toList();
-      });
+    final key = encrypt.Key.fromLength(32);
+    final iv = encrypt.IV.fromLength(16);
+    final encrypter = encrypt.Encrypter(encrypt.AES(key));
+    final decrypted = encrypter.decrypt64(data, iv: iv);
+    setState(() {
+      insuredItems = (jsonDecode(decrypted) as List)
+          .map((item) => InsuredItem.fromJson(item))
+          .toList();
+    });
     }
-  }
 
   Future<void> _saveInsuredItems() async {
     final key = encrypt.Key.fromLength(32);
@@ -3921,123 +3922,225 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     );
   }
 
-  @override
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: _getSelectedScreen(),
-      floatingActionButton: _selectedIndex == 0
-          ? FloatingActionButton(
-              onPressed: () => _showChatBottomSheet(context),
-              tooltip: 'Open Chatbot',
-              child: const Icon(Icons.chat),
-            )
-          : null,
-      appBar: kIsWeb
-          ? AppBar(
-              title: const Text('BIMA GUARDIAN'),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.home),
-                  isSelected: _selectedIndex == 0,
-                  onPressed: () => _onItemTapped(0),
-                  tooltip: 'Home',
-                ),
-                IconButton(
-                  icon: const Icon(Icons.request_quote),
-                  isSelected: _selectedIndex == 1,
-                  onPressed: () => _onItemTapped(1),
-                  tooltip: 'Quotes',
-                ),
-                IconButton(
-                  icon: const Icon(Icons.hourglass_bottom_outlined),
-                  isSelected: _selectedIndex == 2,
-                  onPressed: () => _onItemTapped(2),
-                  tooltip: 'Upcoming',
-                ),
-                IconButton(
-                  icon: const Icon(Icons.account_circle),
-                  isSelected: _selectedIndex == 3,
-                  onPressed: () => _onItemTapped(3),
-                  tooltip: 'My Account',
-                ),
-                if (userRole == UserRole.admin)
-                  IconButton(
-                    icon: const Icon(Icons.admin_panel_settings),
-                    onPressed: () => Navigator.pushNamed(context, '/admin'),
-                    tooltip: 'Admin Panel',
-                  ),
-                Stack(
+  // Mock fetch methods for Trending Topics and Blogs
+  Future<void> fetchTrendingTopics() async {
+    setState(() {
+      trendingTopics = [
+        'Insurance in Kenya: The Future',
+        'Top Insurance Companies in Kenya',
+        'Health Insurance in Kenya: Trends and Updates',
+      ];
+    });
+  }
+
+  Future<void> fetchBlogPosts() async {
+    setState(() {
+      blogPosts = [
+        '5 Tips for Choosing the Right Health Insurance in Kenya',
+        'How to Save on Car Insurance Premiums in Kenya',
+        'The Importance of Life Insurance in Kenya: A Growing Need',
+      ];
+    });
+  }
+
+
+@override
+Widget build(BuildContext context) {
+  return Scaffold(
+    body: LayoutBuilder(
+      builder: (context, constraints) {
+        bool isDesktop = constraints.maxWidth > 800; // Landscape check for desktop
+
+        return Row(
+          children: [
+            // Left side: AppBar-like Navigation Drawer for desktop, nothing for mobile
+            if (isDesktop)
+              Container(
+                width: 250,
+                color: Colors.blueGrey,
+                child: Column(
                   children: [
-                    IconButton(
-                      icon: const Icon(Icons.notifications),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => NotificationsScreen(
-                              notifications: notifications,
-                            ),
-                          ),
-                        );
-                      },
-                      tooltip: 'Notifications',
+                    SizedBox(height: 50), // Padding
+                    ListTile(
+                      leading: Icon(Icons.home, size: 30), // Increased icon size
+                      title: Text("Home"),
+                      onTap: () => _onItemTapped(0),
                     ),
-                    if (notifications.isNotEmpty)
-                      Positioned(
-                        right: 8,
-                        top: 8,
-                        child: Container(
-                          padding: const EdgeInsets.all(2),
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 16,
-                            minHeight: 16,
-                          ),
-                          child: Text(
-                            '${notifications.length}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
+                    ListTile(
+                      leading: Icon(Icons.request_quote, size: 30), // Increased icon size
+                      title: Text("Quotes"),
+                      onTap: () => _onItemTapped(1),
+                    ),
+                    ListTile(
+                      leading: Icon(Icons.hourglass_bottom_outlined, size: 30), // Increased icon size
+                      title: Text("Upcoming"),
+                      onTap: () => _onItemTapped(2),
+                    ),
+                    ListTile(
+                      leading: Icon(Icons.account_circle, size: 30), // Increased icon size
+                      title: Text("My Account"),
+                      onTap: () => _onItemTapped(3),
+                    ),
+                    if (userRole == UserRole.admin)
+                      ListTile(
+                        leading: Icon(Icons.admin_panel_settings, size: 30), // Increased icon size
+                        title: Text("Admin Panel"),
+                        onTap: () => Navigator.pushNamed(context, '/admin'),
                       ),
                   ],
                 ),
-              ],
-            )
-          : null,
-      bottomNavigationBar: kIsWeb
-          ? null
-          : BottomNavigationBar(
-              currentIndex: _selectedIndex,
-              onTap: _onItemTapped,
-              type: BottomNavigationBarType.fixed,
-              items: const [
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.home),
-                  label: 'Home',
+              ),
+            // Main content (middle) - Displays the selected screen
+            Expanded(child: _getSelectedScreen()),
+            // Right side: Trending topics and Blogs for desktop
+            if (isDesktop)
+              Container(
+                width: 250,
+                padding: EdgeInsets.all(16),
+                color: Colors.grey[200],
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("Trending in Insurance", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    SizedBox(height: 10),
+                    trendingTopics.isNotEmpty
+                        ? ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: trendingTopics.length,
+                            itemBuilder: (context, index) {
+                              return ListTile(title: Text(trendingTopics[index]));
+                            },
+                          )
+                        : Center(child: CircularProgressIndicator()),
+
+                    SizedBox(height: 20),
+                    Text("Learn more about Insurance", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    SizedBox(height: 10),
+                    blogPosts.isNotEmpty
+                        ? ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: blogPosts.length,
+                            itemBuilder: (context, index) {
+                              return ListTile(title: Text(blogPosts[index]));
+                            },
+                          )
+                        : Center(child: CircularProgressIndicator()),
+                  ],
                 ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.request_quote),
-                  label: 'Quotes',
+              ),
+          ],
+        );
+      },
+    ),
+    floatingActionButton: _selectedIndex == 0
+        ? FloatingActionButton(
+            onPressed: () => _showChatBottomSheet(context),
+            tooltip: 'Open Chatbot',
+            child: const Icon(Icons.chat, size: 30), // Increased icon size
+          )
+        : null,
+    appBar: kIsWeb
+        ? AppBar(
+            title: const Text('BIMA GUARDIAN'),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.home, size: 20), // Increased icon size
+                onPressed: () => _onItemTapped(0),
+                tooltip: 'Home',
+              ),
+              IconButton(
+                icon: const Icon(Icons.request_quote, size: 20), // Increased icon size
+                onPressed: () => _onItemTapped(1),
+                tooltip: 'Quotes',
+              ),
+              IconButton(
+                icon: const Icon(Icons.hourglass_bottom_outlined, size: 20), // Increased icon size
+                onPressed: () => _onItemTapped(2),
+                tooltip: 'Upcoming',
+              ),
+              IconButton(
+                icon: const Icon(Icons.account_circle, size: 20), // Increased icon size
+                onPressed: () => _onItemTapped(3),
+                tooltip: 'My Account',
+              ),
+              if (userRole == UserRole.admin)
+                IconButton(
+                  icon: const Icon(Icons.admin_panel_settings, size: 20), // Increased icon size
+                  onPressed: () => Navigator.pushNamed(context, '/admin'),
+                  tooltip: 'Admin Panel',
                 ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.hourglass_bottom_outlined),
-                  label: 'Upcoming',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.account_circle),
-                  label: 'My Account',
-                ),
-              ],
-            ),
-    );
-  }
+              Stack(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications, size: 20), // Increased icon size
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => NotificationsScreen(
+                            notifications: notifications,
+                          ),
+                        ),
+                      );
+                    },
+                    tooltip: 'Notifications',
+                  ),
+                  if (notifications.isNotEmpty)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Text(
+                          '${notifications.length}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          )
+        : null,
+    bottomNavigationBar: kIsWeb
+        ? null
+        : BottomNavigationBar(
+            currentIndex: _selectedIndex,
+            onTap: _onItemTapped,
+            type: BottomNavigationBarType.fixed,
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.home, size: 30), // Increased icon size
+                label: 'Home',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.request_quote, size: 30), // Increased icon size
+                label: 'Quotes',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.hourglass_bottom_outlined, size: 30), // Increased icon size
+                label: 'Upcoming',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.account_circle, size: 30), // Increased icon size
+                label: 'My Account',
+              ),
+            ],
+          ),
+  );
+}
+  
 
   // Helper to get field map based on insurance type
   Map<String, FieldDefinition> _getFieldMap(String type) {

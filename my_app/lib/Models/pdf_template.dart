@@ -6,6 +6,7 @@ class PDFTemplate {
   final Map<String, Map<String, double>> coordinates;
   final String policyType; // e.g., 'auto', 'health', 'home'
   final String policySubtype; // e.g., 'comprehensive', 'third_party'
+  String? coverageType;
   final String templateKey; // Unique identifier for the template
 
   PDFTemplate({
@@ -24,6 +25,7 @@ class PDFTemplate {
     'policyType': policyType,
     'policySubtype': policySubtype,
     'templateKey': templateKey,
+    'coverageType': coverageType,
   };
 
   factory PDFTemplate.fromJson(Map<String, dynamic> json) => PDFTemplate(
@@ -37,5 +39,6 @@ class PDFTemplate {
     policyType: json['policyType'],
     policySubtype: json['policySubtype'],
     templateKey: json['templateKey'],
+    coverageType: json['coverageType'] as String? ?? '', // Handle nullable coverageType
   );
 }
