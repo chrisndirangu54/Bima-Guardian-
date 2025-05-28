@@ -2060,6 +2060,10 @@ Future<void> _schedulePaystackAutoBilling(Cover cover) async {
 
 Future<void> _autofillDMVICWebsiteForMotorInsurance(
     String registrationNumber, String vehicleType, BuildContext context) async {
+  // Step 1: Fetch login details from secure storage
+  final loginEmail = 'loginemail@gmail.com';
+  final password = 'your-password';
+
   // Open the DMVIC website in a WebView
   Navigator.push(
     context,
@@ -2067,6 +2071,8 @@ Future<void> _autofillDMVICWebsiteForMotorInsurance(
       builder: (context) => DMVICWebViewPage(
         registrationNumber: registrationNumber,
         vehicleType: vehicleType,
+        email: loginEmail,
+        password: password,
       ),
     ),
   );
