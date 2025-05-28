@@ -332,48 +332,73 @@ class _PdfCoordinateEditorState extends State<PdfCoordinateEditor> {
     }
   }
 
-  String? Function(String) _getValidator(ExpectedType type) {
-    switch (type) {
-      case ExpectedType.text:
-        return (value) =>
-            value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
-                ? null
-                : 'Invalid text';
-      case ExpectedType.number:
-        return (value) {
-          if (value.isEmpty) return null;
-          return double.tryParse(value) != null ? null : 'Invalid number';
-        };
-      case ExpectedType.email:
-        return (value) =>
-            value.isEmpty ||
-                    RegExp(
-                      r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$',
-                    ).hasMatch(value)
-                ? null
-                : 'Invalid email';
-      case ExpectedType.phone:
-        return (value) =>
-            value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
-                ? null
-                : 'Invalid phone number';
-      case ExpectedType.date:
-        return (value) {
-          if (value.isEmpty) return null;
-          try {
-            DateTime.parse(value);
-            return null;
-          } catch (e) {
-            return 'Invalid date (use YYYY-MM-DD)';
+String? Function(String) _getValidator(ExpectedType type, {ExpectedType? listItemType}) {
+  switch (type) {
+    case ExpectedType.text:
+      return (value) =>
+          value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
+              ? null
+              : 'Invalid text';
+
+    case ExpectedType.number:
+      return (value) {
+        if (value.isEmpty) return null;
+        return double.tryParse(value) != null ? null : 'Invalid number';
+      };
+
+    case ExpectedType.email:
+      return (value) => value.isEmpty ||
+              RegExp(
+                r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$',
+              ).hasMatch(value)
+          ? null
+          : 'Invalid email';
+
+    case ExpectedType.phone:
+      return (value) =>
+          value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
+              ? null
+              : 'Invalid phone number';
+
+    case ExpectedType.date:
+      return (value) {
+        if (value.isEmpty) return null;
+        try {
+          DateTime.parse(value);
+          return null;
+        } catch (e) {
+          return 'Invalid date (use YYYY-MM-DD)';
+        }
+      };
+
+    case ExpectedType.custom:
+      return (value) => null;
+
+    case ExpectedType.name:
+      return (value) =>
+          value.isEmpty || RegExp(r'^[A-Za-z\s\-]+$').hasMatch(value)
+              ? null
+              : 'Invalid name';
+
+    case ExpectedType.list:
+      return (value) {
+        if (value.isEmpty) return null;
+        final items = value.split(',').map((e) => e.trim()).toList();
+        if (items.isEmpty) return 'List cannot be empty';
+
+        if (listItemType != null) {
+          final itemValidator = _getValidator(listItemType);
+          for (final item in items) {
+            final result = itemValidator(item);
+            if (result != null) return 'Invalid list item: $item';
           }
-        };
-      case ExpectedType.custom:
-        return (value) => null;
-      case ExpectedType.name:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-    }
+        }
+
+        return null;
+      };
   }
+}
+
 
   @override
   Widget build(BuildContext context) {
