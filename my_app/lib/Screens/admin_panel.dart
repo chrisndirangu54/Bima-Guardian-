@@ -39,26 +39,27 @@ class _AdminPanelState extends State<AdminPanel> {
           await FirebaseFirestore.instance.collection('policies').get();
 
       setState(() {
-        policies = snapshot.docs
-            .map(
-              (doc) => Policy(
-                id: doc['id'] as String,
-                type: doc['type'] as String,
-                subtype: doc['subtype'] as String,
-                companyId: doc['companyId'] as String,
-                status: CoverStatus.values.firstWhere(
-                  (e) => e.toString() == doc['status'],
-                  orElse: () => CoverStatus.active,
-                ),
-                insuredItemId: doc['insuredItemId'] as String? ?? '',
-                coverageType: doc['coverageType'] as String? ?? '',
-                pdfTemplateKey: doc['pdfTemplateKey'] as String? ?? '',
-                endDate: doc['endDate'] != null
-                    ? (doc['endDate'] as Timestamp).toDate()
-                    : null,
-              ),
-            )
-            .toList();
+        policies = snapshot.docs.map((doc) {
+          final data = doc.data();
+          return Policy(
+            id: data['id'] as String,
+            insuredItemId: data['insuredItemId'] as String? ?? '',
+            companyId: data['companyId'] as String,
+            type: PolicyType.fromJson(data['type'] as Map<String, dynamic>),
+            subtype:
+                PolicySubtype.fromJson(data['subtype'] as Map<String, dynamic>),
+            coverageType: CoverageType.fromJson(
+                data['coverageType'] as Map<String, dynamic>),
+            status: CoverStatus.values.firstWhere(
+              (e) => e.toString() == data['status'],
+              orElse: () => CoverStatus.active,
+            ),
+            endDate: data['expirationDate'] != null
+                ? (data['expirationDate'] as Timestamp).toDate()
+                : null,
+            pdfTemplateKey: data['pdfTemplateKey'] as String?,
+          );
+        }).toList();
       });
 
       if (policies.isEmpty && kDebugMode) {

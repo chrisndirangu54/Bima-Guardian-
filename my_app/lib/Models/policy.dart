@@ -1,15 +1,105 @@
 import 'package:my_app/insurance_app.dart';
 
+class PolicyType {
+  final String id;
+  final String name;
+  final String description;
+  final String? pdfTemplateKey;
+
+  String? icon; // Added nullable field
+
+  PolicyType({
+    required this.id,
+    required this.name,
+    required this.description,
+    this.pdfTemplateKey, // Made optional
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'description': description,
+        'pdfTemplateKey': pdfTemplateKey, // Include in JSON
+      };
+
+  factory PolicyType.fromJson(Map<String, dynamic> json) => PolicyType(
+        id: json['id'],
+        name: json['name'],
+        description: json['description'],
+        pdfTemplateKey: json['pdfTemplateKey'], // Nullable in fromJson
+      );
+}
+
+class PolicySubtype {
+  final String id;
+  final String name;
+  final String policyTypeId;
+  final String description;
+  final String? pdfTemplateKey; // Added nullable field
+
+  PolicySubtype({
+    required this.id,
+    required this.name,
+    required this.policyTypeId,
+    required this.description,
+    this.pdfTemplateKey, // Made optional
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'policyTypeId': policyTypeId,
+        'description': description,
+        'pdfTemplateKey': pdfTemplateKey, // Include in JSON
+      };
+
+  factory PolicySubtype.fromJson(Map<String, dynamic> json) => PolicySubtype(
+        id: json['id'],
+        name: json['name'],
+        policyTypeId: json['policyTypeId'],
+        description: json['description'],
+        pdfTemplateKey: json['pdfTemplateKey'], // Nullable in fromJson
+      );
+}
+
+class CoverageType {
+  final String id;
+  final String name;
+  final String description;
+  final String? pdfTemplateKey; // Added nullable field
+
+  CoverageType({
+    required this.id,
+    required this.name,
+    required this.description,
+    this.pdfTemplateKey, // Made optional
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'description': description,
+        'pdfTemplateKey': pdfTemplateKey, // Include in JSON
+      };
+
+  factory CoverageType.fromJson(Map<String, dynamic> json) => CoverageType(
+        id: json['id'],
+        name: json['name'],
+        description: json['description'],
+        pdfTemplateKey: json['pdfTemplateKey'], // Nullable in fromJson
+      );
+}
+
 class Policy {
   final String id;
   final String insuredItemId;
   final String companyId;
-  final String type;
-  final String subtype;
-  final String coverageType; // e.g., 'third_party', 'comprehensive'
+  final PolicyType type;
+  final PolicySubtype subtype;
+  final CoverageType coverageType;
   final CoverStatus status;
   final DateTime? endDate;
-  final String pdfTemplateKey;
+  final String? pdfTemplateKey; // Kept as nullable as per original
 
   Policy({
     required this.id,
@@ -20,33 +110,35 @@ class Policy {
     required this.coverageType,
     required this.status,
     required this.endDate,
-    required this.pdfTemplateKey,
+    this.pdfTemplateKey, // Kept optional
   });
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'insuredItemId': insuredItemId,
-    'companyId': companyId,
-    'type': type,
-    'subtype': subtype,
-    'coverageType': coverageType,
-    'status': status.name,
-    'expirationDate': endDate?.toIso8601String(),
-    'pdfTemplateKey': pdfTemplateKey,
-  };
+        'id': id,
+        'insuredItemId': insuredItemId,
+        'companyId': companyId,
+        'type': type.toJson(),
+        'subtype': subtype.toJson(),
+        'coverageType': coverageType.toJson(),
+        'status': status.name,
+        'expirationDate': endDate?.toIso8601String(),
+        'pdfTemplateKey': pdfTemplateKey,
+      };
 
   factory Policy.fromJson(Map<String, dynamic> json) => Policy(
-    id: json['id'],
-    insuredItemId: json['insuredItemId'],
-    companyId: json['companyId'],
-    type: json['type'],
-    subtype: json['subtype'],
-    coverageType: json['coverageType'],
-    status: CoverStatus.values.firstWhere(
-      (e) => e.name == json['status'],
-      orElse: () => CoverStatus.active,
-    ),
-    endDate: DateTime.parse(json['expirationDate']),
-    pdfTemplateKey: json['pdfTemplateKey'],
-  );
+        id: json['id'],
+        insuredItemId: json['insuredItemId'],
+        companyId: json['companyId'],
+        type: PolicyType.fromJson(json['type']),
+        subtype: PolicySubtype.fromJson(json['subtype']),
+        coverageType: CoverageType.fromJson(json['coverageType']),
+        status: CoverStatus.values.firstWhere(
+          (e) => e.name == json['status'],
+          orElse: () => CoverStatus.active,
+        ),
+        endDate: json['expirationDate'] != null
+            ? DateTime.parse(json['expirationDate'])
+            : null,
+        pdfTemplateKey: json['pdfTemplateKey'],
+      );
 }
