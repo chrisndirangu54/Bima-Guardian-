@@ -359,8 +359,8 @@ class _AdminPanelState extends State<AdminPanel> {
   Future<Map<String, String>?> _showPolicySelectionDialog(
     BuildContext context,
   ) async {
-    String? policyType;
-    String? policySubtype;
+    PolicyType? policyType;
+    PolicySubtype? policySubtype;
     final policyTypes = ['auto', 'health', 'home'];
     final policySubtypes = {
       'auto': ['comprehensive', 'third_party'],
@@ -405,7 +405,7 @@ class _AdminPanelState extends State<AdminPanel> {
                         borderSide: BorderSide(color: Color(0xFF8B0000)),
                       ),
                     ),
-                    value: policyType,
+                    value: policyType as String?,
                     items: policyTypes
                         .map(
                           (type) => DropdownMenuItem(
@@ -420,7 +420,7 @@ class _AdminPanelState extends State<AdminPanel> {
                         .toList(),
                     onChanged: (value) {
                       setState(() {
-                        policyType = value;
+                        policyType = value != null ? PolicyType.fromJson({'name': value}) : null;
                         policySubtype = null;
                       });
                     },
@@ -448,7 +448,7 @@ class _AdminPanelState extends State<AdminPanel> {
                             borderSide: BorderSide(color: Color(0xFF8B0000)),
                           ),
                         ),
-                        value: policySubtype,
+                        value: policySubtype?.name,
                         items: policySubtypes[policyType]!
                             .map(
                               (subtype) => DropdownMenuItem(
@@ -463,7 +463,7 @@ class _AdminPanelState extends State<AdminPanel> {
                             .toList(),
                         onChanged: (value) {
                           setState(() {
-                            policySubtype = value;
+                            policySubtype = value != null ? PolicySubtype.fromJson({'name': value}) : null;
                           });
                         },
                         validator: (value) => value == null

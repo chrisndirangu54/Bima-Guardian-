@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:my_app/Models/Insured_item.dart';
 import 'package:my_app/Models/company.dart';
 import 'package:my_app/Models/cover.dart';
@@ -124,21 +125,27 @@ class InsuranceHomeScreen extends StatefulWidget {
 
   @override
   State<InsuranceHomeScreen> createState() => _InsuranceHomeScreenState();
+
+  static Future<List<Company>> loadCompanies() async {
+    final snapshot =
+        await FirebaseFirestore.instance.collection('companies').get();
+    return snapshot.docs.map((doc) => Company.fromJson(doc.data())).toList();
+  }
 }
 
 class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
   List<InsuredItem> insuredItems = [];
   List<Cover> covers = [];
   List<Quote> quotes = [];
-  List<Quote> companies = [];
+  List<Company> companies = [];
   List<Map<String, dynamic>> notifications = []; // Changed from List<dynamic>
   bool isLoading = false;
+  bool _hasLoadedInsuredItems = false;
+  bool _hasLoadedData = false; // <-- Added to fix undefined name error
   Map<String, PDFTemplate> cachedPdfTemplates = {};
   Map<String, String> userDetails = {};
-  List<Map<String, String>> chatMessages = [];
   TextEditingController chatController = TextEditingController();
   String currentState = 'start';
-  Map<String, dynamic> chatbotTemplate = {};
   final Map<String, String> formResponses = {};
   int currentFieldIndex = 0;
   UserRole userRole = UserRole.regular;
@@ -173,6 +180,19 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
 
   static const Color blueGreen = Color(0xFF26A69A);
   static const Color orange = Color(0xFFFFA726);
+
+  Map<String, dynamic> chatbotTemplate = {
+    'states': {
+      'start': {
+        'message': 'Welcome to the chatbot!',
+        'options': [
+          {'text': 'Option 1'},
+          {'text': 'Option 2'},
+        ],
+      },
+    },
+  };
+  List<Map<String, String>> chatMessages = [];
 
   final Map<String, Map<String, Map<String, dynamic>>> policyCalculators = {
     'motor': {
@@ -220,13 +240,13 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
 
   late bool isDesktop;
 
+  late String pdfTemplateKey;
+
   @override
   void initState() {
     super.initState();
     _loadCachedPdfTemplates();
     _loadUserDetails();
-    _loadInsuredItems();
-    _loadPolicies();
     _loadQuotes();
     _loadNotifications(); // Add this
     fetchTrendingTopics();
@@ -236,6 +256,20 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     _setupFirebaseMessaging();
     _checkCoverExpirations();
     _autofillUserDetails();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_hasLoadedData) {
+      _hasLoadedData = true;
+      _loadPolicies();
+      _loadInsuredItems();
+      isDesktop = !kIsWeb && MediaQuery.of(context).size.width > 600; // Example threshold
+
+      _loadNotifications();
+      _startChatbot();
+    }
   }
 
   Future<void> _autofillUserDetails() async {
@@ -270,19 +304,6 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     } catch (e) {
       print('Error saving user details: $e');
     }
-  }
-
-  Future<void> _loadInsuredItems() async {
-    String? data = await secureStorage.read(key: 'insured_items');
-    final key = encrypt.Key.fromLength(32);
-    final iv = encrypt.IV.fromLength(16);
-    final encrypter = encrypt.Encrypter(encrypt.AES(key));
-    final decrypted = encrypter.decrypt64(data!, iv: iv);
-    setState(() {
-      insuredItems = (jsonDecode(decrypted) as List)
-          .map((item) => InsuredItem.fromJson(item))
-          .toList();
-    });
   }
 
   Future<void> _saveInsuredItems() async {
@@ -390,12 +411,177 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     });
   }
 
+Future<void> _loadPolicies() async {
+  bool hasShownSnackBar = false;
+  try {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) {
+      if (kDebugMode) {
+        print('No user authenticated for loading policies.');
+      }
+      if (mounted && !hasShownSnackBar) {
+        setState(() {
+          policies = [];
+        });
+        await Future.delayed(Duration.zero); // Ensure post-frame
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !hasShownSnackBar) {
+            hasShownSnackBar = true;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Please sign in to view policies')),
+            );
+          }
+        });
+      }
+      return;
+    }
+
+    final snapshot = await FirebaseFirestore.instance
+        .collection('policies')
+        .doc(userId)
+        .collection('user_policies')
+        .get();
+
+    final loadedPolicies = <Policy>[];
+    for (var doc in snapshot.docs) {
+      try {
+        final data = doc.data();
+        if (data.isNotEmpty) {
+          loadedPolicies.add(Policy.fromJson({
+            ...data,
+            'id': doc.id,
+          }));
+        } else {
+          if (kDebugMode) {
+            print('Empty data for policy document ${doc.id}');
+          }
+        }
+      } catch (e, stackTrace) {
+        if (kDebugMode) {
+          print('Error parsing policy ${doc.id}: $e\n$stackTrace');
+        }
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        policies = loadedPolicies;
+      });
+      if (policies.isEmpty && !hasShownSnackBar) {
+        if (kDebugMode) {
+          print('No policies found for user $userId.');
+        }
+        await Future.delayed(Duration.zero);
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !hasShownSnackBar) {
+            hasShownSnackBar = true;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('No policies found')),
+            );
+          }
+        });
+      }
+    }
+  } catch (e, stackTrace) {
+    if (kDebugMode) {
+      print('Error loading policies: $e\n$stackTrace');
+    }
+    if (mounted && !hasShownSnackBar) {
+      await Future.delayed(Duration.zero);
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !hasShownSnackBar) {
+          hasShownSnackBar = true;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to load policies: $e')),
+          );
+        }
+      });
+    }
+  }
+}
+  Future<void> _loadInsuredItems() async {
+    if (_hasLoadedInsuredItems) return;
+    _hasLoadedInsuredItems = true;
+    bool hasShownSnackBar = false;
+    try {
+      final collection = FirebaseFirestore.instance.collection('insured_items');
+      final snapshot = await collection.get();
+      if (kDebugMode) {
+        print('Insured items snapshot: ${snapshot.docs.length} documents');
+        for (var doc in snapshot.docs) {
+          print('Document ${doc.id}: ${doc.data()}');
+        }
+      }
+
+      List<InsuredItem> items = [];
+      for (var doc in snapshot.docs) {
+        try {
+          final data = doc.data();
+          if (data.containsKey('data') && data['data'] is List) {
+            final jsonData = data['data'] as List;
+            items.addAll(jsonData
+                .map((item) =>
+                    InsuredItem.fromJson(item as Map<String, dynamic>))
+                .toList());
+          } else {
+            if (kDebugMode) {
+              print(
+                  'Invalid or missing "data" field in document ${doc.id}: $data');
+            }
+          }
+        } catch (e, stackTrace) {
+          if (kDebugMode) {
+            print('Error processing document ${doc.id}: $e\n$stackTrace');
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          insuredItems = items;
+        });
+        if (items.isEmpty && !hasShownSnackBar) {
+          if (kDebugMode) {
+            print('No insured items found.');
+          }
+          SchedulerBinding.instance.addPostFrameCallback((_) {
+            if (mounted && !hasShownSnackBar) {
+              hasShownSnackBar = true;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('No insured items found')),
+              );
+            }
+          });
+        }
+      }
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        print('Error loading insured items from Firestore: $e\n$stackTrace');
+      }
+      if (mounted && !hasShownSnackBar) {
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !hasShownSnackBar) {
+            hasShownSnackBar = true;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed to load insured items: $e')),
+            );
+          }
+        });
+      }
+    }
+  }
+
   Future<void> _loadNotifications() async {
     try {
       final userId = FirebaseAuth.instance.currentUser?.uid;
       if (userId == null) {
         if (kDebugMode) {
           print('No user authenticated for loading notifications.');
+        }
+        if (mounted) {
+          setState(() {
+            notifications = [];
+          });
         }
         return;
       }
@@ -406,82 +592,19 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
           .collection('user_notifications')
           .get();
 
-      setState(() {
-        notifications = snapshot.docs.map((doc) => doc.data()).toList();
-      });
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error loading notifications: $e');
-      }
-      setState(() {
-        notifications = [];
-      });
-    }
-  }
-
-  Future<void> _loadPolicies() async {
-    try {
-      final userId = FirebaseAuth.instance.currentUser?.uid;
-      if (userId == null) {
-        if (kDebugMode) {
-          print('No user authenticated for loading policies.');
-        }
+      if (mounted) {
         setState(() {
-          policies = [];
+          notifications = snapshot.docs.map((doc) => doc.data()).toList();
         });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please sign in to view policies')),
-          );
-        }
-        return;
-      }
-
-      final snapshot = await FirebaseFirestore.instance
-          .collection('policies')
-          .doc(userId)
-          .collection('user_policies')
-          .get();
-
-      final loadedPolicies = <Policy>[];
-      for (var doc in snapshot.docs) {
-        try {
-          final data = doc.data();
-          loadedPolicies.add(Policy.fromJson({
-            ...data,
-            'id': doc.id, // Ensure ID is set from document ID
-          }));
-        } catch (e, stackTrace) {
-          if (kDebugMode) {
-            print('Error parsing policy ${doc.id}: $e\n$stackTrace');
-          }
-          // Continue loading other policies
-        }
-      }
-
-      setState(() {
-        policies = loadedPolicies;
-      });
-
-      if (policies.isEmpty && kDebugMode) {
-        print('No policies found for user $userId.');
-      }
-      if (policies.isEmpty && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No policies found')),
-        );
       }
     } catch (e, stackTrace) {
       if (kDebugMode) {
-        print('Error loading policies: $e\n$stackTrace');
+        print('Error loading notifications: $e\n$stackTrace');
       }
-      setState(() {
-        policies = [];
-      });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load policies: $e')),
-        );
+        setState(() {
+          notifications = [];
+        });
       }
     }
   }
@@ -609,16 +732,57 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
   }
 
   void _startChatbot() {
-    var startState = chatbotTemplate['states']['start'];
-    String message = startState['message'] +
-        '\n' +
-        startState['options']
-            .asMap()
-            .entries
-            .map((e) => '${e.key + 1}. ${e.value['text']}')
-            .join('\n');
+    // Fallback if chatbotTemplate is null or missing keys
+    if (chatbotTemplate == null || !chatbotTemplate.containsKey('states')) {
+      if (kDebugMode) {
+        print('chatbotTemplate or states is null or missing');
+      }
+      setState(() {
+        chatMessages.add({
+          'sender': 'bot',
+          'text': 'Error: Chatbot configuration not found.',
+        });
+      });
+      return;
+    }
+
+    final states = chatbotTemplate['states'] as Map<String, dynamic>?;
+    if (states == null || !states.containsKey('start')) {
+      if (kDebugMode) {
+        print('Start state is missing in chatbotTemplate');
+      }
+      setState(() {
+        chatMessages.add({
+          'sender': 'bot',
+          'text': 'Error: Start state not found.',
+        });
+      });
+      return;
+    }
+
+    final startState = states['start'] as Map<String, dynamic>?;
+    if (startState == null ||
+        !startState.containsKey('message') ||
+        !startState.containsKey('options')) {
+      if (kDebugMode) {
+        print('Invalid startState structure');
+      }
+      setState(() {
+        chatMessages.add({
+          'sender': 'bot',
+          'text': 'Error: Invalid chatbot start state.',
+        });
+      });
+      return;
+    }
+
+    final message = startState['message'] as String? ?? 'Welcome!';
+    final options = startState['options'] as List<dynamic>? ?? [];
+    final formattedMessage =
+        '$message\n${options.asMap().entries.map((e) => '${e.key + 1}. ${e.value['text'] ?? 'Option'}').join('\n')}';
+
     setState(() {
-      chatMessages.add({'sender': 'bot', 'text': message});
+      chatMessages.add({'sender': 'bot', 'text': formattedMessage});
     });
   }
 
@@ -848,6 +1012,295 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     }
   }
 
+  Future<void> handleCoverSubmission(
+    BuildContext context,
+    String type,
+    String subtype,
+    String coverageType,
+    String companyId,
+    String pdfTemplateKey,
+    Map<String, String> details,
+  ) async {
+    try {
+      // Create or select InsuredItem
+      InsuredItem insuredItem;
+      if (details['insured_item_id']?.isNotEmpty ?? false) {
+        final snapshot = await FirebaseFirestore.instance
+            .collection('insured_items')
+            .doc(details['insured_item_id'])
+            .get();
+        if (!snapshot.exists) {
+          throw Exception('Insured item not found');
+        }
+        insuredItem = InsuredItem.fromJson(snapshot.data()!);
+      } else {
+        insuredItem = InsuredItem(
+          id: Uuid().v4(),
+          type: type,
+          vehicleType: type == 'motor' ? subtype : '',
+          details: details,
+          vehicleValue: type == 'motor' ? details['vehicle_value'] : null,
+          regno: type == 'motor' ? details['regno'] : null,
+          propertyValue: type == 'property' ? details['property_value'] : null,
+          chassisNumber: type == 'motor' ? details['chassis_number'] : null,
+          kraPin: type == 'motor' ? details['kra_pin'] : null,
+          logbookPath: type == 'motor' ? details['logbook_path'] : null,
+          previousPolicyPath:
+              type == 'motor' ? details['previous_policy_path'] : null,
+        );
+        // Save to Firestore
+        await FirebaseFirestore.instance
+            .collection('insured_items')
+            .doc(insuredItem.id)
+            .set(insuredItem.toJson());
+        setState(() {
+          insuredItems.add(insuredItem);
+        });
+      }
+
+      // Calculate premium
+      double premium = await _calculatePremium(type, subtype, details);
+
+      // Ask user whether to generate a quote or proceed with payment
+      bool? proceedWithPayment;
+      if (context.mounted) {
+        proceedWithPayment = await showDialog<bool>(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text('Choose an Option'),
+              content: const Text(
+                'Would you like to generate a quote or proceed with payment?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () =>
+                      Navigator.pop(context, false), // Generate quote
+                  child: const Text('Generate Quote'),
+                ),
+                TextButton(
+                  onPressed: () =>
+                      Navigator.pop(context, true), // Proceed with payment
+                  child: const Text('Proceed with Payment'),
+                ),
+              ],
+            );
+          },
+        );
+      }
+
+      if (proceedWithPayment == null) {
+        // User dismissed the dialog
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Action canceled.')),
+          );
+        }
+        return;
+      }
+
+      if (!proceedWithPayment) {
+        // Generate and save quote
+        final quote = Quote(
+          id: Uuid().v4(),
+          type: type,
+          subtype: subtype,
+          company: companyId,
+          premium: premium,
+          generatedAt: DateTime.now(),
+          formData: details,
+        );
+
+        // Save quote to Firestore
+        await FirebaseFirestore.instance
+            .collection('quotes')
+            .doc(quote.id)
+            .set(quote.toJson());
+
+        // Generate quote PDF
+        final pdfFile = await _generateQuotePdf(quote);
+        if (pdfFile != null && context.mounted) {
+          // Optionally preview the quote PDF
+          if (await _previewPdf(pdfFile)) {
+            await _sendEmail(
+              companyId,
+              type,
+              subtype,
+              details,
+              pdfFile,
+              details['regno'] ?? '',
+              details['vehicle_type'] ?? '',
+            );
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Quote generated and sent.')),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                  content:
+                      Text('Quote PDF preview failed or was not approved.')),
+            );
+          }
+        } else {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Failed to generate quote PDF.')),
+            );
+          }
+        }
+
+        // Update chatbot state for quote
+        setState(() {
+          currentState = 'quote_process';
+          chatMessages.add({
+            'sender': 'bot',
+            'text':
+                'Your ${type.toUpperCase()} quote ($subtype) has been generated.',
+          });
+        });
+        return;
+      }
+
+      // Proceed with payment (original flow)
+      // Create Cover
+      final cover = Cover(
+        id: Uuid().v4(),
+        insuredItemId: insuredItem.id,
+        companyId: companyId,
+        type: type,
+        subtype: subtype,
+        coverageType: type == 'motor' ? coverageType : 'custom',
+        status: CoverStatus.pending,
+        expirationDate: DateTime.now().add(const Duration(days: 365)),
+        pdfTemplateKey: pdfTemplateKey,
+        paymentStatus: 'pending',
+        startDate: DateTime.now(),
+        formData: details,
+        premium: premium,
+        billingFrequency: 'annual',
+      );
+
+      // Save cover to Firestore
+      await FirebaseFirestore.instance
+          .collection('covers')
+          .doc(cover.id)
+          .set(cover.toJson());
+      setState(() {
+        covers.add(cover);
+      });
+
+      // Handle PDF generation
+      File? pdfFile;
+      if (cachedPdfTemplates.isNotEmpty &&
+          cachedPdfTemplates.containsKey(pdfTemplateKey)) {
+        pdfFile = await _fillPdfTemplate(
+          pdfTemplateKey,
+          details,
+          type,
+          context,
+        );
+        if (pdfFile != null && await _previewPdf(pdfFile)) {
+          await _sendEmail(
+            companyId,
+            type,
+            subtype,
+            details,
+            pdfFile,
+            details['regno'] ?? '',
+            details['vehicle_type'] ?? '',
+          );
+        } else {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('PDF preview failed or was not approved.'),
+              ),
+            );
+          }
+        }
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content:
+                  Text('No PDF templates available. Proceeding without PDF.'),
+            ),
+          );
+        }
+        pdfFile = await _generateFallbackPdf(type, subtype, details);
+        if (pdfFile != null) {
+          await _sendEmail(
+            companyId,
+            type,
+            subtype,
+            details,
+            pdfFile,
+            details['regno'] ?? '',
+            details['vehicle_type'] ?? '',
+          );
+        }
+      }
+
+      // Initialize payment
+      final paymentStatus = await _initializePayment(
+        cover.id,
+        premium.toString(),
+      );
+
+      // Update cover status in Firestore
+      await FirebaseFirestore.instance
+          .collection('covers')
+          .doc(cover.id)
+          .update({
+        'status': paymentStatus == 'completed'
+            ? CoverStatus.active.toString()
+            : CoverStatus.pending.toString(),
+        'paymentStatus': paymentStatus,
+      });
+
+      setState(() {
+        final index = covers.indexWhere((c) => c.id == cover.id);
+        covers[index] = cover.copyWith(
+          status: paymentStatus == 'completed'
+              ? CoverStatus.active
+              : CoverStatus.pending,
+          paymentStatus: paymentStatus,
+        );
+      });
+
+      // Update chatbot state and UI
+      setState(() {
+        currentState = type == 'medical' ? 'health_process' : 'pdf_process';
+        chatMessages.add({
+          'sender': 'bot',
+          'text':
+              'Your ${type.toUpperCase()} cover ($subtype) has been created. Payment status: $paymentStatus.',
+        });
+      });
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Cover created, payment $paymentStatus${pdfFile == null ? ', no PDF generated' : ''}'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error in handleCoverSubmission: $e');
+      }
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to create cover: $e'),
+          ),
+        );
+      }
+    }
+  }
+
+// Assuming _generateQuotePdf remains the same as provided
   Future<File?> _generateQuotePdf(Quote quote) async {
     final pdf = pw.Document();
     pdf.addPage(
@@ -1220,38 +1673,6 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     );
   }
 
-  Future<void> _loadCovers() async {
-    final storage = FlutterSecureStorage();
-    final data = await storage.read(key: 'covers');
-    if (data != null) {
-      setState(() {
-        covers =
-            (jsonDecode(data) as List).map((c) => Cover.fromJson(c)).toList();
-      });
-    }
-  }
-
-  Future<void> _saveCompanies() async {
-    final storage = FlutterSecureStorage();
-    await storage.write(
-      key: 'companies',
-      value: jsonEncode(companies.map((c) => c.toJson()).toList()),
-    );
-  }
-
-  Future<void> _loadCompanies() async {
-    final storage = FlutterSecureStorage();
-    final data = await storage.read(key: 'companies');
-    if (data != null) {
-      setState(() {
-        companies = (jsonDecode(data) as List)
-            .map((c) => Company.fromJson(c))
-            .cast<Quote>()
-            .toList();
-      });
-    }
-  }
-
   // Navigation handler
   void _onItemTapped(int index) {
     setState(() {
@@ -1401,7 +1822,8 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 16.0),
                           child: FutureBuilder<
                               Map<String, List<DialogStepConfig>>>(
-                            future: getInsuranceConfigs(),
+                            future: getInsuranceConfigs(
+                                currentType, pdfTemplateKey),
                             builder: (context, snapshot) {
                               final dialogCount =
                                   snapshot.data?[currentType]?.length ?? 1;
@@ -1450,7 +1872,7 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                               colorProvider.setColor(orange);
                               showInsuranceDialog(
                                 context,
-                                policyType.name.toLowerCase(),
+                                policyType.name.toLowerCase(), pdfTemplateKey,
                                 onFinalSubmit:
                                     null, // Handled by _handleCoverSubmission
                               );
@@ -1790,7 +2212,7 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
               child: const Icon(Icons.chat, size: 30),
             )
           : null,
-      appBar: kIsWeb
+      appBar: kIsWeb 
           ? AppBar(
               title: const Text('BIMA GUARDIAN'),
               actions: [
@@ -1946,7 +2368,7 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
   void _showChatBottomSheet(BuildContext context) {
     final TextEditingController chatController = TextEditingController();
     final List<String> chatMessages = [];
-
+    String? pdfTemplateKey;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -2030,6 +2452,7 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                               showInsuranceDialog(
                                 context,
                                 input,
+                                pdfTemplateKey,
                                 onFinalSubmit:
                                     (context, type, subtype, coverage) {
                                   // Save policy to Firestore or update UI
@@ -2073,6 +2496,7 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
   ) async {
     String? insuredItemId;
     bool createNew = insuredItems.isEmpty;
+    final insuranceHomeScreen = InsuranceHomeScreen();
 
     // Fetch pdfTemplateKey
     String? pdfTemplateKey;
@@ -2787,7 +3211,7 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                 ElevatedButton(
                   onPressed: () {
                     Navigator.pop(dialogContext);
-                    _handleCoverSubmission(
+                    handleCoverSubmission(
                       context,
                       type,
                       subtype,
@@ -2817,173 +3241,6 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         );
       },
     );
-  }
-
-  Future<void> _handleCoverSubmission(
-    BuildContext context,
-    String type,
-    String subtype,
-    String coverageType,
-    String companyId,
-    String pdfTemplateKey,
-    Map<String, String> details,
-  ) async {
-    try {
-      // Create or select InsuredItem
-      InsuredItem insuredItem;
-      if (details['insured_item_id']?.isNotEmpty ?? false) {
-        insuredItem = insuredItems.firstWhere(
-          (item) => item.id == details['insured_item_id'],
-          orElse: () => throw Exception('Insured item not found'),
-        );
-      } else {
-        insuredItem = InsuredItem(
-          id: Uuid().v4(),
-          type: type,
-          vehicleType: type == 'motor' ? subtype : '',
-          details: details,
-          vehicleValue: type == 'motor' ? details['vehicle_value'] : null,
-          regno: type == 'motor' ? details['regno'] : null,
-          propertyValue: type == 'property' ? details['property_value'] : null,
-          chassisNumber: type == 'motor' ? details['chassis_number'] : null,
-          kraPin: type == 'motor' ? details['kra_pin'] : null,
-          logbookPath: type == 'motor' ? details['logbook_path'] : null,
-          previousPolicyPath:
-              type == 'motor' ? details['previous_policy_path'] : null,
-        );
-        setState(() {
-          insuredItems.add(insuredItem);
-        });
-        await _saveInsuredItems();
-      }
-
-      // Calculate premium
-      double premium = await _calculatePremium(type, subtype, details);
-
-      // Create Cover
-      final cover = Cover(
-        id: Uuid().v4(),
-        insuredItemId: insuredItem.id,
-        companyId: companyId,
-        type: type,
-        subtype: subtype,
-        coverageType: type == 'motor' ? coverageType : 'custom',
-        status: CoverStatus.pending,
-        expirationDate: DateTime.now().add(const Duration(days: 365)),
-        pdfTemplateKey: pdfTemplateKey,
-        paymentStatus: 'pending',
-        startDate: DateTime.now(),
-        formData: details,
-        premium: premium,
-        billingFrequency: 'annual',
-      );
-
-      setState(() {
-        covers.add(cover);
-      });
-      await _saveCovers();
-
-      // Handle PDF generation
-      File? pdfFile;
-      if (cachedPdfTemplates.isNotEmpty &&
-          cachedPdfTemplates.containsKey(pdfTemplateKey)) {
-        pdfFile = await _fillPdfTemplate(
-          pdfTemplateKey,
-          details,
-          type,
-          context,
-        );
-        if (pdfFile != null && await _previewPdf(pdfFile)) {
-          await _sendEmail(
-            companyId,
-            type,
-            subtype,
-            details,
-            pdfFile,
-            details['regno'] ?? '',
-            details['vehicle_type'] ?? '',
-          );
-        } else {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('PDF preview failed or was not approved.'),
-              ),
-            );
-          }
-        }
-      } else {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content:
-                  Text('No PDF templates available. Proceeding without PDF.'),
-            ),
-          );
-        }
-        // Optionally, generate a fallback PDF
-        pdfFile = await _generateFallbackPdf(type, subtype, details);
-        if (pdfFile != null) {
-          await _sendEmail(
-            companyId,
-            type,
-            subtype,
-            details,
-            pdfFile,
-            details['regno'] ?? '',
-            details['vehicle_type'] ?? '',
-          );
-        }
-      }
-
-      // Initialize payment
-      final paymentStatus = await _initializePayment(
-        cover.id,
-        premium.toString(),
-      );
-
-      // Update cover status
-      setState(() {
-        final index = covers.indexWhere((c) => c.id == cover.id);
-        covers[index] = cover.copyWith(
-          status: paymentStatus == 'completed'
-              ? CoverStatus.active
-              : CoverStatus.pending,
-          paymentStatus: paymentStatus,
-        );
-      });
-      await _saveCovers();
-
-      // Update chatbot state and UI
-      setState(() {
-        currentState = type == 'medical' ? 'health_process' : 'pdf_process';
-        chatMessages.add({
-          'sender': 'bot',
-          'text':
-              'Your ${type.toUpperCase()} cover ($subtype) has been created. Payment status: $paymentStatus.',
-        });
-      });
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                'Cover created, payment $paymentStatus${pdfFile == null ? ', no PDF generated' : ''}'),
-          ),
-        );
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error in handleCoverSubmission: $e');
-      }
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to create cover: $e'),
-          ),
-        );
-      }
-    }
   }
 
 // New helper method for fallback PDF generation
@@ -3243,10 +3500,12 @@ class DialogState extends ChangeNotifier {
   }
 }
 
-Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs() async {
+Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
+    dynamic pdfTemplateKey, dynamic type) async {
   final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
-  final companies = await InsuranceHomeScreen._loadCompanies();
+  final companies = await InsuranceHomeScreen.loadCompanies();
   final Map<String, List<DialogStepConfig>> configs = {};
+  final insuranceHomeScreen = InsuranceHomeScreen();
 
   // Helper lists
   const List<String> inpatientLimits = [
@@ -3671,14 +3930,27 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs() async {
     final coverageOptions = coverageTypes.map((c) => c.name).toList();
 
     final typeName = policyType.name.toLowerCase();
-    final fieldMap = {
-          'motor': motorFields,
-          'medical': medicalFields,
-          'property': propertyFields,
-          'travel': travelFields,
-          'wiba': wibaFields,
-        }[typeName] ??
-        {};
+    // Fetch fields from PDFTemplate or use fieldMap
+    Map<String, FieldDefinition> fields = {};
+    if (pdfTemplateKey != null) {
+      final pdfTemplate =
+          await InsuranceHomeScreen.getPDFTemplate(pdfTemplateKey);
+      if (pdfTemplate != null) {
+        fields = pdfTemplate.fields;
+      }
+    }
+
+    // Fallback to fieldMap
+    if (fields.isEmpty) {
+      fields = {
+            'motor': motorFields,
+            'medical': medicalFields,
+            'property': propertyFields,
+            'travel': travelFields,
+            'wiba': wibaFields,
+          }[type.name.toLowerCase()] ??
+          {};
+    }
 
     configs[typeName] = [
       DialogStepConfig(
@@ -3908,7 +4180,7 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs() async {
           }
 
           // Fetch fields from PDFTemplate or use fieldMap
-          Map<String, FieldDefinition> fields = fieldMap;
+          Map<String, FieldDefinition> fields = {};
           if (pdfTemplateKey != null) {
             final pdfTemplate =
                 await InsuranceHomeScreen.getPDFTemplate(pdfTemplateKey);
@@ -3926,7 +4198,12 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs() async {
                 subtype: subtype,
                 coverageType: coverageType,
                 insuredItem: dialogState.insuredItemId != null
-                    ? (InsuranceHomeScreen._loadInsuredItems()).firstWhere(
+                    ? (context
+                                .findAncestorStateOfType<
+                                    _InsuranceHomeScreenState>()
+                                ?.insuredItems ??
+                            [])
+                        .firstWhere(
                         (item) => item.id == dialogState.insuredItemId,
                         orElse: () => InsuredItem(
                             id: '', type: '', details: {}, vehicleType: ''),
@@ -3981,6 +4258,8 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs() async {
 
   return configs;
 }
+
+
 
 class FieldConfig {
   final String key;
@@ -4268,7 +4547,7 @@ class GenericInsuranceDialog extends StatelessWidget {
 
   Future<List<FieldConfig>> _getFields(BuildContext context) async {
     if (config.title == 'Select Insurance Company') {
-      final companies = await InsuranceHomeScreen._loadCompanies();
+      final companies = await InsuranceHomeScreen.loadCompanies();
       final companyId = dialogState.responses['company_id'];
       final selectedCompany = companies.firstWhere(
         (c) => c.id == companyId,
@@ -4309,6 +4588,7 @@ class GenericInsuranceDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final _formKey = GlobalKey<FormState>();
     final colorProvider = context.watch<ColorProvider>();
+    final insuranceHomeScreen = InsuranceHomeScreen();
 
     if (config.customCallback != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -4423,15 +4703,17 @@ class GenericInsuranceDialog extends StatelessWidget {
                     if (dialogState.insuredItemId != null) {
                       details['insured_item_id'] = dialogState.insuredItemId!;
                     }
-                    await InsuranceHomeScreen._handleCoverSubmission(
-                      context,
-                      type,
-                      subtype,
-                      coverageType,
-                      companyId,
-                      pdfTemplateKey,
-                      details,
-                    );
+                    await (context
+                        .findAncestorStateOfType<_InsuranceHomeScreenState>()
+                        ?.handleCoverSubmission(
+                          context,
+                          type,
+                          subtype,
+                          coverageType,
+                          companyId,
+                          pdfTemplateKey,
+                          details,
+                        ));
                     dialogState.resetForNewCycle();
                   } else {
                     onSubmit();
@@ -4539,7 +4821,8 @@ class DynamicForm extends StatelessWidget {
 
 void showInsuranceDialog(
   BuildContext context,
-  String insuranceType, {
+  String insuranceType,
+  dynamic pdfTemplateKey, {
   int step = 0,
   void Function(BuildContext, String, String, String)? onFinalSubmit,
 }) async {
@@ -4548,7 +4831,7 @@ void showInsuranceDialog(
   dialogState.setCurrentType(normalizedType);
   dialogState.setCurrentStep(step);
 
-  final configs = await getInsuranceConfigs();
+  final configs = await getInsuranceConfigs(pdfTemplateKey, insuranceType);
   if (!configs.containsKey(normalizedType)) {
     if (kDebugMode) {
       print('Invalid insurance type: $normalizedType');
@@ -4589,7 +4872,7 @@ void showInsuranceDialog(
                 print('Back pressed for ${config.title}');
               }
               Navigator.pop(dialogContext);
-              showInsuranceDialog(context, normalizedType,
+              showInsuranceDialog(context, normalizedType, pdfTemplateKey,
                   step: step - 1, onFinalSubmit: onFinalSubmit);
             }
           : null,
@@ -4600,7 +4883,7 @@ void showInsuranceDialog(
         }
         Navigator.pop(dialogContext);
         if (step + 1 < configList.length) {
-          showInsuranceDialog(context, normalizedType,
+          showInsuranceDialog(context, normalizedType, pdfTemplateKey,
               step: step + 1, onFinalSubmit: onFinalSubmit);
         } else {
           // Fetch pdfTemplateKey for Policy
@@ -4645,7 +4928,8 @@ void showInsuranceDialog(
             pdfTemplateKey: pdfTemplateKey,
           );
 
-          _showCompletionDialog(context, normalizedType, policy, onFinalSubmit);
+          _showCompletionDialog(
+              context, normalizedType, policy, pdfTemplateKey, onFinalSubmit);
         }
       },
     ),
@@ -4656,6 +4940,7 @@ void _showCompletionDialog(
   BuildContext context,
   String type,
   Policy policy,
+  pdfTemplateKey,
   void Function(BuildContext, String, String, String)? onFinalSubmit,
 ) {
   final dialogState = context.read<DialogState>();
@@ -4706,7 +4991,7 @@ void _showCompletionDialog(
             }
             dialogState.resetForNewCycle();
             Navigator.pop(dialogContext);
-            showInsuranceDialog(context, type,
+            showInsuranceDialog(context, type, pdfTemplateKey,
                 step: 0, onFinalSubmit: onFinalSubmit);
           },
           style: ElevatedButton.styleFrom(

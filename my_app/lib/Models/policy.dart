@@ -88,6 +88,7 @@ class CoverageType {
         description: json['description'],
         pdfTemplateKey: json['pdfTemplateKey'], // Nullable in fromJson
       );
+      
 }
 
 class Policy {
@@ -141,4 +142,8 @@ class Policy {
             : null,
         pdfTemplateKey: json['pdfTemplateKey'],
       );
+  @override
+  String toString() {
+    return 'Policy(id: $id, insuredItemId: $insuredItemId, companyId: $companyId, type: ${type.name}, subtype: ${subtype.name}, coverageType: ${coverageType.name}, status: $status, endDate: $endDate, pdfTemplateKey: $pdfTemplateKey)';
+  }
 }
