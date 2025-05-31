@@ -5634,8 +5634,6 @@ class DynamicForm extends StatelessWidget {
   }
 }
 
-
-
 Future<void> showInsuranceDialog(
   BuildContext context,
   String insuranceType,
@@ -5645,7 +5643,8 @@ Future<void> showInsuranceDialog(
   required GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey,
 }) async {
   if (kDebugMode) {
-    print('showInsuranceDialog: starting for type=$insuranceType, step=$step, pdfTemplateKey=$pdfTemplateKey');
+    print(
+        'showInsuranceDialog: starting for type=$insuranceType, step=$step, pdfTemplateKey=$pdfTemplateKey');
   }
 
   if (!context.mounted) {
@@ -5665,11 +5664,13 @@ Future<void> showInsuranceDialog(
     if (FirebaseAuth.instance.currentUser == null) {
       await FirebaseAuth.instance.signInAnonymously();
       if (kDebugMode) {
-        print('Anonymous sign-in successful: ${FirebaseAuth.instance.currentUser?.uid}');
+        print(
+            'Anonymous sign-in successful: ${FirebaseAuth.instance.currentUser?.uid}');
       }
     } else {
       if (kDebugMode) {
-        print('User already authenticated: ${FirebaseAuth.instance.currentUser?.uid}');
+        print(
+            'User already authenticated: ${FirebaseAuth.instance.currentUser?.uid}');
       }
     }
   } catch (e, stackTrace) {
@@ -5788,13 +5789,15 @@ Future<void> showInsuranceDialog(
     }
   } else if (!context.mounted) {
     if (kDebugMode) {
-      print('showInsuranceDialog: context not mounted when closing loading dialog');
+      print(
+          'showInsuranceDialog: context not mounted when closing loading dialog');
     }
     return;
   }
 
   // Validate configs
-  if (!configs.containsKey(normalizedType) || configs[normalizedType]!.isEmpty) {
+  if (!configs.containsKey(normalizedType) ||
+      configs[normalizedType]!.isEmpty) {
     if (kDebugMode) {
       print('Invalid insurance type or no configs: $normalizedType');
     }
@@ -5868,7 +5871,8 @@ Future<void> showInsuranceDialog(
                 : null,
             onSubmit: () async {
               if (kDebugMode) {
-                print('Submit pressed for ${config.title}, responses: ${dialogState!.responses}');
+                print(
+                    'Submit pressed for ${config.title}, responses: ${dialogState!.responses}');
               }
               Navigator.of(dialogContext).pop();
               if (step + 1 < configList.length) {
@@ -5900,22 +5904,33 @@ Future<void> showInsuranceDialog(
                   print('Final submit for $normalizedType');
                 }
                 try {
-                  final policyTypes = await InsuranceHomeScreen.getPolicyTypes().timeout(
+                  final policyTypes =
+                      await InsuranceHomeScreen.getPolicyTypes().timeout(
                     const Duration(seconds: 3),
                     onTimeout: () => [
-                      PolicyType(id: '1', name: normalizedType, description: ''),
+                      PolicyType(
+                          id: '1', name: normalizedType, description: ''),
                     ],
                   );
                   final policyType = policyTypes.firstWhere(
                     (t) => t.name.toLowerCase() == normalizedType,
-                    orElse: () => PolicyType(id: normalizedType, name: normalizedType, description: ''),
+                    orElse: () => PolicyType(
+                        id: normalizedType,
+                        name: normalizedType,
+                        description: ''),
                   );
 
                   final subtypeName = dialogState!.responses['subtype'] ?? '';
-                  final subtypes = await InsuranceHomeScreen.getPolicySubtypes(policyType.id).timeout(
+                  final subtypes =
+                      await InsuranceHomeScreen.getPolicySubtypes(policyType.id)
+                          .timeout(
                     const Duration(seconds: 3),
                     onTimeout: () => [
-                      PolicySubtype(id: '1', name: 'Standard', policyTypeId: policyType.id, description: ''),
+                      PolicySubtype(
+                          id: '1',
+                          name: 'Standard',
+                          policyTypeId: policyType.id,
+                          description: ''),
                     ],
                   );
                   final subtype = subtypes.firstWhere(
@@ -5928,8 +5943,10 @@ Future<void> showInsuranceDialog(
                     ),
                   );
 
-                  final coverageName = dialogState.responses['coverage_type'] ?? '';
-                  final coverageTypes = await InsuranceHomeScreen.getCoverageTypes().timeout(
+                  final coverageName =
+                      dialogState.responses['coverage_type'] ?? '';
+                  final coverageTypes =
+                      await InsuranceHomeScreen.getCoverageTypes().timeout(
                     const Duration(seconds: 3),
                     onTimeout: () => [
                       CoverageType(id: '1', name: 'Basic', description: ''),
@@ -5937,11 +5954,13 @@ Future<void> showInsuranceDialog(
                   );
                   final coverageType = coverageTypes.firstWhere(
                     (c) => c.name == coverageName,
-                    orElse: () => CoverageType(id: coverageName, name: coverageName, description: ''),
+                    orElse: () => CoverageType(
+                        id: coverageName, name: coverageName, description: ''),
                   );
 
                   if (context.mounted) {
-                    final state = context.findAncestorStateOfType<_InsuranceHomeScreenState>();
+                    final state = context
+                        .findAncestorStateOfType<_InsuranceHomeScreenState>();
                     if (state != null) {
                       if (kDebugMode) {
                         print('Showing insured item dialog');
@@ -6017,21 +6036,24 @@ Map<String, List<DialogStepConfig>> _defaultConfigs(String normalizedType) {
             label: 'Insurance Company',
             type: 'dropdown',
             options: ['AIG', 'Cigna', 'UnitedHealth'],
-            validator: (value) => value != null ? null : 'Please select a company',
+            validator: (value) =>
+                value != null ? null : 'Please select a company',
           ),
           FieldConfig(
             key: 'subtype',
             label: 'Subtype',
             type: 'dropdown',
             options: ['Standard', 'Premium'],
-            validator: (value) => value != null ? null : 'Please select a subtype',
+            validator: (value) =>
+                value != null ? null : 'Please select a subtype',
           ),
           FieldConfig(
             key: 'coverage_type',
             label: 'Coverage Type',
             type: 'dropdown',
             options: ['Basic', 'Comprehensive'],
-            validator: (value) => value != null ? null : 'Please select a coverage type',
+            validator: (value) =>
+                value != null ? null : 'Please select a coverage type',
           ),
         ],
         nextStep: 'details',
@@ -6041,6 +6063,7 @@ Map<String, List<DialogStepConfig>> _defaultConfigs(String normalizedType) {
     ],
   };
 }
+
 void _showCompletionDialog(
   BuildContext context,
   String type,
