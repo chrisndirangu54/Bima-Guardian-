@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:my_app/Models/Insured_item.dart';
 import 'package:my_app/Models/company.dart';
@@ -12,6 +13,7 @@ import 'package:my_app/Models/field_definition.dart';
 import 'package:my_app/Models/pdf_template.dart';
 import 'package:my_app/Models/policy.dart';
 import 'package:my_app/Providers/theme_provider.dart';
+import 'package:my_app/Screens/Policy_report_screen.dart';
 import 'package:my_app/Screens/cover_screen.dart';
 import 'package:my_app/Screens/notifications_screen.dart';
 import 'package:my_app/Screens/pdf_preview.dart';
@@ -28,7 +30,6 @@ import 'package:pdf_render/pdf_render.dart' as pdf;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:encrypt/encrypt.dart' as encrypt;
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'package:google_fonts/google_fonts.dart'; // For elegant typography
 import 'package:carousel_slider/carousel_slider.dart';
@@ -87,49 +88,143 @@ class Quote {
 class InsuranceHomeScreen extends StatefulWidget {
   const InsuranceHomeScreen({super.key});
   static Future<List<PolicyType>> getPolicyTypes() async {
-    // Fetch from Firestore
-    final snapshot =
-        await FirebaseFirestore.instance.collection('policy_types').get();
-    return snapshot.docs.map((doc) => PolicyType.fromJson(doc.data())).toList();
+    try {
+      await Future.delayed(const Duration(seconds: 1));
+      return [
+        PolicyType(
+          id: '1',
+          name: 'Motor',
+          description: 'Motor insurance',
+        ),
+        PolicyType(
+          id: '2',
+          name: 'Medical',
+          description: 'Medical insurance',
+        ),
+        PolicyType(
+          id: '3',
+          name: 'Travel',
+          description: 'Travel insurance',
+        ),
+        PolicyType(
+          id: '4',
+          name: 'Property',
+          description: 'Property insurance',
+        ),
+        PolicyType(
+          id: '5',
+          name: 'WIBA',
+          description: 'WIBA insurance',
+        ),
+      ];
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error in getPolicyTypes: $e');
+      }
+      return [
+        PolicyType(
+          id: '1',
+          name: 'Motor',
+          description: 'Motor insurance',
+        ),
+        PolicyType(
+          id: '2',
+          name: 'Medical',
+          description: 'Medical insurance',
+        ),
+        PolicyType(
+          id: '3',
+          name: 'Travel',
+          description: 'Travel insurance',
+        ),
+        PolicyType(
+          id: '4',
+          name: 'Property',
+          description: 'Property insurance',
+        ),
+        PolicyType(
+          id: '5',
+          name: 'WIBA',
+          description: 'WIBA insurance',
+        ),
+      ];
+    }
   }
 
   static Future<List<PolicySubtype>> getPolicySubtypes(
       String policyTypeId) async {
-    // Fetch subtypes for a policy type
-    final snapshot = await FirebaseFirestore.instance
-        .collection('policy_subtypes')
-        .where('policyTypeId', isEqualTo: policyTypeId)
-        .get();
-    return snapshot.docs
-        .map((doc) => PolicySubtype.fromJson(doc.data()))
-        .toList();
+    try {
+      await Future.delayed(const Duration(seconds: 1));
+      return [
+        PolicySubtype(
+            id: '1',
+            name: 'Standard',
+            policyTypeId: policyTypeId,
+            description: ''),
+        PolicySubtype(
+            id: '2',
+            name: 'Premium',
+            policyTypeId: policyTypeId,
+            description: ''),
+      ];
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error in getPolicySubtypes: $e');
+      }
+      return [
+        PolicySubtype(
+            id: '1',
+            name: 'Standard',
+            policyTypeId: policyTypeId,
+            description: ''),
+      ];
+    }
   }
 
   static Future<List<CoverageType>> getCoverageTypes() async {
-    // Fetch coverage types
-    final snapshot =
-        await FirebaseFirestore.instance.collection('coverage_types').get();
-    return snapshot.docs
-        .map((doc) => CoverageType.fromJson(doc.data()))
-        .toList();
+    try {
+      await Future.delayed(const Duration(seconds: 1));
+      return [
+        CoverageType(id: '1', name: 'Basic', description: ''),
+        CoverageType(id: '2', name: 'Comprehensive', description: ''),
+      ];
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error in getCoverageTypes: $e');
+      }
+      return [
+        CoverageType(id: '1', name: 'Basic', description: ''),
+      ];
+    }
   }
 
   static Future<PDFTemplate?> getPDFTemplate(String pdfTemplateKey) async {
-    // Fetch PDFTemplate by key
-    final doc = await FirebaseFirestore.instance
-        .collection('pdf_templates')
-        .doc(pdfTemplateKey)
-        .get();
-    return doc.exists ? PDFTemplate.fromJson(doc.data()!) : null;
+    try {
+      await Future.delayed(const Duration(seconds: 1));
+      return null; // Simulate no template found
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error in getPDFTemplate: $e');
+      }
+      return null;
+    }
   }
 
   @override
   State<InsuranceHomeScreen> createState() => _InsuranceHomeScreenState();
 
   static Future<List<Company>> loadCompanies() async {
-    final snapshot =
-        await FirebaseFirestore.instance.collection('companies').get();
-    return snapshot.docs.map((doc) => Company.fromJson(doc.data())).toList();
+    try {
+      await Future.delayed(const Duration(seconds: 1));
+      return [
+        Company(id: '1', name: 'AIG', pdfTemplateKeys: const []),
+        Company(id: '2', name: 'Cigna', pdfTemplateKeys: const []),
+        Company(id: '3', name: 'UnitedHealth', pdfTemplateKeys: const []),
+      ];
+    } catch (e) {
+      print('Error in loadCompanies: $e');
+      return [Company(id: '1', name: 'AIG', pdfTemplateKeys: const [])];
+    }
   }
 }
 
@@ -178,8 +273,10 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
   List<String> trendingTopics = [];
   List<String> blogPosts = [];
 
-  static const Color blueGreen = Color(0xFF26A69A);
-  static const Color orange = Color(0xFFFFA726);
+  String pdfTemplateKey = 'default_template';
+  List<PolicyType> cachedPolicyTypes = [];
+  final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
+      GlobalKey<ScaffoldMessengerState>();
 
   Map<String, dynamic> chatbotTemplate = {
     'states': {
@@ -240,8 +337,6 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
 
   late bool isDesktop;
 
-  late String pdfTemplateKey;
-
   @override
   void initState() {
     super.initState();
@@ -265,7 +360,8 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       _hasLoadedData = true;
       _loadPolicies();
       _loadInsuredItems();
-      isDesktop = !kIsWeb && MediaQuery.of(context).size.width > 600; // Example threshold
+      isDesktop = !kIsWeb &&
+          MediaQuery.of(context).size.width > 600; // Example threshold
 
       _loadNotifications();
       _startChatbot();
@@ -411,94 +507,96 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     });
   }
 
-Future<void> _loadPolicies() async {
-  bool hasShownSnackBar = false;
-  try {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) {
+  Future<void> _loadPolicies() async {
+    bool hasShownSnackBar = false;
+    try {
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId == null) {
+        if (kDebugMode) {
+          print('No user authenticated for loading policies.');
+        }
+        if (mounted && !hasShownSnackBar) {
+          setState(() {
+            policies = [];
+          });
+          await Future.delayed(Duration.zero); // Ensure post-frame
+          SchedulerBinding.instance.addPostFrameCallback((_) {
+            if (mounted && !hasShownSnackBar) {
+              hasShownSnackBar = true;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                    content: Text('Please sign in to view policies')),
+              );
+            }
+          });
+        }
+        return;
+      }
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('policies')
+          .doc(userId)
+          .collection('user_policies')
+          .get();
+
+      final loadedPolicies = <Policy>[];
+      for (var doc in snapshot.docs) {
+        try {
+          final data = doc.data();
+          if (data.isNotEmpty) {
+            loadedPolicies.add(Policy.fromJson({
+              ...data,
+              'id': doc.id,
+            }));
+          } else {
+            if (kDebugMode) {
+              print('Empty data for policy document ${doc.id}');
+            }
+          }
+        } catch (e, stackTrace) {
+          if (kDebugMode) {
+            print('Error parsing policy ${doc.id}: $e\n$stackTrace');
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          policies = loadedPolicies;
+        });
+        if (policies.isEmpty && !hasShownSnackBar) {
+          if (kDebugMode) {
+            print('No policies found for user $userId.');
+          }
+          await Future.delayed(Duration.zero);
+          SchedulerBinding.instance.addPostFrameCallback((_) {
+            if (mounted && !hasShownSnackBar) {
+              hasShownSnackBar = true;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('No policies found')),
+              );
+            }
+          });
+        }
+      }
+    } catch (e, stackTrace) {
       if (kDebugMode) {
-        print('No user authenticated for loading policies.');
+        print('Error loading policies: $e\n$stackTrace');
       }
       if (mounted && !hasShownSnackBar) {
-        setState(() {
-          policies = [];
-        });
-        await Future.delayed(Duration.zero); // Ensure post-frame
-        SchedulerBinding.instance.addPostFrameCallback((_) {
-          if (mounted && !hasShownSnackBar) {
-            hasShownSnackBar = true;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Please sign in to view policies')),
-            );
-          }
-        });
-      }
-      return;
-    }
-
-    final snapshot = await FirebaseFirestore.instance
-        .collection('policies')
-        .doc(userId)
-        .collection('user_policies')
-        .get();
-
-    final loadedPolicies = <Policy>[];
-    for (var doc in snapshot.docs) {
-      try {
-        final data = doc.data();
-        if (data.isNotEmpty) {
-          loadedPolicies.add(Policy.fromJson({
-            ...data,
-            'id': doc.id,
-          }));
-        } else {
-          if (kDebugMode) {
-            print('Empty data for policy document ${doc.id}');
-          }
-        }
-      } catch (e, stackTrace) {
-        if (kDebugMode) {
-          print('Error parsing policy ${doc.id}: $e\n$stackTrace');
-        }
-      }
-    }
-
-    if (mounted) {
-      setState(() {
-        policies = loadedPolicies;
-      });
-      if (policies.isEmpty && !hasShownSnackBar) {
-        if (kDebugMode) {
-          print('No policies found for user $userId.');
-        }
         await Future.delayed(Duration.zero);
         SchedulerBinding.instance.addPostFrameCallback((_) {
           if (mounted && !hasShownSnackBar) {
             hasShownSnackBar = true;
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('No policies found')),
+              SnackBar(content: Text('Failed to load policies: $e')),
             );
           }
         });
       }
     }
-  } catch (e, stackTrace) {
-    if (kDebugMode) {
-      print('Error loading policies: $e\n$stackTrace');
-    }
-    if (mounted && !hasShownSnackBar) {
-      await Future.delayed(Duration.zero);
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        if (mounted && !hasShownSnackBar) {
-          hasShownSnackBar = true;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to load policies: $e')),
-          );
-        }
-      });
-    }
   }
-}
+
   Future<void> _loadInsuredItems() async {
     if (_hasLoadedInsuredItems) return;
     _hasLoadedInsuredItems = true;
@@ -1053,9 +1151,7 @@ Future<void> _loadPolicies() async {
             .collection('insured_items')
             .doc(insuredItem.id)
             .set(insuredItem.toJson());
-        setState(() {
-          insuredItems.add(insuredItem);
-        });
+        insuredItems.add(insuredItem); // Update global list
       }
 
       // Calculate premium
@@ -1150,19 +1246,16 @@ Future<void> _loadPolicies() async {
         }
 
         // Update chatbot state for quote
-        setState(() {
-          currentState = 'quote_process';
-          chatMessages.add({
-            'sender': 'bot',
-            'text':
-                'Your ${type.toUpperCase()} quote ($subtype) has been generated.',
-          });
+        currentState = 'quote_process';
+        chatMessages.add({
+          'sender': 'bot',
+          'text':
+              'Your ${type.toUpperCase()} quote ($subtype) has been generated.',
         });
         return;
       }
 
-      // Proceed with payment (original flow)
-      // Create Cover
+      // Proceed with payment
       final cover = Cover(
         id: Uuid().v4(),
         insuredItemId: insuredItem.id,
@@ -1185,16 +1278,14 @@ Future<void> _loadPolicies() async {
           .collection('covers')
           .doc(cover.id)
           .set(cover.toJson());
-      setState(() {
-        covers.add(cover);
-      });
+      covers.add(cover);
 
       // Handle PDF generation
       File? pdfFile;
       if (cachedPdfTemplates.isNotEmpty &&
           cachedPdfTemplates.containsKey(pdfTemplateKey)) {
         pdfFile = await _fillPdfTemplate(
-          pdfTemplateKey,
+          pdfTemplateKey ?? '',
           details,
           type,
           context,
@@ -1258,24 +1349,23 @@ Future<void> _loadPolicies() async {
         'paymentStatus': paymentStatus,
       });
 
-      setState(() {
-        final index = covers.indexWhere((c) => c.id == cover.id);
-        covers[index] = cover.copyWith(
-          status: paymentStatus == 'completed'
-              ? CoverStatus.active
-              : CoverStatus.pending,
-          paymentStatus: paymentStatus,
-        );
-      });
+      final updatedCover = cover.copyWith(
+        status: paymentStatus == 'completed'
+            ? CoverStatus.active
+            : CoverStatus.pending,
+        paymentStatus: paymentStatus,
+      );
+      final index = covers.indexWhere((c) => c.id == cover.id);
+      if (index != -1) {
+        covers[index] = updatedCover;
+      }
 
       // Update chatbot state and UI
-      setState(() {
-        currentState = type == 'medical' ? 'health_process' : 'pdf_process';
-        chatMessages.add({
-          'sender': 'bot',
-          'text':
-              'Your ${type.toUpperCase()} cover ($subtype) has been created. Payment status: $paymentStatus.',
-        });
+      currentState = type == 'medical' ? 'health_process' : 'pdf_process';
+      chatMessages.add({
+        'sender': 'bot',
+        'text':
+            'Your ${type.toUpperCase()} cover ($subtype) has been created. Payment status: $paymentStatus.',
       });
 
       if (context.mounted) {
@@ -1284,6 +1374,18 @@ Future<void> _loadPolicies() async {
             content: Text(
                 'Cover created, payment $paymentStatus${pdfFile == null ? ', no PDF generated' : ''}'),
           ),
+        );
+        // Show completion dialog
+        _showCompletionDialog(
+          context,
+          type,
+          await Policy.fromCover(updatedCover),
+          pdfTemplateKey,
+          (context, type, subtype, coverageType) {
+            if (kDebugMode) {
+              print('Final submission: $type, $subtype, $coverageType');
+            }
+          },
         );
       }
     } catch (e) {
@@ -1684,7 +1786,12 @@ Future<void> _loadPolicies() async {
   Widget _getSelectedScreen() {
     switch (_selectedIndex) {
       case 0:
-        return _buildHomeScreen(context);
+        return _buildHomeScreen(
+          context,
+          pdfTemplateKey,
+          GlobalKey<ScaffoldMessengerState>(),
+          [], // Provide a list of PolicyType or your cachedPolicyTypes variable if available
+        );
       case 1:
         return _buildQuotesScreen();
       case 2:
@@ -1692,24 +1799,89 @@ Future<void> _loadPolicies() async {
       case 3:
         return _buildMyAccountScreen(context);
       default:
-        return _buildHomeScreen(context);
+        return _buildHomeScreen(
+          context,
+          pdfTemplateKey,
+          GlobalKey<ScaffoldMessengerState>(),
+          [], // Provide a list of PolicyType or your cachedPolicyTypes variable if available
+        );
     }
   }
 
-  Widget _buildHomeScreen(BuildContext context) {
-    return Consumer2<ColorProvider, DialogState>(
-      builder: (context, colorProvider, dialogState, _) {
-        return FutureBuilder<List<PolicyType>>(
-          future: InsuranceHomeScreen.getPolicyTypes(),
+  Widget _buildHomeScreen(
+    BuildContext context,
+    String pdfTemplateKey,
+    GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey,
+    List<PolicyType> cachedPolicyTypes,
+  ) {
+    // Cache for getInsuranceConfigs results
+    final Map<String, Map<String, List<DialogStepConfig>>> configCache = {};
+
+    return Consumer<DialogState>(builder: (context, dialogState, _) {
+      return Scaffold(
+        key: scaffoldMessengerKey,
+        body: FutureBuilder<List<PolicyType>>(
+          future: Future.value(cachedPolicyTypes),
           builder: (context, snapshot) {
+            if (kDebugMode) {
+              print('Policy FutureBuilder: state=${snapshot.connectionState}, '
+                  'data=${snapshot.data?.map((p) => p.name).toList()}, error=${snapshot.error}');
+            }
+
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
+
             if (snapshot.hasError) {
-              return Center(child: Text('Error: ${snapshot.error}'));
+              if (kDebugMode) {
+                print('Error fetching policies: ${snapshot.error}');
+              }
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text('Error: ${snapshot.error}',
+                        style: GoogleFonts.roboto()),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () => (context as Element).markNeedsBuild(),
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              );
             }
 
-            final policyTypes = snapshot.data ?? [];
+            final policyTypes = snapshot.data?.isNotEmpty == true
+                ? snapshot.data!
+                : [
+                    PolicyType(
+                        id: '1', name: 'Motor', description: 'Motor insurance'),
+                    PolicyType(
+                      id: '2',
+                      name: 'Medical',
+                      description: 'Medical insurance',
+                    ),
+                    PolicyType(
+                        id: '3',
+                        name: 'Travel',
+                        description: 'Travel insurance'),
+                    PolicyType(
+                      id: '4',
+                      name: 'Property',
+                      description: 'Property insurance',
+                    ),
+                    PolicyType(
+                      id: '5',
+                      name: 'WIBA',
+                      description: 'WIBA insurance',
+                    ),
+                  ];
+
+            if (kDebugMode) {
+              print('Policy types: ${policyTypes.map((p) => p.name).toList()}');
+            }
+
             final currentType = dialogState.currentType;
             final dialogIndex = dialogState.currentStep;
 
@@ -1718,13 +1890,22 @@ Future<void> _loadPolicies() async {
                 if (!kIsWeb)
                   SliverAppBar(
                     pinned: true,
-                    title: Text('BIMA GUARDIAN', style: GoogleFonts.lora()),
-                    backgroundColor: blueGreen,
+                    title: Text(
+                      'BIMA GUARDIAN',
+                      style: GoogleFonts.lora(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    backgroundColor: Theme.of(context).colorScheme.primary,
                     actions: [
                       if (userRole == UserRole.admin)
                         IconButton(
-                          icon: Icon(Icons.admin_panel_settings,
-                              color: colorProvider.color),
+                          icon: Icon(
+                            Icons.admin_panel_settings,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                            semanticLabel: 'Admin Panel',
+                          ),
                           onPressed: () =>
                               Navigator.pushNamed(context, '/admin'),
                           tooltip: 'Admin Panel',
@@ -1732,37 +1913,41 @@ Future<void> _loadPolicies() async {
                       Stack(
                         children: [
                           IconButton(
-                            icon: Icon(Icons.notifications,
-                                color: colorProvider.color),
+                            icon: Icon(
+                              Icons.notifications,
+                              color: Theme.of(context).colorScheme.onPrimary,
+                              semanticLabel: 'Notifications',
+                            ),
                             onPressed: () {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) => NotificationsScreen(
-                                      notifications: notifications),
+                                      notifications: notifications ?? []),
                                 ),
                               );
                             },
                             tooltip: 'Notifications',
                           ),
-                          if (notifications.isNotEmpty)
+                          if ((notifications ?? []).isNotEmpty)
                             Positioned(
                               right: 8,
                               top: 8,
                               child: Container(
                                 padding: const EdgeInsets.all(2),
                                 decoration: BoxDecoration(
-                                  color: orange,
+                                  color: Theme.of(context).colorScheme.error,
                                   shape: BoxShape.circle,
                                 ),
                                 constraints: const BoxConstraints(
                                     minWidth: 16, minHeight: 16),
                                 child: Text(
-                                  '${notifications.length}',
+                                  '${(notifications ?? []).length}',
                                   style: GoogleFonts.roboto(
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.white,
+                                    color:
+                                        Theme.of(context).colorScheme.onError,
                                   ),
                                   textAlign: TextAlign.center,
                                 ),
@@ -1771,16 +1956,26 @@ Future<void> _loadPolicies() async {
                         ],
                       ),
                       IconButton(
-                        icon: Icon(Icons.save, color: colorProvider.color),
-                        onPressed: () {
-                          if (dialogState.currentType.isNotEmpty) {
-                            dialogState.saveProgress(
-                                dialogState.currentType, dialogIndex);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Progress saved')),
-                            );
-                          }
-                        },
+                        icon: Icon(
+                          Icons.save,
+                          color: currentType.isNotEmpty
+                              ? Theme.of(context).colorScheme.onPrimary
+                              : Theme.of(context)
+                                  .colorScheme
+                                  .onPrimary
+                                  .withOpacity(0.5),
+                          semanticLabel: 'Save Progress',
+                        ),
+                        onPressed: currentType.isNotEmpty
+                            ? () {
+                                dialogState.saveProgress(
+                                    currentType, dialogIndex);
+                                scaffoldMessengerKey.currentState?.showSnackBar(
+                                  const SnackBar(
+                                      content: Text('Progress saved')),
+                                );
+                              }
+                            : null,
                         tooltip: 'Save progress',
                       ),
                     ],
@@ -1802,43 +1997,132 @@ Future<void> _loadPolicies() async {
                           'assets/banners/promo1.jpg',
                           'assets/banners/promo2.jpg',
                           'assets/banners/promo3.jpg',
-                        ].map((imagePath) {
-                          return Container(
-                            width: MediaQuery.of(context).size.width,
-                            margin: const EdgeInsets.symmetric(horizontal: 5.0),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                              image: DecorationImage(
-                                image: AssetImage(imagePath),
-                                fit: BoxFit.cover,
-                              ),
-                            ),
+                        ].asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final imagePath = entry.value;
+                          return Builder(
+                            builder: (BuildContext context) {
+                              return Container(
+                                width: MediaQuery.of(context).size.width,
+                                margin:
+                                    const EdgeInsets.symmetric(horizontal: 5.0),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainer,
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.asset(
+                                    imagePath,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      if (kDebugMode) {
+                                        print('Image load error: $error');
+                                      }
+                                      return Container(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary
+                                            .withOpacity(0.2),
+                                        child: Center(
+                                          child: Text(
+                                            'Promo ${index + 1}',
+                                            style: GoogleFonts.lora(
+                                              fontSize: 24,
+                                              fontWeight: FontWeight.bold,
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurface,
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              );
+                            },
                           );
                         }).toList(),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 24),
                       if (currentType.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16.0),
                           child: FutureBuilder<
                               Map<String, List<DialogStepConfig>>>(
-                            future: getInsuranceConfigs(
-                                currentType, pdfTemplateKey),
+                            future: configCache.containsKey(currentType)
+                                ? Future.value(configCache[currentType])
+                                : getInsuranceConfigs(
+                                        pdfTemplateKey, currentType)
+                                    .timeout(const Duration(seconds: 5),
+                                        onTimeout: () {
+                                    if (kDebugMode) {
+                                      print('Config FutureBuilder timed out');
+                                    }
+                                    return {
+                                      currentType: [
+                                        DialogStepConfig(
+                                          title: 'Default $currentType Config',
+                                          fields: [
+                                            FieldConfig(
+                                              key: 'subtype',
+                                              label: 'Subtype',
+                                              type: 'dropdown',
+                                              options: ['Standard', 'Premium'],
+                                              validator: (value) => value !=
+                                                      null
+                                                  ? null
+                                                  : 'Please select a subtype',
+                                            ),
+                                          ],
+                                          customCallback:
+                                              (context, dialogState) async {},
+                                        ),
+                                      ],
+                                    };
+                                  }).then((configs) {
+                                    configCache[currentType] = configs;
+                                    return configs;
+                                  }),
                             builder: (context, snapshot) {
+                              if (kDebugMode) {
+                                print(
+                                    'Config FutureBuilder: state=${snapshot.connectionState}, '
+                                    'data=${snapshot.data?.keys.toList()}, error=${snapshot.error}');
+                              }
+                              if (snapshot.connectionState ==
+                                  ConnectionState.waiting) {
+                                return const LinearProgressIndicator(value: 0);
+                              }
+                              if (snapshot.hasError) {
+                                if (kDebugMode) {
+                                  print(
+                                      'Error in config FutureBuilder: ${snapshot.error}');
+                                }
+                                return const SizedBox.shrink();
+                              }
                               final dialogCount =
                                   snapshot.data?[currentType]?.length ?? 1;
                               return LinearProgressIndicator(
-                                value: (dialogIndex + 1) / dialogCount,
-                                backgroundColor: blueGreen.withOpacity(0.3),
-                                valueColor:
-                                    AlwaysStoppedAnimation<Color>(orange),
+                                value: (dialogIndex + 1) /
+                                    dialogCount.clamp(1, double.infinity),
+                                backgroundColor: Theme.of(context)
+                                    .colorScheme
+                                    .primary
+                                    .withOpacity(0.3),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Theme.of(context).colorScheme.secondary,
+                                ),
                                 semanticsLabel:
-                                    'Progress: ${(dialogIndex + 1) / dialogCount * 100}%',
+                                    'Progress: ${((dialogIndex + 1) / dialogCount * 100).toStringAsFixed(0)}%',
                               );
                             },
                           ),
                         ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 24),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16.0),
                         child: Text(
@@ -1846,7 +2130,7 @@ Future<void> _loadPolicies() async {
                           style: GoogleFonts.lora(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
-                            color: const Color(0xFF1B263B),
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                         ),
                       ),
@@ -1858,49 +2142,75 @@ Future<void> _loadPolicies() async {
                         gridDelegate:
                             const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 2,
-                          childAspectRatio: 1.0,
+                          childAspectRatio: 1.2,
                           crossAxisSpacing: 12,
                           mainAxisSpacing: 12,
                         ),
                         itemCount: policyTypes.length,
                         itemBuilder: (context, index) {
+                          if (kDebugMode) {
+                            print(
+                                'Building grid item $index: ${policyTypes[index].name}');
+                          }
                           final policyType = policyTypes[index];
                           final icon = getIconFromString(policyType.icon) ??
                               _fallbackIcon(policyType.name.toLowerCase());
-                          return GestureDetector(
-                            onTap: () {
-                              colorProvider.setColor(orange);
-                              showInsuranceDialog(
-                                context,
-                                policyType.name.toLowerCase(), pdfTemplateKey,
-                                onFinalSubmit:
-                                    null, // Handled by _handleCoverSubmission
-                              );
+                          return InkWell(
+                            onTap: () async {
+                              if (kDebugMode) {
+                                print('Tapped policy: ${policyType.name}');
+                              }
+                              try {
+                                await showInsuranceDialog(
+                                  context,
+                                  policyType.name,
+                                  pdfTemplateKey,
+                                  scaffoldMessengerKey: scaffoldMessengerKey,
+                                  onFinalSubmit: null,
+                                );
+                              } catch (e) {
+                                if (kDebugMode) {
+                                  print('Error in showInsuranceDialog: $e');
+                                }
+                                scaffoldMessengerKey.currentState?.showSnackBar(
+                                  SnackBar(
+                                      content:
+                                          Text('Failed to show dialog: $e')),
+                                );
+                              }
                             },
+                            borderRadius: BorderRadius.circular(12),
                             child: Card(
                               elevation: 4,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    icon,
-                                    size: 40,
-                                    color: colorProvider.color,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    policyType.name.toUpperCase(),
-                                    style: GoogleFonts.roboto(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w500,
-                                      color: const Color(0xFF1B263B),
+                              child: Container(
+                                color: Colors.transparent,
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      icon,
+                                      size: 40,
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                      semanticLabel: '${policyType.name} icon',
                                     ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ],
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      policyType.name.toUpperCase(),
+                                      style: GoogleFonts.roboto(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurface,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           );
@@ -1908,16 +2218,16 @@ Future<void> _loadPolicies() async {
                       ),
                     ],
                   ),
-                ),
+                )
               ],
             );
           },
-        );
-      },
-    );
+        ),
+      );
+    });
   }
 
-// Icon mapping and fallback (unchanged)
+// Unchanged methods (included for completeness)
   IconData? getIconFromString(String? iconName) {
     if (iconName == null) return null;
     switch (iconName.toLowerCase()) {
@@ -1953,7 +2263,6 @@ Future<void> _loadPolicies() async {
     }
   }
 
-// Helper method to fetch policy types and subtypes from Firestore
   Future<Map<String, List<PolicySubtype>>>
       _fetchPolicyTypesAndSubtypes() async {
     final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
@@ -1967,34 +2276,75 @@ Future<void> _loadPolicies() async {
     return result;
   }
 
-  // Quotes screen
+// Quotes screen
   Widget _buildQuotesScreen() {
-    return ListView.builder(
-      padding: EdgeInsets.all(16.0),
-      itemCount: quotes.length,
-      itemBuilder: (context, index) {
-        final quote = quotes[index];
-        return Card(
-          elevation: 2,
-          margin: EdgeInsets.only(bottom: 12),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: ListTile(
-            title: Text(
-              '${quote.type} - ${quote.subtype}',
-              style: TextStyle(fontWeight: FontWeight.bold),
+    return CupertinoPageScaffold(
+      navigationBar: const CupertinoNavigationBar(
+        middle: Text('Quotes'),
+      ),
+      backgroundColor: CupertinoColors.systemGroupedBackground,
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+        itemCount: quotes.length,
+        itemBuilder: (context, index) {
+          final quote = quotes[index];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: CupertinoListTile(
+              backgroundColor: CupertinoColors.white,
+              padding: const EdgeInsets.all(16.0),
+              title: Text(
+                '${quote.type} - ${quote.subtype}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                  color: CupertinoColors.black,
+                ),
+              ),
+              subtitle: Text(
+                'Premium: KES ${quote.premium.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: CupertinoColors.secondaryLabel,
+                ),
+              ),
+              trailing: Text(
+                '${quote.generatedAt.day}/${quote.generatedAt.month}/${quote.generatedAt.year}',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: CupertinoColors.secondaryLabel,
+                ),
+              ),
+              additionalInfo: const Icon(
+                CupertinoIcons.chevron_right,
+                color: CupertinoColors.systemGrey,
+                size: 20,
+              ),
+              onTap: () {
+                showCupertinoDialog(
+                  context: context,
+                  builder: (context) => CupertinoAlertDialog(
+                    title: Text('${quote.type} - ${quote.subtype}'),
+                    content: Text(
+                      'Premium: KES ${quote.premium.toStringAsFixed(2)}\nGenerated: ${quote.generatedAt.day}/${quote.generatedAt.month}/${quote.generatedAt.year}',
+                    ),
+                    actions: [
+                      CupertinoDialogAction(
+                        child: const Text('Close'),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
-            subtitle: Text('Premium: KES ${quote.premium.toStringAsFixed(2)}'),
-            trailing: Text(
-              '${quote.generatedAt.day}/${quote.generatedAt.month}/${quote.generatedAt.year}',
-            ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
-  // Upcoming screen (policies nearing expiration)
+// Upcoming screen
   Widget _buildUpcomingScreen() {
     final upcomingPolicies = policies.where((policy) {
       if (policy.endDate == null) return false;
@@ -2003,88 +2353,285 @@ Future<void> _loadPolicies() async {
       return daysUntilExpiration <= 30 && daysUntilExpiration > 0;
     }).toList();
 
-    return ListView.builder(
-      padding: EdgeInsets.all(16.0),
-      itemCount: upcomingPolicies.length,
-      itemBuilder: (context, index) {
-        final policy = upcomingPolicies[index];
-        final daysUntilExpiration =
-            policy.endDate!.difference(DateTime.now()).inDays;
-        return Card(
-          elevation: 2,
-          margin: EdgeInsets.only(bottom: 12),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: ListTile(
-            title: Text(
-              '${policy.type} - ${policy.subtype}',
-              style: TextStyle(fontWeight: FontWeight.bold),
+    return CupertinoPageScaffold(
+      navigationBar: const CupertinoNavigationBar(
+        middle: Text('Upcoming Expirations'),
+      ),
+      backgroundColor: CupertinoColors.systemGroupedBackground,
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+        itemCount: upcomingPolicies.length,
+        itemBuilder: (context, index) {
+          final policy = upcomingPolicies[index];
+          final daysUntilExpiration =
+              policy.endDate!.difference(DateTime.now()).inDays;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: CupertinoListTile(
+              backgroundColor: CupertinoColors.white,
+              padding: const EdgeInsets.all(16.0),
+              title: Text(
+                '${policy.type} - ${policy.subtype}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                  color: CupertinoColors.black,
+                ),
+              ),
+              subtitle: Text(
+                'Expires in $daysUntilExpiration days',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: daysUntilExpiration <= 7
+                      ? CupertinoColors.systemRed
+                      : CupertinoColors.secondaryLabel,
+                ),
+              ),
+              trailing: Icon(
+                CupertinoIcons.exclamationmark_triangle,
+                color: daysUntilExpiration <= 7
+                    ? CupertinoColors.systemRed
+                    : CupertinoColors.systemYellow,
+                size: 24,
+              ),
+              additionalInfo: const Icon(
+                CupertinoIcons.chevron_right,
+                color: CupertinoColors.systemGrey,
+                size: 20,
+              ),
+              onTap: () {
+                showCupertinoDialog(
+                  context: context,
+                  builder: (context) => CupertinoAlertDialog(
+                    title: Text('${policy.type} - ${policy.subtype}'),
+                    content: Text('Expires in $daysUntilExpiration days'),
+                    actions: [
+                      CupertinoDialogAction(
+                        child: const Text('Close'),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      CupertinoDialogAction(
+                        child: const Text('Renew'),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          // Add renewal logic here
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Renewal initiated')),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
-            subtitle: Text('Expires in $daysUntilExpiration days'),
-            trailing: Icon(Icons.warning_amber),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
   Widget _buildMyAccountScreen(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
-    return Padding(
-      padding: EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'My Account',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-          ),
-          SizedBox(height: 16),
-          ListTile(
-            leading: Icon(Icons.description),
-            title: Text('Policy Reports'),
-            onTap: () => Navigator.pushNamed(context, '/policy_report'),
-          ),
-          ListTile(
-            leading: Icon(Icons.brightness_6),
-            title: Text('Toggle Theme'),
-            trailing: Switch(
-              value: themeProvider.themeMode == ThemeMode.dark,
-              onChanged: (value) {
-                themeProvider.toggleTheme(value);
-              },
-            ),
-          ),
-          ListTile(
-            leading: Icon(Icons.logout),
-            title: Text('Log Out'),
-            onTap: () async {
-              try {
-                await FirebaseAuth.instance.signOut();
-                if (kDebugMode) {
-                  print('User signed out');
-                }
-                // Optionally, sign in anonymously again
-                await FirebaseAuth.instance.signInAnonymously();
-              } catch (e) {
-                if (kDebugMode) {
-                  print('Error signing out: $e');
-                }
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Error signing out: $e'),
+    return CupertinoPageScaffold(
+      // Use CupertinoPageScaffold for iOS look
+      navigationBar: CupertinoNavigationBar(
+        middle: const Text(
+          'My Account',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+        backgroundColor: CupertinoDynamicColor.resolve(
+          CupertinoColors.systemBackground,
+          context,
+        ),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Settings-style grouped list
+              Container(
+                margin:
+                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                decoration: BoxDecoration(
+                  color: CupertinoDynamicColor.resolve(
+                    CupertinoColors.secondarySystemGroupedBackground,
+                    context,
                   ),
-                );
-              }
-            },
+                  borderRadius: BorderRadius.circular(12.0),
+                  border: Border.all(
+                    color: CupertinoDynamicColor.resolve(
+                      CupertinoColors.systemGrey5,
+                      context,
+                    ),
+                    width: 0.5,
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    // Policy Reports Row
+                    CupertinoButton(
+                      padding: const EdgeInsets.all(0),
+                      onPressed: () {
+                        // Navigate with iOS slide transition
+                        Navigator.of(context).push(
+                          CupertinoPageRoute(
+                            builder: (context) => const CoverReportScreen(),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0,
+                          vertical: 12.0,
+                        ),
+                        decoration: const BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: CupertinoColors.systemGrey5,
+                              width: 0.5,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              CupertinoIcons.doc_text,
+                              color: CupertinoColors.systemGrey,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Policy Reports',
+                                style: CupertinoTheme.of(context)
+                                    .textTheme
+                                    .textStyle
+                                    .copyWith(
+                                      fontSize: 16,
+                                      color: CupertinoDynamicColor.resolve(
+                                        CupertinoColors.label,
+                                        context,
+                                      ),
+                                    ),
+                              ),
+                            ),
+                            const Icon(
+                              CupertinoIcons.chevron_right,
+                              color: CupertinoColors.systemGrey,
+                              size: 18,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Theme Toggle Row
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0,
+                        vertical: 12.0,
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            CupertinoIcons.moon,
+                            color: CupertinoColors.systemGrey,
+                            size: 24,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Dark Mode',
+                              style: CupertinoTheme.of(context)
+                                  .textTheme
+                                  .textStyle
+                                  .copyWith(
+                                    fontSize: 16,
+                                    color: CupertinoDynamicColor.resolve(
+                                      CupertinoColors.label,
+                                      context,
+                                    ),
+                                  ),
+                            ),
+                          ),
+                          CupertinoSwitch(
+                            value: themeProvider.themeMode == ThemeMode.dark,
+                            onChanged: (value) {
+                              themeProvider.toggleTheme(value);
+                            },
+                            activeColor: CupertinoColors.activeGreen,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Logout Button
+              Container(
+                margin:
+                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: CupertinoButton(
+                  color: CupertinoColors.systemRed,
+                  borderRadius: BorderRadius.circular(12.0),
+                  padding: const EdgeInsets.symmetric(vertical: 12.0),
+                  onPressed: () async {
+                    try {
+                      await FirebaseAuth.instance.signOut();
+                      if (kDebugMode) {
+                        print('User signed out');
+                      }
+                      await FirebaseAuth.instance.signInAnonymously();
+                      // Optional: Navigate to login screen
+                      // Navigator.of(context).pushReplacement(
+                      //   CupertinoPageRoute(builder: (context) => LoginScreen()),
+                      // );
+                    } catch (e) {
+                      if (kDebugMode) {
+                        print('Error signing out: $e');
+                      }
+                      // Show Cupertino-style error dialog
+                      showCupertinoDialog(
+                        context: context,
+                        builder: (context) => CupertinoAlertDialog(
+                          title: const Text('Error'),
+                          content: Text('Failed to sign out: $e'),
+                          actions: [
+                            CupertinoDialogAction(
+                              isDefaultAction: true,
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text('OK'),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                  },
+                  child: Center(
+                    child: Text(
+                      'Log Out',
+                      style: CupertinoTheme.of(context)
+                          .textTheme
+                          .textStyle
+                          .copyWith(
+                            fontSize: 16,
+                            color: CupertinoColors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  // Mock fetch methods for Trending Topics and Blogs
   Future<void> fetchTrendingTopics() async {
     setState(() {
       trendingTopics = [
@@ -2107,260 +2654,377 @@ Future<void> _loadPolicies() async {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          bool isDesktop = constraints.maxWidth > 800;
+    return kIsWeb
+        ? CupertinoPageScaffold(
+            backgroundColor: CupertinoColors.systemBackground,
+            navigationBar: CupertinoNavigationBar(
+              middle: Text('BIMA GUARDIAN'),
+              backgroundColor: CupertinoColors.systemBackground,
+              trailing: LayoutBuilder(
+                builder: (context, constraints) {
+                  bool isDesktop = constraints.maxWidth > 800;
+                  return isDesktop
+                      ? _buildNotificationButton(
+                          context) // Only notifications in desktop
+                      : PopupMenuButton<String>(
+                          icon: Icon(CupertinoIcons.line_horizontal_3),
+                          onSelected: (String value) {
+                            if (value == 'Home') {
+                              _onItemTapped(0);
+                            } else if (value == 'Quotes') {
+                              _onItemTapped(1);
+                            } else if (value == 'Upcoming') {
+                              _onItemTapped(2);
+                            } else if (value == 'My Account') {
+                              _onItemTapped(3);
+                            } else if (value == 'Admin Panel' &&
+                                userRole == UserRole.admin) {
+                              Navigator.pushNamed(context, '/admin');
+                            }
+                          },
+                          itemBuilder: (BuildContext context) =>
+                              <PopupMenuEntry<String>>[
+                            PopupMenuItem<String>(
+                              value: 'Home',
+                              child: Row(
+                                children: [
+                                  Icon(CupertinoIcons.house_fill),
+                                  SizedBox(width: 8),
+                                  Text('Home'),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem<String>(
+                              value: 'Quotes',
+                              child: Row(
+                                children: [
+                                  Icon(CupertinoIcons.doc_text_fill),
+                                  SizedBox(width: 8),
+                                  Text('Quotes'),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem<String>(
+                              value: 'Upcoming',
+                              child: Row(
+                                children: [
+                                  Icon(CupertinoIcons.hourglass),
+                                  SizedBox(width: 8),
+                                  Text('Upcoming'),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem<String>(
+                              value: 'My Account',
+                              child: Row(
+                                children: [
+                                  Icon(CupertinoIcons.person_fill),
+                                  SizedBox(width: 8),
+                                  Text('My Account'),
+                                ],
+                              ),
+                            ),
+                            if (userRole == UserRole.admin)
+                              PopupMenuItem<String>(
+                                value: 'Admin Panel',
+                                child: Row(
+                                  children: [
+                                    Icon(CupertinoIcons.shield_fill),
+                                    SizedBox(width: 8),
+                                    Text('Admin Panel'),
+                                  ],
+                                ),
+                              ),
+                            PopupMenuItem<String>(
+                              value: 'Notifications',
+                              child: Row(
+                                children: [
+                                  Icon(CupertinoIcons.bell_fill),
+                                  SizedBox(width: 8),
+                                  Text('Notifications'),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                },
+              ),
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                bool isDesktop = constraints.maxWidth > 800;
 
-          return Row(
-            children: [
-              // Left side: Navigation Drawer for desktop
-              if (isDesktop)
-                Container(
-                  width: 250,
-                  color: Colors.blueGrey,
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 50),
-                      ListTile(
-                        leading: const Icon(Icons.home, size: 30),
-                        title: const Text("Home"),
-                        onTap: () => _onItemTapped(0),
-                      ),
-                      ListTile(
-                        leading: const Icon(Icons.request_quote, size: 30),
-                        title: const Text("Quotes"),
-                        onTap: () => _onItemTapped(1),
-                      ),
-                      ListTile(
-                        leading: const Icon(Icons.hourglass_bottom_outlined,
-                            size: 30),
-                        title: const Text("Upcoming"),
-                        onTap: () => _onItemTapped(2),
-                      ),
-                      ListTile(
-                        leading: const Icon(Icons.account_circle, size: 30),
-                        title: const Text("My Account"),
-                        onTap: () => _onItemTapped(3),
-                      ),
-                      if (userRole == UserRole.admin)
-                        ListTile(
-                          leading:
-                              const Icon(Icons.admin_panel_settings, size: 30),
-                          title: const Text("Admin Panel"),
-                          onTap: () => Navigator.pushNamed(context, '/admin'),
+                return Row(
+                  children: [
+                    if (isDesktop)
+                      Container(
+                        width: 280,
+                        decoration: BoxDecoration(
+                          color: CupertinoColors.systemGroupedBackground,
+                          boxShadow: [
+                            BoxShadow(
+                              color: CupertinoColors.black.withOpacity(0.1),
+                              blurRadius: 10,
+                              offset: Offset(2, 0),
+                            ),
+                          ],
                         ),
-                    ],
-                  ),
-                ),
-              // Main content
-              Expanded(child: _getSelectedScreen()),
-              // Right side: Trending topics and Blogs for desktop
-              if (isDesktop)
-                Container(
-                  width: 250,
-                  padding: const EdgeInsets.all(16),
-                  color: Colors.grey[200],
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        "Trending in Insurance",
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 10),
-                      trendingTopics.isNotEmpty
-                          ? ListView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: trendingTopics.length,
-                              itemBuilder: (context, index) {
-                                return ListTile(
-                                    title: Text(trendingTopics[index]));
-                              },
-                            )
-                          : const Center(child: CircularProgressIndicator()),
-                      const SizedBox(height: 20),
-                      const Text(
-                        "Learn more about Insurance",
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 10),
-                      blogPosts.isNotEmpty
-                          ? ListView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: blogPosts.length,
-                              itemBuilder: (context, index) {
-                                return ListTile(title: Text(blogPosts[index]));
-                              },
-                            )
-                          : const Center(child: CircularProgressIndicator()),
-                    ],
-                  ),
-                ),
-            ],
-          );
-        },
-      ),
-      floatingActionButton: _selectedIndex == 0
-          ? FloatingActionButton(
-              onPressed: () => _showChatBottomSheet(context),
-              tooltip: 'Open Chatbot',
-              child: const Icon(Icons.chat, size: 30),
-            )
-          : null,
-      appBar: kIsWeb 
-          ? AppBar(
-              title: const Text('BIMA GUARDIAN'),
-              actions: [
-                if (isDesktop)
-                  // Only notification icon for desktop
-                  Stack(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.notifications, size: 20),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => NotificationsScreen(
-                                notifications: notifications,
+                        child: SafeArea(
+                          child: Column(
+                            children: [
+                              SizedBox(height: 60),
+                              _buildNavItem(
+                                context,
+                                icon: CupertinoIcons.house_fill,
+                                title: "Home",
+                                onTap: () => _onItemTapped(0),
                               ),
-                            ),
-                          );
-                        },
-                        tooltip: 'Notifications',
-                      ),
-                      if (notifications.isNotEmpty)
-                        Positioned(
-                          right: 8,
-                          top: 8,
-                          child: Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                            constraints: const BoxConstraints(
-                              minWidth: 16,
-                              minHeight: 16,
-                            ),
-                            child: Text(
-                              '${notifications.length}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
+                              _buildNavItem(
+                                context,
+                                icon: CupertinoIcons.doc_text_fill,
+                                title: "Quotes",
+                                onTap: () => _onItemTapped(1),
                               ),
-                              textAlign: TextAlign.center,
-                            ),
+                              _buildNavItem(
+                                context,
+                                icon: CupertinoIcons.hourglass,
+                                title: "Upcoming",
+                                onTap: () => _onItemTapped(2),
+                              ),
+                              _buildNavItem(
+                                context,
+                                icon: CupertinoIcons.person_fill,
+                                title: "My Account",
+                                onTap: () => _onItemTapped(3),
+                              ),
+                              if (userRole == UserRole.admin)
+                                _buildNavItem(
+                                  context,
+                                  icon: CupertinoIcons.shield_fill,
+                                  title: "Admin Panel",
+                                  onTap: () =>
+                                      Navigator.pushNamed(context, '/admin'),
+                                ),
+                            ],
                           ),
                         ),
-                    ],
-                  ),
-                if (!isDesktop) ...[
-                  // Full actions for non-desktop web
-                  IconButton(
-                    icon: const Icon(Icons.home, size: 20),
-                    onPressed: () => _onItemTapped(0),
-                    tooltip: 'Home',
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.request_quote, size: 20),
-                    onPressed: () => _onItemTapped(1),
-                    tooltip: 'Quotes',
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.hourglass_bottom_outlined, size: 20),
-                    onPressed: () => _onItemTapped(2),
-                    tooltip: 'Upcoming',
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.account_circle, size: 20),
-                    onPressed: () => _onItemTapped(3),
-                    tooltip: 'My Account',
-                  ),
-                  if (userRole == UserRole.admin)
-                    IconButton(
-                      icon: const Icon(Icons.admin_panel_settings, size: 20),
-                      onPressed: () => Navigator.pushNamed(context, '/admin'),
-                      tooltip: 'Admin Panel',
-                    ),
-                  Stack(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.notifications, size: 20),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => NotificationsScreen(
-                                notifications: notifications,
-                              ),
-                            ),
-                          );
-                        },
-                        tooltip: 'Notifications',
                       ),
-                      if (notifications.isNotEmpty)
-                        Positioned(
-                          right: 8,
-                          top: 8,
-                          child: Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Theme.of(context).colorScheme.error,
+                    Expanded(child: _getSelectedScreen()),
+                    if (isDesktop)
+                      Container(
+                        width: 280,
+                        padding: EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: CupertinoColors.systemBackground,
+                          boxShadow: [
+                            BoxShadow(
+                              color: CupertinoColors.black.withOpacity(0.1),
+                              blurRadius: 10,
+                              offset: Offset(-2, 0),
                             ),
-                            constraints: const BoxConstraints(
-                              minWidth: 16,
-                              minHeight: 16,
-                            ),
-                            child: Text(
-                              '${notifications.length}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
+                          ],
+                        ),
+                        child: SafeArea(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Trending in Insurance",
+                                style: CupertinoTheme.of(context)
+                                    .textTheme
+                                    .navTitleTextStyle
+                                    .copyWith(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                               ),
-                              textAlign: TextAlign.center,
-                            ),
+                              SizedBox(height: 16),
+                              trendingTopics.isNotEmpty
+                                  ? ListView.builder(
+                                      shrinkWrap: true,
+                                      physics: NeverScrollableScrollPhysics(),
+                                      itemCount: trendingTopics.length,
+                                      itemBuilder: (context, index) {
+                                        return Padding(
+                                          padding:
+                                              EdgeInsets.symmetric(vertical: 8),
+                                          child: CupertinoListTile(
+                                            title: Text(
+                                              trendingTopics[index],
+                                              style: CupertinoTheme.of(context)
+                                                  .textTheme
+                                                  .textStyle,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    )
+                                  : Center(child: CupertinoActivityIndicator()),
+                              SizedBox(height: 24),
+                              Text(
+                                "Learn more about Insurance",
+                                style: CupertinoTheme.of(context)
+                                    .textTheme
+                                    .navTitleTextStyle
+                                    .copyWith(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                              ),
+                              SizedBox(height: 16),
+                              blogPosts.isNotEmpty
+                                  ? ListView.builder(
+                                      shrinkWrap: true,
+                                      physics: NeverScrollableScrollPhysics(),
+                                      itemCount: blogPosts.length,
+                                      itemBuilder: (context, index) {
+                                        return Padding(
+                                          padding:
+                                              EdgeInsets.symmetric(vertical: 8),
+                                          child: CupertinoListTile(
+                                            title: Text(
+                                              blogPosts[index],
+                                              style: CupertinoTheme.of(context)
+                                                  .textTheme
+                                                  .textStyle,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    )
+                                  : Center(child: CupertinoActivityIndicator()),
+                            ],
                           ),
                         ),
-                    ],
-                  ),
-                ],
-              ],
-            )
-          : null,
-      bottomNavigationBar: kIsWeb
-          ? null
-          : BottomNavigationBar(
-              currentIndex: _selectedIndex,
-              onTap: _onItemTapped,
-              type: BottomNavigationBarType.fixed,
-              items: const [
+                      ),
+                  ],
+                );
+              },
+            ),
+          )
+        : CupertinoTabScaffold(
+            tabBar: CupertinoTabBar(
+              backgroundColor: CupertinoColors.systemBackground,
+              items: [
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.home, size: 30),
+                  icon: Icon(CupertinoIcons.house_fill, size: 30),
                   label: 'Home',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.request_quote, size: 30),
+                  icon: Icon(CupertinoIcons.doc_text_fill, size: 30),
                   label: 'Quotes',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.hourglass_bottom_outlined, size: 30),
+                  icon: Icon(CupertinoIcons.hourglass, size: 30),
                   label: 'Upcoming',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.account_circle, size: 30),
+                  icon: Icon(CupertinoIcons.person_fill, size: 30),
                   label: 'My Account',
                 ),
               ],
+              onTap: _onItemTapped,
+              currentIndex: _selectedIndex,
             ),
+            tabBuilder: (context, index) {
+              return CupertinoTabView(
+                builder: (context) {
+                  return Stack(
+                    children: [
+                      Positioned.fill(child: _getSelectedScreen()),
+                      Positioned(
+                        bottom: 16,
+                        right: 16,
+                        child: CupertinoButton.filled(
+                          padding: EdgeInsets.all(16),
+                          borderRadius: BorderRadius.circular(16),
+                          child:
+                              Icon(CupertinoIcons.chat_bubble_fill, size: 30),
+                          onPressed: () {
+                            if (kDebugMode) {
+                              print('Chat button pressed');
+                            }
+                            _showChatBottomSheet(context);
+                          },
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          );
+  }
+
+// Helper method to build navigation items
+  Widget _buildNavItem(BuildContext context,
+      {required IconData icon,
+      required String title,
+      required VoidCallback onTap}) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: CupertinoListTile(
+        leading: Icon(icon,
+            size: 30, color: CupertinoTheme.of(context).primaryColor),
+        title:
+            Text(title, style: CupertinoTheme.of(context).textTheme.textStyle),
+        onTap: onTap,
+        padding: EdgeInsets.all(12),
+        backgroundColor: CupertinoColors.systemBackground,
+        backgroundColorActivated: CupertinoColors.systemGrey.withOpacity(0.2),
+      ),
+    );
+  }
+
+// Helper method to build navigation icons for app bar
+
+// Helper method to build notification button
+  Widget _buildNotificationButton(BuildContext context) {
+    return Stack(
+      children: [
+        CupertinoButton(
+          padding: EdgeInsets.zero,
+          child: Icon(CupertinoIcons.bell_fill, size: 20),
+          onPressed: () {
+            Navigator.push(
+              context,
+              CupertinoPageRoute(
+                builder: (context) =>
+                    NotificationsScreen(notifications: notifications),
+              ),
+            );
+          },
+        ),
+        if (notifications.isNotEmpty)
+          Positioned(
+            right: 4,
+            top: 4,
+            child: Container(
+              padding: EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: CupertinoColors.systemRed,
+                boxShadow: [
+                  BoxShadow(
+                    color: CupertinoColors.black.withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              constraints: BoxConstraints(minWidth: 20, minHeight: 20),
+              child: Text(
+                '${notifications.length}',
+                style: TextStyle(
+                  color: CupertinoColors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -2452,7 +3116,7 @@ Future<void> _loadPolicies() async {
                               showInsuranceDialog(
                                 context,
                                 input,
-                                pdfTemplateKey,
+                                pdfTemplateKey!,
                                 onFinalSubmit:
                                     (context, type, subtype, coverage) {
                                   // Save policy to Firestore or update UI
@@ -2466,6 +3130,8 @@ Future<void> _loadPolicies() async {
                                     ),
                                   );
                                 },
+                                scaffoldMessengerKey:
+                                    GlobalKey<ScaffoldMessengerState>(),
                               );
                             }
                           } else {
@@ -2496,7 +3162,6 @@ Future<void> _loadPolicies() async {
   ) async {
     String? insuredItemId;
     bool createNew = insuredItems.isEmpty;
-    final insuranceHomeScreen = InsuranceHomeScreen();
 
     // Fetch pdfTemplateKey
     String? pdfTemplateKey;
@@ -3501,11 +4166,13 @@ class DialogState extends ChangeNotifier {
 }
 
 Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
-    dynamic pdfTemplateKey, dynamic type) async {
-  final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
-  final companies = await InsuranceHomeScreen.loadCompanies();
+    String pdfTemplateKey, String type) async {
+  if (kDebugMode) {
+    print(
+        'getInsuranceConfigs called with pdfTemplateKey: $pdfTemplateKey, type: $type');
+  }
+  final normalizedType = type.toLowerCase();
   final Map<String, List<DialogStepConfig>> configs = {};
-  final insuranceHomeScreen = InsuranceHomeScreen();
 
   // Helper lists
   const List<String> inpatientLimits = [
@@ -3522,7 +4189,7 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
     'maternity'
   ];
   const List<String> underwriters = [
-    'Aetna',
+    'AIG',
     'Cigna',
     'UnitedHealth',
     'Humana',
@@ -3539,14 +4206,16 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
   final Map<String, FieldDefinition> travelFields = {
     'name': FieldDefinition(
       expectedType: ExpectedType.name,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
-              ? null
-              : 'Invalid name',
+      validator: (value) => value == null ||
+              value.isEmpty ||
+              RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
+          ? null
+          : 'Invalid name',
     ),
     'email': FieldDefinition(
       expectedType: ExpectedType.email,
-      validator: (value) => value.isEmpty ||
+      validator: (value) => value == null ||
+              value.isEmpty ||
               RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
                   .hasMatch(value)
           ? null
@@ -3554,22 +4223,24 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
     ),
     'phone': FieldDefinition(
       expectedType: ExpectedType.phone,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
-              ? null
-              : 'Invalid phone number',
+      validator: (value) => value == null ||
+              value.isEmpty ||
+              RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
+          ? null
+          : 'Invalid phone number',
     ),
     'destination': FieldDefinition(
       expectedType: ExpectedType.text,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z\s\,\-]+$').hasMatch(value)
-              ? null
-              : 'Invalid destination (use letters, commas, or hyphens)',
+      validator: (value) => value == null ||
+              value.isEmpty ||
+              RegExp(r'^[A-Za-z\s\,\-]+$').hasMatch(value)
+          ? null
+          : 'Invalid destination',
     ),
     'travel_start_date': FieldDefinition(
       expectedType: ExpectedType.text,
       validator: (value) {
-        if (value.isEmpty) return null;
+        if (value == null || value.isEmpty) return null;
         try {
           DateTime.parse(value);
           return null;
@@ -3581,7 +4252,7 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
     'travel_end_date': FieldDefinition(
       expectedType: ExpectedType.text,
       validator: (value) {
-        if (value.isEmpty) return null;
+        if (value == null || value.isEmpty) return null;
         try {
           DateTime.parse(value);
           return null;
@@ -3593,7 +4264,7 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
     'number_of_travelers': FieldDefinition(
       expectedType: ExpectedType.number,
       validator: (value) {
-        if (value.isEmpty) return null;
+        if (value == null || value.isEmpty) return null;
         int? val = int.tryParse(value);
         return val != null && val >= 1 ? null : 'Must have at least 1 traveler';
       },
@@ -3601,7 +4272,7 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
     'coverage_limit': FieldDefinition(
       expectedType: ExpectedType.number,
       validator: (value) {
-        if (value.isEmpty) return null;
+        if (value == null || value.isEmpty) return null;
         double? val = double.tryParse(value);
         return val != null && val >= 0 ? null : 'Invalid coverage limit';
       },
@@ -3611,14 +4282,16 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
   final Map<String, FieldDefinition> wibaFields = {
     'name': FieldDefinition(
       expectedType: ExpectedType.name,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
-              ? null
-              : 'Invalid name',
+      validator: (value) => value == null ||
+              value.isEmpty ||
+              RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
+          ? null
+          : 'Invalid name',
     ),
     'email': FieldDefinition(
       expectedType: ExpectedType.email,
-      validator: (value) => value.isEmpty ||
+      validator: (value) => value == null ||
+              value.isEmpty ||
               RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
                   .hasMatch(value)
           ? null
@@ -3626,22 +4299,24 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
     ),
     'phone': FieldDefinition(
       expectedType: ExpectedType.phone,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
-              ? null
-              : 'Invalid phone number',
+      validator: (value) => value == null ||
+              value.isEmpty ||
+              RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
+          ? null
+          : 'Invalid phone number',
     ),
     'business_name': FieldDefinition(
       expectedType: ExpectedType.text,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z0-9\s\-\.]+$').hasMatch(value)
-              ? null
-              : 'Invalid business name',
+      validator: (value) => value == null ||
+              value.isEmpty ||
+              RegExp(r'^[A-Za-z0-9\s\-\.]+$').hasMatch(value)
+          ? null
+          : 'Invalid business name',
     ),
     'number_of_employees': FieldDefinition(
       expectedType: ExpectedType.number,
       validator: (value) {
-        if (value.isEmpty) return null;
+        if (value == null || value.isEmpty) return null;
         int? val = int.tryParse(value);
         return val != null && val >= 1 ? null : 'Must have at least 1 employee';
       },
@@ -3649,19 +4324,16 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
     'coverage_limit': FieldDefinition(
       expectedType: ExpectedType.number,
       validator: (value) {
-        if (value.isEmpty) return null;
+        if (value == null || value.isEmpty) return null;
         double? val = double.tryParse(value);
         return val != null && val >= 0 ? null : 'Invalid coverage limit';
       },
     ),
     'industry_type': FieldDefinition(
       expectedType: ExpectedType.text,
-      validator: (value) => [
-        'construction',
-        'manufacturing',
-        'services',
-        'retail'
-      ].contains(value)
+      validator: (value) => value == null ||
+              ['construction', 'manufacturing', 'services', 'retail']
+                  .contains(value)
           ? null
           : 'Invalid industry type',
     ),
@@ -3670,14 +4342,16 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
   final Map<String, FieldDefinition> propertyFields = {
     'name': FieldDefinition(
       expectedType: ExpectedType.name,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
-              ? null
-              : 'Invalid name',
+      validator: (value) => value == null ||
+              value.isEmpty ||
+              RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
+          ? null
+          : 'Invalid name',
     ),
     'email': FieldDefinition(
       expectedType: ExpectedType.email,
-      validator: (value) => value.isEmpty ||
+      validator: (value) => value == null ||
+              value.isEmpty ||
               RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
                   .hasMatch(value)
           ? null
@@ -3685,48 +4359,48 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
     ),
     'phone': FieldDefinition(
       expectedType: ExpectedType.phone,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
-              ? null
-              : 'Invalid phone number',
+      validator: (value) => value == null ||
+              value.isEmpty ||
+              RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
+          ? null
+          : 'Invalid phone number',
     ),
     'property_value': FieldDefinition(
       expectedType: ExpectedType.number,
       validator: (value) {
-        if (value.isEmpty) return null;
+        if (value == null || value.isEmpty) return null;
         double? val = double.tryParse(value);
         return val != null && val > 0 ? null : 'Invalid property value';
       },
     ),
     'property_type': FieldDefinition(
       expectedType: ExpectedType.text,
-      validator: (value) => [
-        'residential',
-        'commercial',
-        'industrial',
-        'landlord'
-      ].contains(value)
+      validator: (value) => value == null ||
+              ['residential', 'commercial', 'industrial', 'landlord']
+                  .contains(value)
           ? null
           : 'Invalid property type',
     ),
     'property_location': FieldDefinition(
       expectedType: ExpectedType.text,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z0-9\s\,\.\-]+$').hasMatch(value)
-              ? null
-              : 'Invalid location (use letters, numbers, commas, or periods)',
+      validator: (value) => value == null ||
+              value.isEmpty ||
+              RegExp(r'^[A-Za-z0-9\s\,\.\-]+$').hasMatch(value)
+          ? null
+          : 'Invalid location',
     ),
     'deed_number': FieldDefinition(
       expectedType: ExpectedType.text,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z0-9\-\/]{5,20}$').hasMatch(value)
-              ? null
-              : 'Invalid deed number (5-20 alphanumeric characters)',
+      validator: (value) => value == null ||
+              value.isEmpty ||
+              RegExp(r'^[A-Za-z0-9\-\/]{5,20}$').hasMatch(value)
+          ? null
+          : 'Invalid deed number',
     ),
     'construction_year': FieldDefinition(
       expectedType: ExpectedType.number,
       validator: (value) {
-        if (value.isEmpty) return null;
+        if (value == null || value.isEmpty) return null;
         int? val = int.tryParse(value);
         return val != null && val >= 1900 && val <= DateTime.now().year
             ? null
@@ -3738,14 +4412,16 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
   final Map<String, FieldDefinition> medicalFields = {
     'name': FieldDefinition(
       expectedType: ExpectedType.name,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
-              ? null
-              : 'Invalid name',
+      validator: (value) => value == null ||
+              value.isEmpty ||
+              RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
+          ? null
+          : 'Invalid name',
     ),
     'email': FieldDefinition(
       expectedType: ExpectedType.email,
-      validator: (value) => value.isEmpty ||
+      validator: (value) => value == null ||
+              value.isEmpty ||
               RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
                   .hasMatch(value)
           ? null
@@ -3753,15 +4429,16 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
     ),
     'phone': FieldDefinition(
       expectedType: ExpectedType.phone,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
-              ? null
-              : 'Invalid phone number',
+      validator: (value) => value == null ||
+              value.isEmpty ||
+              RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
+          ? null
+          : 'Invalid phone number',
     ),
     'age': FieldDefinition(
       expectedType: ExpectedType.number,
       validator: (value) {
-        if (value.isEmpty) return null;
+        if (value == null || value.isEmpty) return null;
         int? val = int.tryParse(value);
         return val != null && val >= 0 && val <= 120 ? null : 'Invalid age';
       },
@@ -3769,7 +4446,7 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
     'spouse_age': FieldDefinition(
       expectedType: ExpectedType.number,
       validator: (value) {
-        if (value.isEmpty) return null;
+        if (value == null || value.isEmpty) return null;
         int? val = int.tryParse(value);
         return val != null && val >= 0 && val <= 120
             ? null
@@ -3779,7 +4456,7 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
     'children_count': FieldDefinition(
       expectedType: ExpectedType.number,
       validator: (value) {
-        if (value.isEmpty) return null;
+        if (value == null || value.isEmpty) return null;
         int? val = int.tryParse(value);
         return val != null && val >= 0 ? null : 'Invalid number of children';
       },
@@ -3791,7 +4468,7 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
     'beneficiaries': FieldDefinition(
       expectedType: ExpectedType.number,
       validator: (value) {
-        if (value.isEmpty) return null;
+        if (value == null || value.isEmpty) return null;
         int? val = int.tryParse(value);
         return val != null && val >= 1
             ? null
@@ -3800,14 +4477,15 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
     ),
     'inpatient_limit': FieldDefinition(
       expectedType: ExpectedType.text,
-      validator: (value) => value.isEmpty || inpatientLimits.contains(value)
-          ? null
-          : 'Invalid inpatient limit',
+      validator: (value) =>
+          value == null || value.isEmpty || inpatientLimits.contains(value)
+              ? null
+              : 'Invalid inpatient limit',
     ),
     'outpatient_limit': FieldDefinition(
       expectedType: ExpectedType.number,
       validator: (value) {
-        if (value.isEmpty) return null;
+        if (value == null || value.isEmpty) return null;
         double? val = double.tryParse(value);
         return val != null && val >= 0 ? null : 'Invalid outpatient limit';
       },
@@ -3815,7 +4493,7 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
     'dental_limit': FieldDefinition(
       expectedType: ExpectedType.number,
       validator: (value) {
-        if (value.isEmpty) return null;
+        if (value == null || value.isEmpty) return null;
         double? val = double.tryParse(value);
         return val != null && val >= 0 ? null : 'Invalid dental limit';
       },
@@ -3823,7 +4501,7 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
     'optical_limit': FieldDefinition(
       expectedType: ExpectedType.number,
       validator: (value) {
-        if (value.isEmpty) return null;
+        if (value == null || value.isEmpty) return null;
         double? val = double.tryParse(value);
         return val != null && val >= 0 ? null : 'Invalid optical limit';
       },
@@ -3831,7 +4509,7 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
     'maternity_limit': FieldDefinition(
       expectedType: ExpectedType.number,
       validator: (value) {
-        if (value.isEmpty) return null;
+        if (value == null || value.isEmpty) return null;
         double? val = double.tryParse(value);
         return val != null && val >= 0 ? null : 'Invalid maternity limit';
       },
@@ -3840,7 +4518,7 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
       expectedType: ExpectedType.list,
       listItemType: ExpectedType.text,
       validator: (value) {
-        if (value.isEmpty) return null;
+        if (value == null || value.isEmpty) return null;
         var services = value.split(', ').map((s) => s.trim()).toList();
         return services.every((s) => medicalServices.contains(s))
             ? null
@@ -3851,7 +4529,7 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
       expectedType: ExpectedType.list,
       listItemType: ExpectedType.text,
       validator: (value) {
-        if (value.isEmpty) return null;
+        if (value == null || value.isEmpty) return null;
         var selected = value.split(', ').map((s) => s.trim()).toList();
         return selected.length <= 3 &&
                 selected.every((s) => underwriters.contains(s))
@@ -3864,14 +4542,16 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
   final Map<String, FieldDefinition> motorFields = {
     'name': FieldDefinition(
       expectedType: ExpectedType.name,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
-              ? null
-              : 'Invalid name',
+      validator: (value) => value == null ||
+              value.isEmpty ||
+              RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
+          ? null
+          : 'Invalid name',
     ),
     'email': FieldDefinition(
       expectedType: ExpectedType.email,
-      validator: (value) => value.isEmpty ||
+      validator: (value) => value == null ||
+              value.isEmpty ||
               RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
                   .hasMatch(value)
           ? null
@@ -3879,68 +4559,184 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
     ),
     'phone': FieldDefinition(
       expectedType: ExpectedType.phone,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
-              ? null
-              : 'Invalid phone number',
+      validator: (value) => value == null ||
+              value.isEmpty ||
+              RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
+          ? null
+          : 'Invalid phone number',
     ),
     'chassis_number': FieldDefinition(
       expectedType: ExpectedType.text,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z0-9\-]{10,20}$').hasMatch(value)
-              ? null
-              : 'Invalid chassis number (10-20 alphanumeric characters)',
+      validator: (value) => value == null ||
+              value.isEmpty ||
+              RegExp(r'^[A-Za-z0-9\-]{10,20}$').hasMatch(value)
+          ? null
+          : 'Invalid chassis number',
     ),
     'kra_pin': FieldDefinition(
       expectedType: ExpectedType.text,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z0-9]{11}$').hasMatch(value)
-              ? null
-              : 'Invalid KRA PIN (11 alphanumeric characters)',
+      validator: (value) => value == null ||
+              value.isEmpty ||
+              RegExp(r'^[A-Za-z0-9]{11}$').hasMatch(value)
+          ? null
+          : 'Invalid KRA PIN',
     ),
     'regno': FieldDefinition(
       expectedType: ExpectedType.text,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z0-9\s\-]{5,10}$').hasMatch(value)
-              ? null
-              : 'Invalid registration number (5-10 alphanumeric characters)',
+      validator: (value) => value == null ||
+              value.isEmpty ||
+              RegExp(r'^[A-Za-z0-9\s\-]{5,10}$').hasMatch(value)
+          ? null
+          : 'Invalid registration number',
     ),
     'vehicle_value': FieldDefinition(
       expectedType: ExpectedType.number,
       validator: (value) {
-        if (value.isEmpty) return null;
+        if (value == null || value.isEmpty) return null;
         double? val = double.tryParse(value);
         return val != null && val > 0 ? null : 'Invalid vehicle value';
       },
     ),
     'vehicle_type': FieldDefinition(
       expectedType: ExpectedType.text,
-      validator: (value) => value.isEmpty || vehicleTypes.contains(value)
-          ? null
-          : 'Invalid vehicle type',
+      validator: (value) =>
+          value == null || value.isEmpty || vehicleTypes.contains(value)
+              ? null
+              : 'Invalid vehicle type',
     ),
   };
 
-  for (var policyType in policyTypes) {
-    final subtypes = await InsuranceHomeScreen.getPolicySubtypes(policyType.id);
-    final coverageTypes = await InsuranceHomeScreen.getCoverageTypes();
-    final companyOptions = companies.map((c) => c.name).toList();
+  List<PolicyType> policyTypes;
+  try {
+    policyTypes = await InsuranceHomeScreen.getPolicyTypes().timeout(
+      const Duration(seconds: 3),
+      onTimeout: () {
+        if (kDebugMode) {
+          print('getPolicyTypes timed out');
+        }
+        return [
+          PolicyType(
+            id: '1',
+            name: normalizedType,
+            description: '',
+          ),
+        ];
+      },
+    );
+    if (kDebugMode) {
+      print('Fetched policyTypes: ${policyTypes.map((p) => p.name).toList()}');
+    }
+  } catch (e) {
+    if (kDebugMode) {
+      print('Error fetching policyTypes: $e');
+    }
+    policyTypes = [
+      PolicyType(id: '1', name: normalizedType, description: ''),
+    ];
+  }
 
+  List<Company> companies;
+  try {
+    companies = await InsuranceHomeScreen.loadCompanies().timeout(
+      const Duration(seconds: 2),
+      onTimeout: () {
+        if (kDebugMode) {
+          print('loadCompanies timed out');
+        }
+        return [
+          Company(id: 'default', name: 'Default', pdfTemplateKeys: const [])
+        ];
+      },
+    );
+    if (kDebugMode) {
+      print('Fetched companies: ${companies.map((c) => c.name).toList()}');
+    }
+  } catch (e) {
+    if (kDebugMode) {
+      print('Error fetching companies: $e');
+    }
+    companies = [
+      Company(id: 'default', name: 'Default', pdfTemplateKeys: const [])
+    ];
+  }
+
+  bool typeFound = false;
+  for (var policyType in policyTypes) {
+    final typeName = policyType.name.toLowerCase();
+    print(
+        'Checking policyType: $typeName against normalizedType: $normalizedType');
+    if (typeName != normalizedType) continue;
+    typeFound = true;
+
+    List<PolicySubtype> subtypes;
+    try {
+      subtypes =
+          await InsuranceHomeScreen.getPolicySubtypes(policyType.id).timeout(
+        const Duration(seconds: 2),
+        onTimeout: () {
+          print('getPolicySubtypes timed out for $typeName');
+          return [
+            PolicySubtype(
+                id: '1',
+                name: 'Standard',
+                policyTypeId: policyType.id,
+                description: ''),
+          ];
+        },
+      );
+      print(
+          'Fetched subtypes for $typeName: ${subtypes.map((s) => s.name).toList()}');
+    } catch (e) {
+      print('Error fetching subtypes for $typeName: $e');
+      subtypes = [
+        PolicySubtype(
+            id: '1',
+            name: 'Standard',
+            policyTypeId: policyType.id,
+            description: ''),
+      ];
+    }
+
+    List<CoverageType> coverageTypes;
+    try {
+      coverageTypes = await InsuranceHomeScreen.getCoverageTypes().timeout(
+        const Duration(seconds: 2),
+        onTimeout: () {
+          print('getCoverageTypes timed out');
+          return [CoverageType(id: '1', name: 'Basic', description: '')];
+        },
+      );
+      print(
+          'Fetched coverageTypes: ${coverageTypes.map((c) => c.name).toList()}');
+    } catch (e) {
+      print('Error fetching coverageTypes: $e');
+      coverageTypes = [CoverageType(id: '1', name: 'Basic', description: '')];
+    }
+
+    final companyOptions = companies.map((c) => c.name).toList();
     final subtypeOptions = subtypes.map((s) => s.name).toList();
     final coverageOptions = coverageTypes.map((c) => c.name).toList();
 
-    final typeName = policyType.name.toLowerCase();
-    // Fetch fields from PDFTemplate or use fieldMap
     Map<String, FieldDefinition> fields = {};
-    if (pdfTemplateKey != null) {
-      final pdfTemplate =
-          await InsuranceHomeScreen.getPDFTemplate(pdfTemplateKey);
-      if (pdfTemplate != null) {
-        fields = pdfTemplate.fields;
+    try {
+      if (pdfTemplateKey.isNotEmpty) {
+        final pdfTemplate =
+            await InsuranceHomeScreen.getPDFTemplate(pdfTemplateKey).timeout(
+          const Duration(seconds: 2),
+          onTimeout: () {
+            print('getPDFTemplate timed out');
+            return null;
+          },
+        );
+        if (pdfTemplate != null) {
+          fields = pdfTemplate.fields;
+          print('Fetched fields from PDFTemplate for $typeName');
+        }
       }
+    } catch (e) {
+      print('Error fetching PDFTemplate for $typeName: $e');
     }
 
-    // Fallback to fieldMap
     if (fields.isEmpty) {
       fields = {
             'motor': motorFields,
@@ -3948,8 +4744,11 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
             'property': propertyFields,
             'travel': travelFields,
             'wiba': wibaFields,
-          }[type.name.toLowerCase()] ??
+          }[typeName] ??
           {};
+      if (kDebugMode) {
+        print('Using fallback fields for $typeName');
+      }
     }
 
     configs[typeName] = [
@@ -3989,9 +4788,7 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
         },
         nextStep: 'coverage',
         pdfTemplateKeySource: 'type',
-        customCallback: (context, dialogState) async {
-          return; // Ensure non-null return
-        },
+        customCallback: (context, dialogState) async {},
       ),
       DialogStepConfig(
         title: 'Select Coverage Type',
@@ -4007,9 +4804,7 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
         ],
         nextStep: typeName == 'medical' ? 'personal_info' : 'insured_item',
         pdfTemplateKeySource: 'coverage',
-        customCallback: (context, dialogState) async {
-          return; // Ensure non-null return
-        },
+        customCallback: (context, dialogState) async {},
       ),
       if (typeName == 'medical')
         DialogStepConfig(
@@ -4139,9 +4934,7 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
           ],
           nextStep: 'insured_item',
           pdfTemplateKeySource: 'subtype',
-          customCallback: (context, dialogState) async {
-            return; // Ensure non-null return
-          },
+          customCallback: (context, dialogState) async {},
         ),
       DialogStepConfig(
         title: 'Select Insured Item',
@@ -4154,78 +4947,83 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
           final coverageType = dialogState.responses['coverage_type'] ?? '';
           String? pdfTemplateKey;
 
-          // Fetch pdfTemplateKey
-          if (coverageType.isNotEmpty) {
-            final coverageTypes = await InsuranceHomeScreen.getCoverageTypes();
-            pdfTemplateKey = coverageTypes
-                .firstWhere((c) => c.name == coverageType,
-                    orElse: () =>
-                        CoverageType(id: '', name: '', description: ''))
-                .pdfTemplateKey;
-          }
-          if (pdfTemplateKey == null && subtype.isNotEmpty) {
-            final subtypes = await InsuranceHomeScreen.getPolicySubtypes(type);
-            pdfTemplateKey = subtypes
-                .firstWhere((s) => s.name == subtype,
-                    orElse: () => PolicySubtype(
-                        id: '', name: '', policyTypeId: '', description: ''))
-                .pdfTemplateKey;
-          }
-          if (pdfTemplateKey == null) {
-            final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
-            pdfTemplateKey = policyTypes
-                .firstWhere((t) => t.name.toLowerCase() == type,
-                    orElse: () => PolicyType(id: '', name: '', description: ''))
-                .pdfTemplateKey;
+          try {
+            if (coverageType.isNotEmpty) {
+              final coverageTypes =
+                  await InsuranceHomeScreen.getCoverageTypes();
+              pdfTemplateKey = coverageTypes
+                  .firstWhere((c) => c.name == coverageType,
+                      orElse: () =>
+                          CoverageType(id: '', name: '', description: ''))
+                  .pdfTemplateKey;
+            }
+            if (pdfTemplateKey == null && subtype.isNotEmpty) {
+              final subtypes =
+                  await InsuranceHomeScreen.getPolicySubtypes(type);
+              pdfTemplateKey = subtypes
+                  .firstWhere((s) => s.name == subtype,
+                      orElse: () => PolicySubtype(
+                          id: '', name: '', policyTypeId: '', description: ''))
+                  .pdfTemplateKey;
+            }
+            if (pdfTemplateKey == null) {
+              final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
+              pdfTemplateKey = policyTypes
+                  .firstWhere((t) => t.name.toLowerCase() == type,
+                      orElse: () =>
+                          PolicyType(id: '', name: '', description: ''))
+                  .pdfTemplateKey;
+            }
+          } catch (e) {
+            print('Error fetching pdfTemplateKey: $e');
           }
 
-          // Fetch fields from PDFTemplate or use fieldMap
           Map<String, FieldDefinition> fields = {};
           if (pdfTemplateKey != null) {
-            final pdfTemplate =
-                await InsuranceHomeScreen.getPDFTemplate(pdfTemplateKey);
-            if (pdfTemplate != null) {
-              fields = pdfTemplate.fields;
+            try {
+              final pdfTemplate =
+                  await InsuranceHomeScreen.getPDFTemplate(pdfTemplateKey);
+              if (pdfTemplate != null) {
+                fields = pdfTemplate.fields;
+              }
+            } catch (e) {
+              print('Error fetching PDFTemplate: $e');
             }
           }
 
-          // Navigate to CoverDetailScreen
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => CoverDetailScreen(
-                type: type,
-                subtype: subtype,
-                coverageType: coverageType,
-                insuredItem: dialogState.insuredItemId != null
-                    ? (context
-                                .findAncestorStateOfType<
-                                    _InsuranceHomeScreenState>()
-                                ?.insuredItems ??
-                            [])
-                        .firstWhere(
-                        (item) => item.id == dialogState.insuredItemId,
-                        orElse: () => InsuredItem(
-                            id: '', type: '', details: {}, vehicleType: ''),
-                      )
-                    : null,
-                fields: fields,
-                onSubmit: (details) {
-                  dialogState.setInsuredItemId(details['insured_item_id']);
-                  dialogState.responses.addAll(details);
-                },
-                onAutofillPreviousPolicy: (File file,
-                    Map<String, String>? detailsMap, String? policyNumber) {
-                  // Handle autofill
-                },
-                onAutofillLogbook:
-                    (File file, Map<String, String>? detailsMap) {
-                  // Handle autofill
-                },
+          if (context.mounted) {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => CoverDetailScreen(
+                  type: type,
+                  subtype: subtype,
+                  coverageType: coverageType,
+                  insuredItem: dialogState.insuredItemId != null
+                      ? (context
+                                  .findAncestorStateOfType<
+                                      _InsuranceHomeScreenState>()
+                                  ?.insuredItems ??
+                              [])
+                          .firstWhere(
+                          (item) => item.id == dialogState.insuredItemId,
+                          orElse: () => InsuredItem(
+                              id: '', type: '', details: {}, vehicleType: ''),
+                        )
+                      : null,
+                  fields: fields,
+                  onSubmit: (details) {
+                    dialogState.setInsuredItemId(details['insured_item_id']);
+                    dialogState.updateResponses(details);
+                  },
+                  onAutofillPreviousPolicy: (File file,
+                      Map<String, String>? detailsMap, String? policyNumber) {},
+                  onAutofillLogbook:
+                      (File file, Map<String, String>? detailsMap) {},
+                ),
               ),
-            ),
-          );
-          return; // Ensure non-null return
+            );
+          }
         },
       ),
       DialogStepConfig(
@@ -4243,23 +5041,41 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
             key: 'pdf_template_key',
             label: 'PDF Template',
             type: 'dropdown',
-            options: [], // Populated in GenericInsuranceDialog
+            options: [],
             validator: (value) =>
                 value != null ? null : 'Please select a template',
           ),
         ],
         pdfTemplateKeySource: null,
-        customCallback: (context, dialogState) async {
-          return; // Ensure non-null return
-        },
+        customCallback: (context, dialogState) async {},
       ),
     ];
   }
 
+  if (!typeFound) {
+    if (kDebugMode) {
+      print('Type $normalizedType not found in policyTypes');
+    }
+    configs[normalizedType] = [
+      DialogStepConfig(
+        title: 'Default $type Config',
+        fields: [
+          FieldConfig(
+            key: 'placeholder',
+            label: 'Placeholder',
+            validator: (value) => null,
+          ),
+        ],
+        customCallback: (context, dialogState) async {},
+      ),
+    ];
+  }
+
+  if (kDebugMode) {
+    print('getInsuranceConfigs returning: ${configs.keys.toList()}');
+  }
   return configs;
 }
-
-
 
 class FieldConfig {
   final String key;
@@ -4588,7 +5404,6 @@ class GenericInsuranceDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final _formKey = GlobalKey<FormState>();
     final colorProvider = context.watch<ColorProvider>();
-    final insuranceHomeScreen = InsuranceHomeScreen();
 
     if (config.customCallback != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -4819,25 +5634,175 @@ class DynamicForm extends StatelessWidget {
   }
 }
 
-void showInsuranceDialog(
+
+
+Future<void> showInsuranceDialog(
   BuildContext context,
   String insuranceType,
-  dynamic pdfTemplateKey, {
+  String pdfTemplateKey, {
   int step = 0,
   void Function(BuildContext, String, String, String)? onFinalSubmit,
+  required GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey,
 }) async {
-  final normalizedType = insuranceType.toLowerCase();
-  final dialogState = context.read<DialogState>();
-  dialogState.setCurrentType(normalizedType);
-  dialogState.setCurrentStep(step);
+  if (kDebugMode) {
+    print('showInsuranceDialog: starting for type=$insuranceType, step=$step, pdfTemplateKey=$pdfTemplateKey');
+  }
 
-  final configs = await getInsuranceConfigs(pdfTemplateKey, insuranceType);
-  if (!configs.containsKey(normalizedType)) {
+  if (!context.mounted) {
     if (kDebugMode) {
-      print('Invalid insurance type: $normalizedType');
+      print('showInsuranceDialog: context not mounted at start');
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Invalid insurance type: $normalizedType')),
+    return;
+  }
+
+  final normalizedType = insuranceType.toLowerCase();
+  if (kDebugMode) {
+    print('showInsuranceDialog: normalized type=$normalizedType');
+  }
+
+  // Attempt authentication
+  try {
+    if (FirebaseAuth.instance.currentUser == null) {
+      await FirebaseAuth.instance.signInAnonymously();
+      if (kDebugMode) {
+        print('Anonymous sign-in successful: ${FirebaseAuth.instance.currentUser?.uid}');
+      }
+    } else {
+      if (kDebugMode) {
+        print('User already authenticated: ${FirebaseAuth.instance.currentUser?.uid}');
+      }
+    }
+  } catch (e, stackTrace) {
+    if (kDebugMode) {
+      print('Failed to sign in anonymously: $e\n$stackTrace');
+    }
+    scaffoldMessengerKey.currentState?.showSnackBar(
+      const SnackBar(
+        content: Text('Authentication failed. Using default options.'),
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
+  // Set dialog state
+  DialogState? dialogState;
+  try {
+    dialogState = context.read<DialogState>();
+    dialogState.setCurrentType(normalizedType);
+    dialogState.setCurrentStep(step);
+    if (kDebugMode) {
+      print('showInsuranceDialog: dialog state set successfully');
+    }
+  } catch (e, stackTrace) {
+    if (kDebugMode) {
+      print('Error setting dialog state: $e\n$stackTrace');
+    }
+    scaffoldMessengerKey.currentState?.showSnackBar(
+      const SnackBar(
+        content: Text('Error initializing dialog state. Cannot proceed.'),
+        duration: Duration(seconds: 3),
+      ),
+    );
+    return;
+  }
+
+  // Check context before proceeding
+  if (!context.mounted) {
+    if (kDebugMode) {
+      print('showInsuranceDialog: context not mounted before loading dialog');
+    }
+    return;
+  }
+
+  // Show loading dialog with a separate context
+  final navigator = Navigator.of(context, rootNavigator: true);
+  bool isLoadingDialogShown = false;
+  try {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        isLoadingDialogShown = true;
+        return const Center(
+          child: CircularProgressIndicator(
+            semanticsLabel: 'Loading insurance options',
+          ),
+        );
+      },
+    );
+    if (kDebugMode) {
+      print('showInsuranceDialog: loading dialog shown');
+    }
+  } catch (e, stackTrace) {
+    if (kDebugMode) {
+      print('Error showing loading dialog: $e\n$stackTrace');
+    }
+    isLoadingDialogShown = false;
+  }
+
+  // Fetch configs
+  Map<String, List<DialogStepConfig>> configs;
+  try {
+    configs = await getInsuranceConfigs(pdfTemplateKey, normalizedType).timeout(
+      const Duration(seconds: 8), // Reduced for faster fallback
+      onTimeout: () {
+        if (kDebugMode) {
+          print('getInsuranceConfigs timed out for type: $normalizedType');
+        }
+        scaffoldMessengerKey.currentState?.showSnackBar(
+          const SnackBar(
+            content: Text('Loading options timed out. Using default options.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+        return _defaultConfigs(normalizedType);
+      },
+    );
+    if (kDebugMode) {
+      print('Fetched configs for $normalizedType: ${configs.keys.toList()}');
+    }
+  } catch (e, stackTrace) {
+    if (kDebugMode) {
+      print('Error in getInsuranceConfigs: $e\n$stackTrace');
+    }
+    configs = _defaultConfigs(normalizedType);
+    scaffoldMessengerKey.currentState?.showSnackBar(
+      const SnackBar(
+        content: Text('Failed to load options. Using default options.'),
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
+  // Close loading dialog
+  if (isLoadingDialogShown && context.mounted) {
+    try {
+      navigator.pop();
+      if (kDebugMode) {
+        print('showInsuranceDialog: loading dialog closed');
+      }
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        print('Error closing loading dialog: $e\n$stackTrace');
+      }
+    }
+  } else if (!context.mounted) {
+    if (kDebugMode) {
+      print('showInsuranceDialog: context not mounted when closing loading dialog');
+    }
+    return;
+  }
+
+  // Validate configs
+  if (!configs.containsKey(normalizedType) || configs[normalizedType]!.isEmpty) {
+    if (kDebugMode) {
+      print('Invalid insurance type or no configs: $normalizedType');
+    }
+    scaffoldMessengerKey.currentState?.showSnackBar(
+      SnackBar(
+        content: Text('Invalid insurance type: $normalizedType'),
+        duration: const Duration(seconds: 3),
+      ),
     );
     return;
   }
@@ -4847,100 +5812,240 @@ void showInsuranceDialog(
     if (kDebugMode) {
       print('Invalid step: $step for type: $normalizedType');
     }
+    scaffoldMessengerKey.currentState?.showSnackBar(
+      const SnackBar(
+        content: Text('Invalid step in insurance process'),
+        duration: Duration(seconds: 3),
+      ),
+    );
     return;
   }
 
   final config = configList[step];
 
-  showDialog(
-    context: context,
-    barrierDismissible: true,
-    builder: (dialogContext) => GenericInsuranceDialog(
-      insuranceType: normalizedType,
-      step: step,
-      config: config,
-      dialogState: dialogState,
-      onCancel: () {
-        if (kDebugMode) {
-          print('Cancel pressed for ${config.title}');
-        }
-        Navigator.pop(dialogContext);
-      },
-      onBack: step > 0
-          ? () {
-              if (kDebugMode) {
-                print('Back pressed for ${config.title}');
-              }
-              Navigator.pop(dialogContext);
-              showInsuranceDialog(context, normalizedType, pdfTemplateKey,
-                  step: step - 1, onFinalSubmit: onFinalSubmit);
+  // Show insurance dialog
+  if (context.mounted) {
+    if (kDebugMode) {
+      print('Showing GenericInsuranceDialog for ${config.title}');
+    }
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        builder: (dialogContext) => WillPopScope(
+          onWillPop: () async {
+            if (kDebugMode) {
+              print('Dialog dismissed for ${config.title}');
             }
-          : null,
-      onSubmit: () async {
-        if (kDebugMode) {
-          print(
-              'Navigating from ${config.title}, responses: ${dialogState.responses}');
-        }
-        Navigator.pop(dialogContext);
-        if (step + 1 < configList.length) {
-          showInsuranceDialog(context, normalizedType, pdfTemplateKey,
-              step: step + 1, onFinalSubmit: onFinalSubmit);
-        } else {
-          // Fetch pdfTemplateKey for Policy
-          String? pdfTemplateKey = dialogState.responses['pdfTemplateKey'];
-          final subtypeName = dialogState.responses['subtype'] ?? '';
-          final coverageName = dialogState.responses['coverage_type'] ?? '';
+            return true;
+          },
+          child: GenericInsuranceDialog(
+            insuranceType: normalizedType,
+            step: step,
+            config: config,
+            dialogState: dialogState!,
+            onCancel: () {
+              if (kDebugMode) {
+                print('Cancel pressed for ${config.title}');
+              }
+              Navigator.of(dialogContext).pop();
+            },
+            onBack: step > 0
+                ? () {
+                    if (kDebugMode) {
+                      print('Back pressed for ${config.title}');
+                    }
+                    Navigator.of(dialogContext).pop();
+                    showInsuranceDialog(
+                      context,
+                      normalizedType,
+                      pdfTemplateKey,
+                      step: step - 1,
+                      onFinalSubmit: onFinalSubmit,
+                      scaffoldMessengerKey: scaffoldMessengerKey,
+                    );
+                  }
+                : null,
+            onSubmit: () async {
+              if (kDebugMode) {
+                print('Submit pressed for ${config.title}, responses: ${dialogState!.responses}');
+              }
+              Navigator.of(dialogContext).pop();
+              if (step + 1 < configList.length) {
+                if (kDebugMode) {
+                  print('Navigating to next step: ${step + 1}');
+                }
+                try {
+                  await showInsuranceDialog(
+                    context,
+                    normalizedType,
+                    pdfTemplateKey,
+                    step: step + 1,
+                    onFinalSubmit: onFinalSubmit,
+                    scaffoldMessengerKey: scaffoldMessengerKey,
+                  );
+                } catch (e, stackTrace) {
+                  if (kDebugMode) {
+                    print('Error navigating to next step: $e\n$stackTrace');
+                  }
+                  scaffoldMessengerKey.currentState?.showSnackBar(
+                    const SnackBar(
+                      content: Text('Error proceeding to next step.'),
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
+                }
+              } else {
+                if (kDebugMode) {
+                  print('Final submit for $normalizedType');
+                }
+                try {
+                  final policyTypes = await InsuranceHomeScreen.getPolicyTypes().timeout(
+                    const Duration(seconds: 3),
+                    onTimeout: () => [
+                      PolicyType(id: '1', name: normalizedType, description: ''),
+                    ],
+                  );
+                  final policyType = policyTypes.firstWhere(
+                    (t) => t.name.toLowerCase() == normalizedType,
+                    orElse: () => PolicyType(id: normalizedType, name: normalizedType, description: ''),
+                  );
 
-          final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
-          final policyType = policyTypes.firstWhere(
-            (t) => t.name.toLowerCase() == normalizedType,
-            orElse: () => PolicyType(
-                id: normalizedType, name: normalizedType, description: ''),
-          );
+                  final subtypeName = dialogState!.responses['subtype'] ?? '';
+                  final subtypes = await InsuranceHomeScreen.getPolicySubtypes(policyType.id).timeout(
+                    const Duration(seconds: 3),
+                    onTimeout: () => [
+                      PolicySubtype(id: '1', name: 'Standard', policyTypeId: policyType.id, description: ''),
+                    ],
+                  );
+                  final subtype = subtypes.firstWhere(
+                    (s) => s.name == subtypeName,
+                    orElse: () => PolicySubtype(
+                      id: subtypeName,
+                      name: subtypeName,
+                      policyTypeId: policyType.id,
+                      description: '',
+                    ),
+                  );
 
-          final subtypes =
-              await InsuranceHomeScreen.getPolicySubtypes(policyType.id);
-          final subtype = subtypes.firstWhere(
-            (s) => s.name == subtypeName,
-            orElse: () => PolicySubtype(
-                id: subtypeName,
-                name: subtypeName,
-                policyTypeId: policyType.id,
-                description: ''),
-          );
+                  final coverageName = dialogState.responses['coverage_type'] ?? '';
+                  final coverageTypes = await InsuranceHomeScreen.getCoverageTypes().timeout(
+                    const Duration(seconds: 3),
+                    onTimeout: () => [
+                      CoverageType(id: '1', name: 'Basic', description: ''),
+                    ],
+                  );
+                  final coverageType = coverageTypes.firstWhere(
+                    (c) => c.name == coverageName,
+                    orElse: () => CoverageType(id: coverageName, name: coverageName, description: ''),
+                  );
 
-          final coverageTypes = await InsuranceHomeScreen.getCoverageTypes();
-          final coverageType = coverageTypes.firstWhere(
-            (c) => c.name == coverageName,
-            orElse: () => CoverageType(
-                id: coverageName, name: coverageName, description: ''),
-          );
-
-          final policy = Policy(
-            id: const Uuid().v4(),
-            insuredItemId: dialogState.responses['insured_item'] ?? '',
-            companyId: 'default_company',
-            type: policyType,
-            subtype: subtype,
-            coverageType: coverageType,
-            status: CoverStatus.active,
-            endDate: DateTime.now().add(const Duration(days: 365)),
-            pdfTemplateKey: pdfTemplateKey,
-          );
-
-          _showCompletionDialog(
-              context, normalizedType, policy, pdfTemplateKey, onFinalSubmit);
-        }
-      },
-    ),
-  );
+                  if (context.mounted) {
+                    final state = context.findAncestorStateOfType<_InsuranceHomeScreenState>();
+                    if (state != null) {
+                      if (kDebugMode) {
+                        print('Showing insured item dialog');
+                      }
+                      await state._showInsuredItemDialog(
+                        context,
+                        policyType,
+                        subtype,
+                        coverageType,
+                      );
+                    } else {
+                      if (kDebugMode) {
+                        print('Could not find _InsuranceHomeScreenState');
+                      }
+                      scaffoldMessengerKey.currentState?.showSnackBar(
+                        const SnackBar(
+                          content: Text('Unable to proceed with insured item.'),
+                          duration: Duration(seconds: 3),
+                        ),
+                      );
+                    }
+                  }
+                } catch (e, stackTrace) {
+                  if (kDebugMode) {
+                    print('Error in final submit: $e\n$stackTrace');
+                  }
+                  scaffoldMessengerKey.currentState?.showSnackBar(
+                    const SnackBar(
+                      content: Text('Error completing submission.'),
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
+                }
+              }
+            },
+            onFinalSubmit: onFinalSubmit,
+          ),
+        ),
+      );
+      if (kDebugMode) {
+        print('GenericInsuranceDialog closed');
+      }
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        print('Error showing GenericInsuranceDialog: $e\n$stackTrace');
+      }
+      scaffoldMessengerKey.currentState?.showSnackBar(
+        const SnackBar(
+          content: Text('Failed to display insurance options.'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  } else {
+    if (kDebugMode) {
+      print('showInsuranceDialog: context not mounted for main dialog');
+    }
+  }
 }
 
+// Default configurations
+Map<String, List<DialogStepConfig>> _defaultConfigs(String normalizedType) {
+  if (kDebugMode) {
+    print('Using default configs for $normalizedType');
+  }
+  return {
+    normalizedType: [
+      DialogStepConfig(
+        title: 'Select $normalizedType Options',
+        fields: [
+          FieldConfig(
+            key: 'company',
+            label: 'Insurance Company',
+            type: 'dropdown',
+            options: ['AIG', 'Cigna', 'UnitedHealth'],
+            validator: (value) => value != null ? null : 'Please select a company',
+          ),
+          FieldConfig(
+            key: 'subtype',
+            label: 'Subtype',
+            type: 'dropdown',
+            options: ['Standard', 'Premium'],
+            validator: (value) => value != null ? null : 'Please select a subtype',
+          ),
+          FieldConfig(
+            key: 'coverage_type',
+            label: 'Coverage Type',
+            type: 'dropdown',
+            options: ['Basic', 'Comprehensive'],
+            validator: (value) => value != null ? null : 'Please select a coverage type',
+          ),
+        ],
+        nextStep: 'details',
+        pdfTemplateKeySource: 'type',
+        customCallback: (context, dialogState) async {},
+      ),
+    ],
+  };
+}
 void _showCompletionDialog(
   BuildContext context,
   String type,
   Policy policy,
-  pdfTemplateKey,
+  String? pdfTemplateKey,
   void Function(BuildContext, String, String, String)? onFinalSubmit,
 ) {
   final dialogState = context.read<DialogState>();
@@ -4991,8 +6096,14 @@ void _showCompletionDialog(
             }
             dialogState.resetForNewCycle();
             Navigator.pop(dialogContext);
-            showInsuranceDialog(context, type, pdfTemplateKey,
-                step: 0, onFinalSubmit: onFinalSubmit);
+            showInsuranceDialog(
+              context,
+              type,
+              pdfTemplateKey!,
+              step: 0,
+              onFinalSubmit: onFinalSubmit,
+              scaffoldMessengerKey: GlobalKey<ScaffoldMessengerState>(),
+            );
           },
           style: ElevatedButton.styleFrom(
             backgroundColor: colorProvider.color,

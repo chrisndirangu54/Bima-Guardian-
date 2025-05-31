@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+import 'package:my_app/Models/cover.dart';
 import 'package:my_app/insurance_app.dart';
 
 class PolicyType {
@@ -146,4 +148,60 @@ class Policy {
   String toString() {
     return 'Policy(id: $id, insuredItemId: $insuredItemId, companyId: $companyId, type: ${type.name}, subtype: ${subtype.name}, coverageType: ${coverageType.name}, status: $status, endDate: $endDate, pdfTemplateKey: $pdfTemplateKey)';
   }
+
+static Future<Policy> fromCover(Cover updatedCover) async {
+  try {
+    // Fetch PolicyType
+    final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
+    final policyType = policyTypes.firstWhere(
+      (t) => t.name.toLowerCase() == updatedCover.type.toLowerCase(),
+      orElse: () => PolicyType(
+        id: updatedCover.type,
+        name: updatedCover.type,
+        description: '',
+      ),
+    );
+
+    // Fetch PolicySubtype
+    final subtypes = await InsuranceHomeScreen.getPolicySubtypes(policyType.id);
+    final policySubtype = subtypes.firstWhere(
+      (s) => s.name.toLowerCase() == updatedCover.subtype.toLowerCase(),
+      orElse: () => PolicySubtype(
+        id: updatedCover.subtype,
+        name: updatedCover.subtype,
+        policyTypeId: policyType.id,
+        description: '',
+      ),
+    );
+
+    // Fetch CoverageType
+    final coverageTypes = await InsuranceHomeScreen.getCoverageTypes();
+    final coverageType = coverageTypes.firstWhere(
+      (c) => c.name.toLowerCase() == updatedCover.coverageType.toLowerCase(),
+      orElse: () => CoverageType(
+        id: updatedCover.coverageType,
+        name: updatedCover.coverageType,
+        description: '',
+      ),
+    );
+
+    // Create Policy
+    return Policy(
+      id: updatedCover.id,
+      insuredItemId: updatedCover.insuredItemId,
+      companyId: updatedCover.companyId,
+      type: policyType,
+      subtype: policySubtype,
+      coverageType: coverageType,
+      status: updatedCover.status,
+      endDate: updatedCover.expirationDate,
+      pdfTemplateKey: updatedCover.pdfTemplateKey,
+    );
+  } catch (e) {
+    if (kDebugMode) {
+      print('Error converting Cover to Policy: $e');
+    }
+    throw Exception('Failed to convert Cover to Policy: $e');
+  }
+}
 }
