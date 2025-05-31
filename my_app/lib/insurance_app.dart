@@ -2057,7 +2057,7 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                                 ? Future.value(configCache[currentType])
                                 : getInsuranceConfigs(
                                         pdfTemplateKey, currentType)
-                                    .timeout(const Duration(seconds: 5),
+                                    .timeout(const Duration(seconds: 100),
                                         onTimeout: () {
                                     if (kDebugMode) {
                                       print('Config FutureBuilder timed out');
