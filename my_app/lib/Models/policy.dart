@@ -95,6 +95,7 @@ class CoverageType {
 
 class Policy {
   final String id;
+  final String name; // Added name field
   final String insuredItemId;
   final String companyId;
   final PolicyType type;
@@ -106,6 +107,7 @@ class Policy {
 
   Policy({
     required this.id,
+    required this.name, // Add name to constructor
     required this.insuredItemId,
     required this.companyId,
     required this.type,
@@ -118,6 +120,7 @@ class Policy {
 
   Map<String, dynamic> toJson() => {
         'id': id,
+        'name': name, // Add name to JSON
         'insuredItemId': insuredItemId,
         'companyId': companyId,
         'type': type.toJson(),
@@ -130,6 +133,7 @@ class Policy {
 
   factory Policy.fromJson(Map<String, dynamic> json) => Policy(
         id: json['id'],
+        name: json['name'], // Add name from JSON
         insuredItemId: json['insuredItemId'],
         companyId: json['companyId'],
         type: PolicyType.fromJson(json['type']),
@@ -144,10 +148,10 @@ class Policy {
             : null,
         pdfTemplateKey: json['pdfTemplateKey'],
       );
-  @override
-  String toString() {
-    return 'Policy(id: $id, insuredItemId: $insuredItemId, companyId: $companyId, type: ${type.name}, subtype: ${subtype.name}, coverageType: ${coverageType.name}, status: $status, endDate: $endDate, pdfTemplateKey: $pdfTemplateKey)';
-  }
+@override
+String toString() {
+  return 'Policy(id: $id, name: $name, insuredItemId: $insuredItemId, companyId: $companyId, type: ${type.name}, subtype: ${subtype.name}, coverageType: ${coverageType.name}, status: ${status.name}, endDate: $endDate, pdfTemplateKey: $pdfTemplateKey)';
+}
 
 static Future<Policy> fromCover(Cover updatedCover) async {
   try {
@@ -188,6 +192,7 @@ static Future<Policy> fromCover(Cover updatedCover) async {
     // Create Policy
     return Policy(
       id: updatedCover.id,
+      name: updatedCover.name, // Add name from Cover
       insuredItemId: updatedCover.insuredItemId,
       companyId: updatedCover.companyId,
       type: policyType,

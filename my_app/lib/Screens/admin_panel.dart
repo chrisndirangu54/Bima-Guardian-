@@ -57,7 +57,7 @@ class _AdminPanelState extends State<AdminPanel> {
             endDate: data['expirationDate'] != null
                 ? (data['expirationDate'] as Timestamp).toDate()
                 : null,
-            pdfTemplateKey: data['pdfTemplateKey'] as String?,
+            pdfTemplateKey: data['pdfTemplateKey'] as String?, name: '',
           );
         }).toList();
       });
@@ -284,7 +284,7 @@ class _AdminPanelState extends State<AdminPanel> {
             : policy.endDate,
         companyId: policy.companyId,
         coverageType: policy.coverageType,
-        pdfTemplateKey: policy.pdfTemplateKey,
+        pdfTemplateKey: policy.pdfTemplateKey, name: '',
       );
 
       // Update Firestore

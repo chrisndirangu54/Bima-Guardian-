@@ -1271,6 +1271,7 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         formData: details,
         premium: premium,
         billingFrequency: 'annual',
+        name: '',
       );
 
       // Save cover to Firestore
@@ -1660,7 +1661,9 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         }
       }
     } catch (e) {
-      print('Paystack auto-billing error: $e');
+      if (kDebugMode) {
+        print('Paystack auto-billing error: $e');
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to set up auto-billing: $e')),
       );
@@ -1840,12 +1843,36 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text('Error: ${snapshot.error}',
-                        style: GoogleFonts.roboto()),
+                    Text(
+                      'Error: ${snapshot.error}',
+                      style: GoogleFonts.roboto(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     ElevatedButton(
                       onPressed: () => (context as Element).markNeedsBuild(),
-                      child: const Text('Retry'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 6,
+                        shadowColor: Theme.of(context)
+                            .colorScheme
+                            .shadow
+                            .withOpacity(0.3),
+                      ),
+                      child: Text(
+                        'Retry',
+                        style: GoogleFonts.roboto(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -1858,24 +1885,19 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                     PolicyType(
                         id: '1', name: 'Motor', description: 'Motor insurance'),
                     PolicyType(
-                      id: '2',
-                      name: 'Medical',
-                      description: 'Medical insurance',
-                    ),
+                        id: '2',
+                        name: 'Medical',
+                        description: 'Medical insurance'),
                     PolicyType(
                         id: '3',
                         name: 'Travel',
                         description: 'Travel insurance'),
                     PolicyType(
-                      id: '4',
-                      name: 'Property',
-                      description: 'Property insurance',
-                    ),
+                        id: '4',
+                        name: 'Property',
+                        description: 'Property insurance'),
                     PolicyType(
-                      id: '5',
-                      name: 'WIBA',
-                      description: 'WIBA insurance',
-                    ),
+                        id: '5', name: 'WIBA', description: 'WIBA insurance'),
                   ];
 
             if (kDebugMode) {
@@ -1893,18 +1915,36 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                     title: Text(
                       'BIMA GUARDIAN',
                       style: GoogleFonts.lora(
-                        fontSize: 20,
+                        fontSize: 22,
                         fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onPrimary,
                       ),
                     ),
                     backgroundColor: Theme.of(context).colorScheme.primary,
+                    elevation: 8,
+                    shadowColor:
+                        Theme.of(context).colorScheme.shadow.withOpacity(0.3),
+                    shape: const RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.vertical(bottom: Radius.circular(16)),
+                    ),
                     actions: [
                       if (userRole == UserRole.admin)
                         IconButton(
-                          icon: Icon(
-                            Icons.admin_panel_settings,
-                            color: Theme.of(context).colorScheme.onPrimary,
-                            semanticLabel: 'Admin Panel',
+                          icon: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primaryContainer
+                                  .withOpacity(0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.admin_panel_settings,
+                              color: Theme.of(context).colorScheme.onPrimary,
+                              semanticLabel: 'Admin Panel',
+                            ),
                           ),
                           onPressed: () =>
                               Navigator.pushNamed(context, '/admin'),
@@ -1913,10 +1953,20 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                       Stack(
                         children: [
                           IconButton(
-                            icon: Icon(
-                              Icons.notifications,
-                              color: Theme.of(context).colorScheme.onPrimary,
-                              semanticLabel: 'Notifications',
+                            icon: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .primaryContainer
+                                    .withOpacity(0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.notifications,
+                                color: Theme.of(context).colorScheme.onPrimary,
+                                semanticLabel: 'Notifications',
+                              ),
                             ),
                             onPressed: () {
                               Navigator.push(
@@ -1929,20 +1979,30 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                             },
                             tooltip: 'Notifications',
                           ),
-                          if ((notifications ?? []).isNotEmpty)
+                          if ((notifications?.length ?? 0) > 0)
                             Positioned(
                               right: 8,
                               top: 8,
                               child: Container(
-                                padding: const EdgeInsets.all(2),
+                                padding: const EdgeInsets.all(4),
                                 decoration: BoxDecoration(
                                   color: Theme.of(context).colorScheme.error,
                                   shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .shadow
+                                          .withOpacity(0.2),
+                                      blurRadius: 4,
+                                      spreadRadius: 1,
+                                    ),
+                                  ],
                                 ),
                                 constraints: const BoxConstraints(
-                                    minWidth: 16, minHeight: 16),
+                                    minWidth: 20, minHeight: 20),
                                 child: Text(
-                                  '${(notifications ?? []).length}',
+                                  '${notifications?.length ?? 0}',
                                   style: GoogleFonts.roboto(
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,
@@ -1956,15 +2016,26 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                         ],
                       ),
                       IconButton(
-                        icon: Icon(
-                          Icons.save,
-                          color: currentType.isNotEmpty
-                              ? Theme.of(context).colorScheme.onPrimary
-                              : Theme.of(context)
-                                  .colorScheme
-                                  .onPrimary
-                                  .withOpacity(0.5),
-                          semanticLabel: 'Save Progress',
+                        icon: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primaryContainer
+                                .withOpacity(
+                                    currentType.isNotEmpty ? 0.2 : 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.save,
+                            color: currentType.isNotEmpty
+                                ? Theme.of(context).colorScheme.onPrimary
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .onPrimary
+                                    .withOpacity(0.5),
+                            semanticLabel: 'Save Progress',
+                          ),
                         ),
                         onPressed: currentType.isNotEmpty
                             ? () {
@@ -1986,7 +2057,7 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                     children: [
                       CarouselSlider(
                         options: CarouselOptions(
-                          height: 180.0,
+                          height: 180.0, // Reduced height to prevent overflow
                           autoPlay: true,
                           autoPlayInterval: const Duration(seconds: 3),
                           enlargeCenterPage: true,
@@ -1994,9 +2065,9 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                           aspectRatio: 2.0,
                         ),
                         items: [
-                          'assets/banners/promo1.jpg',
-                          'assets/banners/promo2.jpg',
-                          'assets/banners/promo3.jpg',
+                          'banners/promo1.jpg',
+                          'banners/promo2.jpg',
+                          'banners/promo3.jpg',
                         ].asMap().entries.map((entry) {
                           final index = entry.key;
                           final imagePath = entry.value;
@@ -2005,15 +2076,23 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                               return Container(
                                 width: MediaQuery.of(context).size.width,
                                 margin:
-                                    const EdgeInsets.symmetric(horizontal: 5.0),
+                                    const EdgeInsets.symmetric(horizontal: 8.0),
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .surfaceContainer,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .shadow
+                                          .withOpacity(0.2),
+                                      blurRadius: 12,
+                                      spreadRadius: 2,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
                                 ),
                                 child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.circular(16),
                                   child: Image.asset(
                                     imagePath,
                                     fit: BoxFit.cover,
@@ -2095,7 +2174,15 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                               }
                               if (snapshot.connectionState ==
                                   ConnectionState.waiting) {
-                                return const LinearProgressIndicator(value: 0);
+                                return LinearProgressIndicator(
+                                  value: null,
+                                  backgroundColor: Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainer,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Theme.of(context).colorScheme.primary,
+                                  ),
+                                );
                               }
                               if (snapshot.hasError) {
                                 if (kDebugMode) {
@@ -2106,18 +2193,26 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                               }
                               final dialogCount =
                                   snapshot.data?[currentType]?.length ?? 1;
-                              return LinearProgressIndicator(
-                                value: (dialogIndex + 1) /
-                                    dialogCount.clamp(1, double.infinity),
-                                backgroundColor: Theme.of(context)
-                                    .colorScheme
-                                    .primary
-                                    .withOpacity(0.3),
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Theme.of(context).colorScheme.secondary,
+                              return Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  color: Theme.of(context).colorScheme.surface,
                                 ),
-                                semanticsLabel:
-                                    'Progress: ${((dialogIndex + 1) / dialogCount * 100).toStringAsFixed(0)}%',
+                                child: LinearProgressIndicator(
+                                  value: (dialogIndex + 1) /
+                                      dialogCount.clamp(1, double.infinity),
+                                  backgroundColor: Theme.of(context)
+                                      .colorScheme
+                                      .primary
+                                      .withOpacity(0.3),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Theme.of(context).colorScheme.primary,
+                                  ),
+                                  minHeight: 6,
+                                  borderRadius: BorderRadius.circular(8),
+                                  semanticsLabel:
+                                      'Progress: ${((dialogIndex + 1) / dialogCount * 100).toStringAsFixed(0)}%',
+                                ),
                               );
                             },
                           ),
@@ -2128,7 +2223,7 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                         child: Text(
                           'Select Your Insurance Cover',
                           style: GoogleFonts.lora(
-                            fontSize: 22,
+                            fontSize: 24,
                             fontWeight: FontWeight.bold,
                             color: Theme.of(context).colorScheme.onSurface,
                           ),
@@ -2138,15 +2233,16 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                       GridView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16.0, vertical: 8.0),
                         gridDelegate:
                             const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 2,
-                          childAspectRatio: 1.2,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
+                          childAspectRatio: 1.4, // Adjusted to prevent overflow
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 16,
                         ),
-                        itemCount: policyTypes.length,
+                        itemCount: (policyTypes as List<String>).length,
                         itemBuilder: (context, index) {
                           if (kDebugMode) {
                             print(
@@ -2179,35 +2275,70 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                                 );
                               }
                             },
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(16),
                             child: Card(
-                              elevation: 4,
+                              elevation: 8,
+                              shadowColor: Theme.of(context)
+                                  .colorScheme
+                                  .shadow
+                                  .withOpacity(0.3),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(16),
                               ),
                               child: Container(
-                                color: Colors.transparent,
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.surface,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .shadow
+                                          .withOpacity(0.2),
+                                      blurRadius: 12,
+                                      spreadRadius: 2,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                padding: const EdgeInsets.all(
+                                    12.0), // Reduced padding
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(
-                                      icon,
-                                      size: 40,
-                                      color:
-                                          Theme.of(context).colorScheme.primary,
-                                      semanticLabel: '${policyType.name} icon',
+                                    Container(
+                                      padding: const EdgeInsets.all(
+                                          10.0), // Reduced icon padding
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary
+                                            .withOpacity(0.1),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        icon,
+                                        size: 40, // Reduced size to fit better
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
+                                        semanticLabel:
+                                            '${policyType.name} icon',
+                                      ),
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
                                       policyType.name.toUpperCase(),
                                       style: GoogleFonts.roboto(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500,
+                                        fontSize: 14, // Reduced font size
+                                        fontWeight: FontWeight.w600,
                                         color: Theme.of(context)
                                             .colorScheme
                                             .onSurface,
                                       ),
                                       textAlign: TextAlign.center,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ],
                                 ),
@@ -2218,7 +2349,7 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                       ),
                     ],
                   ),
-                )
+                ),
               ],
             );
           },
@@ -2276,60 +2407,259 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     return result;
   }
 
-// Quotes screen
-  Widget _buildQuotesScreen() {
-    return CupertinoPageScaffold(
-      navigationBar: const CupertinoNavigationBar(
-        middle: Text('Quotes'),
+Widget _buildMyAccountScreen(BuildContext context) {
+  final themeProvider = Provider.of<ThemeProvider>(context);
+
+  return Scaffold(
+    appBar: AppBar(
+      title: const Text('My Account'),
+      elevation: 4,
+      shadowColor: Colors.grey.withOpacity(0.5),
+    ),
+    backgroundColor: Colors.grey[100],
+    body: SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Settings-style grouped list
+            Card(
+              elevation: 4,
+              shadowColor: Colors.grey.withOpacity(0.3),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12.0),
+              ),
+              margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: Column(
+                children: [
+                  // Policy Reports Row
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12.0),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const CoverReportScreen(),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0,
+                          vertical: 12.0,
+                        ),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: Colors.grey[300]!,
+                              width: 0.5,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(4.0),
+                              child: Icon(
+                                Icons.description_outlined,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Policy Reports',
+                                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                      fontSize: 16,
+                                    ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.all(4.0),
+                              child: Icon(
+                                Icons.arrow_forward_ios,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                size: 18,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Theme Toggle Row
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16.0,
+                      vertical: 12.0,
+                    ),
+                    child: Row(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(4.0),
+                          child: Icon(
+                            Icons.dark_mode_outlined,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Dark Mode',
+                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                  fontSize: 16,
+                                ),
+                          ),
+                        ),
+                        Switch(
+                          value: themeProvider.themeMode == ThemeMode.dark,
+                          onChanged: (value) {
+                            themeProvider.toggleTheme(value);
+                          },
+                          activeColor: Colors.green,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Logout Button
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12.0),
+                  ),
+                  elevation: 4,
+                  shadowColor: Colors.grey.withOpacity(0.3),
+                  padding: const EdgeInsets.symmetric(vertical: 12.0),
+                  minimumSize: const Size(double.infinity, 48),
+                ),
+                onPressed: () async {
+                  try {
+                    await FirebaseAuth.instance.signOut();
+                    if (kDebugMode) {
+                      print('User signed out');
+                    }
+                    await FirebaseAuth.instance.signInAnonymously();
+                  } catch (e) {
+                    if (kDebugMode) {
+                      print('Error signing out: $e');
+                    }
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12.0),
+                        ),
+                        title: const Text('Error'),
+                        content: Text('Failed to sign out: $e'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('OK'),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                },
+                child: Text(
+                  'Log Out',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        fontSize: 16,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
-      backgroundColor: CupertinoColors.systemGroupedBackground,
-      child: ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-        itemCount: quotes.length,
-        itemBuilder: (context, index) {
-          final quote = quotes[index];
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: CupertinoListTile(
-              backgroundColor: CupertinoColors.white,
-              padding: const EdgeInsets.all(16.0),
+    ),
+  );
+}
+
+Widget _buildQuotesScreen() {
+  return Scaffold(
+    appBar: AppBar(
+      title: const Text('Quotes'),
+      elevation: 4,
+      shadowColor: Colors.grey.withOpacity(0.5),
+    ),
+    backgroundColor: Colors.grey[100],
+    body: ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+      itemCount: quotes.length,
+      itemBuilder: (context, index) {
+        final quote = quotes[index];
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8.0),
+          child: Card(
+            elevation: 4,
+            shadowColor: Colors.grey.withOpacity(0.3),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12.0),
+            ),
+            child: ListTile(
+              contentPadding: const EdgeInsets.all(16.0),
               title: Text(
                 '${quote.type} - ${quote.subtype}',
                 style: const TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 16,
-                  color: CupertinoColors.black,
                 ),
               ),
               subtitle: Text(
                 'Premium: KES ${quote.premium.toStringAsFixed(2)}',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
-                  color: CupertinoColors.secondaryLabel,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
-              trailing: Text(
-                '${quote.generatedAt.day}/${quote.generatedAt.month}/${quote.generatedAt.year}',
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: CupertinoColors.secondaryLabel,
-                ),
-              ),
-              additionalInfo: const Icon(
-                CupertinoIcons.chevron_right,
-                color: CupertinoColors.systemGrey,
-                size: 20,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${quote.generatedAt.day}/${quote.generatedAt.month}/${quote.generatedAt.year}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Padding(
+                    padding: const EdgeInsets.all(4.0),
+                    child: Icon(
+                      Icons.arrow_forward_ios,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      size: 20,
+                    ),
+                  ),
+                ],
               ),
               onTap: () {
-                showCupertinoDialog(
+                showDialog(
                   context: context,
-                  builder: (context) => CupertinoAlertDialog(
+                  builder: (context) => AlertDialog(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.0),
+                    ),
                     title: Text('${quote.type} - ${quote.subtype}'),
                     content: Text(
                       'Premium: KES ${quote.premium.toStringAsFixed(2)}\nGenerated: ${quote.generatedAt.day}/${quote.generatedAt.month}/${quote.generatedAt.year}',
                     ),
                     actions: [
-                      CupertinoDialogAction(
+                      TextButton(
                         child: const Text('Close'),
                         onPressed: () => Navigator.pop(context),
                       ),
@@ -2338,44 +2668,48 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                 );
               },
             ),
-          );
-        },
-      ),
-    );
-  }
+          ),
+        );
+      },
+    ),
+  );
+}
 
-// Upcoming screen
-  Widget _buildUpcomingScreen() {
-    final upcomingPolicies = policies.where((policy) {
-      if (policy.endDate == null) return false;
-      final daysUntilExpiration =
-          policy.endDate!.difference(DateTime.now()).inDays;
-      return daysUntilExpiration <= 30 && daysUntilExpiration > 0;
-    }).toList();
+Widget _buildUpcomingScreen() {
+  final upcomingPolicies = policies.where((policy) {
+    if (policy.endDate == null) return false;
+    final daysUntilExpiration = policy.endDate!.difference(DateTime.now()).inDays;
+    return daysUntilExpiration <= 30 && daysUntilExpiration > 0;
+  }).toList();
 
-    return CupertinoPageScaffold(
-      navigationBar: const CupertinoNavigationBar(
-        middle: Text('Upcoming Expirations'),
-      ),
-      backgroundColor: CupertinoColors.systemGroupedBackground,
-      child: ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-        itemCount: upcomingPolicies.length,
-        itemBuilder: (context, index) {
-          final policy = upcomingPolicies[index];
-          final daysUntilExpiration =
-              policy.endDate!.difference(DateTime.now()).inDays;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: CupertinoListTile(
-              backgroundColor: CupertinoColors.white,
-              padding: const EdgeInsets.all(16.0),
+  return Scaffold(
+    appBar: AppBar(
+      title: const Text('Upcoming Expirations'),
+      elevation: 4,
+      shadowColor: Colors.grey.withOpacity(0.5),
+    ),
+    backgroundColor: Colors.grey[100],
+    body: ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+      itemCount: upcomingPolicies.length,
+      itemBuilder: (context, index) {
+        final policy = upcomingPolicies[index];
+        final daysUntilExpiration = policy.endDate!.difference(DateTime.now()).inDays;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8.0),
+          child: Card(
+            elevation: 4,
+            shadowColor: Colors.grey.withOpacity(0.3),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12.0),
+            ),
+            child: ListTile(
+              contentPadding: const EdgeInsets.all(16.0),
               title: Text(
                 '${policy.type} - ${policy.subtype}',
                 style: const TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 16,
-                  color: CupertinoColors.black,
                 ),
               ),
               subtitle: Text(
@@ -2383,38 +2717,52 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                 style: TextStyle(
                   fontSize: 14,
                   color: daysUntilExpiration <= 7
-                      ? CupertinoColors.systemRed
-                      : CupertinoColors.secondaryLabel,
+                      ? Colors.red
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
-              trailing: Icon(
-                CupertinoIcons.exclamationmark_triangle,
-                color: daysUntilExpiration <= 7
-                    ? CupertinoColors.systemRed
-                    : CupertinoColors.systemYellow,
-                size: 24,
-              ),
-              additionalInfo: const Icon(
-                CupertinoIcons.chevron_right,
-                color: CupertinoColors.systemGrey,
-                size: 20,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(4.0),
+                    child: Icon(
+                      Icons.warning_amber_rounded,
+                      color: daysUntilExpiration <= 7
+                          ? Colors.red
+                          : Colors.amber,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Padding(
+                    padding: const EdgeInsets.all(4.0),
+                    child: Icon(
+                      Icons.arrow_forward_ios,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      size: 20,
+                    ),
+                  ),
+                ],
               ),
               onTap: () {
-                showCupertinoDialog(
+                showDialog(
                   context: context,
-                  builder: (context) => CupertinoAlertDialog(
+                  builder: (context) => AlertDialog(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.0),
+                    ),
                     title: Text('${policy.type} - ${policy.subtype}'),
                     content: Text('Expires in $daysUntilExpiration days'),
                     actions: [
-                      CupertinoDialogAction(
+                      TextButton(
                         child: const Text('Close'),
                         onPressed: () => Navigator.pop(context),
                       ),
-                      CupertinoDialogAction(
+                      TextButton(
                         child: const Text('Renew'),
                         onPressed: () {
                           Navigator.pop(context);
-                          // Add renewal logic here
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Renewal initiated')),
                           );
@@ -2425,212 +2773,14 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                 );
               },
             ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildMyAccountScreen(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-
-    return CupertinoPageScaffold(
-      // Use CupertinoPageScaffold for iOS look
-      navigationBar: CupertinoNavigationBar(
-        middle: const Text(
-          'My Account',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-        backgroundColor: CupertinoDynamicColor.resolve(
-          CupertinoColors.systemBackground,
-          context,
-        ),
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Settings-style grouped list
-              Container(
-                margin:
-                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                decoration: BoxDecoration(
-                  color: CupertinoDynamicColor.resolve(
-                    CupertinoColors.secondarySystemGroupedBackground,
-                    context,
-                  ),
-                  borderRadius: BorderRadius.circular(12.0),
-                  border: Border.all(
-                    color: CupertinoDynamicColor.resolve(
-                      CupertinoColors.systemGrey5,
-                      context,
-                    ),
-                    width: 0.5,
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    // Policy Reports Row
-                    CupertinoButton(
-                      padding: const EdgeInsets.all(0),
-                      onPressed: () {
-                        // Navigate with iOS slide transition
-                        Navigator.of(context).push(
-                          CupertinoPageRoute(
-                            builder: (context) => const CoverReportScreen(),
-                          ),
-                        );
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16.0,
-                          vertical: 12.0,
-                        ),
-                        decoration: const BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(
-                              color: CupertinoColors.systemGrey5,
-                              width: 0.5,
-                            ),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              CupertinoIcons.doc_text,
-                              color: CupertinoColors.systemGrey,
-                              size: 24,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                'Policy Reports',
-                                style: CupertinoTheme.of(context)
-                                    .textTheme
-                                    .textStyle
-                                    .copyWith(
-                                      fontSize: 16,
-                                      color: CupertinoDynamicColor.resolve(
-                                        CupertinoColors.label,
-                                        context,
-                                      ),
-                                    ),
-                              ),
-                            ),
-                            const Icon(
-                              CupertinoIcons.chevron_right,
-                              color: CupertinoColors.systemGrey,
-                              size: 18,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    // Theme Toggle Row
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16.0,
-                        vertical: 12.0,
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            CupertinoIcons.moon,
-                            color: CupertinoColors.systemGrey,
-                            size: 24,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Dark Mode',
-                              style: CupertinoTheme.of(context)
-                                  .textTheme
-                                  .textStyle
-                                  .copyWith(
-                                    fontSize: 16,
-                                    color: CupertinoDynamicColor.resolve(
-                                      CupertinoColors.label,
-                                      context,
-                                    ),
-                                  ),
-                            ),
-                          ),
-                          CupertinoSwitch(
-                            value: themeProvider.themeMode == ThemeMode.dark,
-                            onChanged: (value) {
-                              themeProvider.toggleTheme(value);
-                            },
-                            activeColor: CupertinoColors.activeGreen,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Logout Button
-              Container(
-                margin:
-                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: CupertinoButton(
-                  color: CupertinoColors.systemRed,
-                  borderRadius: BorderRadius.circular(12.0),
-                  padding: const EdgeInsets.symmetric(vertical: 12.0),
-                  onPressed: () async {
-                    try {
-                      await FirebaseAuth.instance.signOut();
-                      if (kDebugMode) {
-                        print('User signed out');
-                      }
-                      await FirebaseAuth.instance.signInAnonymously();
-                      // Optional: Navigate to login screen
-                      // Navigator.of(context).pushReplacement(
-                      //   CupertinoPageRoute(builder: (context) => LoginScreen()),
-                      // );
-                    } catch (e) {
-                      if (kDebugMode) {
-                        print('Error signing out: $e');
-                      }
-                      // Show Cupertino-style error dialog
-                      showCupertinoDialog(
-                        context: context,
-                        builder: (context) => CupertinoAlertDialog(
-                          title: const Text('Error'),
-                          content: Text('Failed to sign out: $e'),
-                          actions: [
-                            CupertinoDialogAction(
-                              isDefaultAction: true,
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: const Text('OK'),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-                  },
-                  child: Center(
-                    child: Text(
-                      'Log Out',
-                      style: CupertinoTheme.of(context)
-                          .textTheme
-                          .textStyle
-                          .copyWith(
-                            fontSize: 16,
-                            color: CupertinoColors.white,
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
           ),
-        ),
-      ),
-    );
-  }
+        );
+      },
+    ),
+  );
+}
+
+
 
   Future<void> fetchTrendingTopics() async {
     setState(() {
@@ -2652,382 +2802,465 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return kIsWeb
-        ? CupertinoPageScaffold(
-            backgroundColor: CupertinoColors.systemBackground,
-            navigationBar: CupertinoNavigationBar(
-              middle: Text('BIMA GUARDIAN'),
-              backgroundColor: CupertinoColors.systemBackground,
-              trailing: LayoutBuilder(
-                builder: (context, constraints) {
-                  bool isDesktop = constraints.maxWidth > 800;
-                  return isDesktop
-                      ? _buildNotificationButton(
-                          context) // Only notifications in desktop
-                      : PopupMenuButton<String>(
-                          icon: Icon(CupertinoIcons.line_horizontal_3),
-                          onSelected: (String value) {
-                            if (value == 'Home') {
-                              _onItemTapped(0);
-                            } else if (value == 'Quotes') {
-                              _onItemTapped(1);
-                            } else if (value == 'Upcoming') {
-                              _onItemTapped(2);
-                            } else if (value == 'My Account') {
-                              _onItemTapped(3);
-                            } else if (value == 'Admin Panel' &&
-                                userRole == UserRole.admin) {
-                              Navigator.pushNamed(context, '/admin');
-                            }
-                          },
-                          itemBuilder: (BuildContext context) =>
-                              <PopupMenuEntry<String>>[
-                            PopupMenuItem<String>(
-                              value: 'Home',
-                              child: Row(
-                                children: [
-                                  Icon(CupertinoIcons.house_fill),
-                                  SizedBox(width: 8),
-                                  Text('Home'),
-                                ],
-                              ),
-                            ),
-                            PopupMenuItem<String>(
-                              value: 'Quotes',
-                              child: Row(
-                                children: [
-                                  Icon(CupertinoIcons.doc_text_fill),
-                                  SizedBox(width: 8),
-                                  Text('Quotes'),
-                                ],
-                              ),
-                            ),
-                            PopupMenuItem<String>(
-                              value: 'Upcoming',
-                              child: Row(
-                                children: [
-                                  Icon(CupertinoIcons.hourglass),
-                                  SizedBox(width: 8),
-                                  Text('Upcoming'),
-                                ],
-                              ),
-                            ),
-                            PopupMenuItem<String>(
-                              value: 'My Account',
-                              child: Row(
-                                children: [
-                                  Icon(CupertinoIcons.person_fill),
-                                  SizedBox(width: 8),
-                                  Text('My Account'),
-                                ],
-                              ),
-                            ),
-                            if (userRole == UserRole.admin)
-                              PopupMenuItem<String>(
-                                value: 'Admin Panel',
-                                child: Row(
-                                  children: [
-                                    Icon(CupertinoIcons.shield_fill),
-                                    SizedBox(width: 8),
-                                    Text('Admin Panel'),
-                                  ],
-                                ),
-                              ),
-                            PopupMenuItem<String>(
-                              value: 'Notifications',
-                              child: Row(
-                                children: [
-                                  Icon(CupertinoIcons.bell_fill),
-                                  SizedBox(width: 8),
-                                  Text('Notifications'),
-                                ],
-                              ),
-                            ),
-                          ],
-                        );
-                },
-              ),
-            ),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                bool isDesktop = constraints.maxWidth > 800;
-
-                return Row(
-                  children: [
-                    if (isDesktop)
-                      Container(
-                        width: 280,
-                        decoration: BoxDecoration(
-                          color: CupertinoColors.systemGroupedBackground,
-                          boxShadow: [
-                            BoxShadow(
-                              color: CupertinoColors.black.withOpacity(0.1),
-                              blurRadius: 10,
-                              offset: Offset(2, 0),
-                            ),
-                          ],
-                        ),
-                        child: SafeArea(
-                          child: Column(
-                            children: [
-                              SizedBox(height: 60),
-                              _buildNavItem(
-                                context,
-                                icon: CupertinoIcons.house_fill,
-                                title: "Home",
-                                onTap: () => _onItemTapped(0),
-                              ),
-                              _buildNavItem(
-                                context,
-                                icon: CupertinoIcons.doc_text_fill,
-                                title: "Quotes",
-                                onTap: () => _onItemTapped(1),
-                              ),
-                              _buildNavItem(
-                                context,
-                                icon: CupertinoIcons.hourglass,
-                                title: "Upcoming",
-                                onTap: () => _onItemTapped(2),
-                              ),
-                              _buildNavItem(
-                                context,
-                                icon: CupertinoIcons.person_fill,
-                                title: "My Account",
-                                onTap: () => _onItemTapped(3),
-                              ),
-                              if (userRole == UserRole.admin)
-                                _buildNavItem(
-                                  context,
-                                  icon: CupertinoIcons.shield_fill,
-                                  title: "Admin Panel",
-                                  onTap: () =>
-                                      Navigator.pushNamed(context, '/admin'),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    Expanded(child: _getSelectedScreen()),
-                    if (isDesktop)
-                      Container(
-                        width: 280,
-                        padding: EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: CupertinoColors.systemBackground,
-                          boxShadow: [
-                            BoxShadow(
-                              color: CupertinoColors.black.withOpacity(0.1),
-                              blurRadius: 10,
-                              offset: Offset(-2, 0),
-                            ),
-                          ],
-                        ),
-                        child: SafeArea(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Trending in Insurance",
-                                style: CupertinoTheme.of(context)
-                                    .textTheme
-                                    .navTitleTextStyle
-                                    .copyWith(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                              ),
-                              SizedBox(height: 16),
-                              trendingTopics.isNotEmpty
-                                  ? ListView.builder(
-                                      shrinkWrap: true,
-                                      physics: NeverScrollableScrollPhysics(),
-                                      itemCount: trendingTopics.length,
-                                      itemBuilder: (context, index) {
-                                        return Padding(
-                                          padding:
-                                              EdgeInsets.symmetric(vertical: 8),
-                                          child: CupertinoListTile(
-                                            title: Text(
-                                              trendingTopics[index],
-                                              style: CupertinoTheme.of(context)
-                                                  .textTheme
-                                                  .textStyle,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    )
-                                  : Center(child: CupertinoActivityIndicator()),
-                              SizedBox(height: 24),
-                              Text(
-                                "Learn more about Insurance",
-                                style: CupertinoTheme.of(context)
-                                    .textTheme
-                                    .navTitleTextStyle
-                                    .copyWith(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                              ),
-                              SizedBox(height: 16),
-                              blogPosts.isNotEmpty
-                                  ? ListView.builder(
-                                      shrinkWrap: true,
-                                      physics: NeverScrollableScrollPhysics(),
-                                      itemCount: blogPosts.length,
-                                      itemBuilder: (context, index) {
-                                        return Padding(
-                                          padding:
-                                              EdgeInsets.symmetric(vertical: 8),
-                                          child: CupertinoListTile(
-                                            title: Text(
-                                              blogPosts[index],
-                                              style: CupertinoTheme.of(context)
-                                                  .textTheme
-                                                  .textStyle,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    )
-                                  : Center(child: CupertinoActivityIndicator()),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
-          )
-        : CupertinoTabScaffold(
-            tabBar: CupertinoTabBar(
-              backgroundColor: CupertinoColors.systemBackground,
-              items: [
-                BottomNavigationBarItem(
-                  icon: Icon(CupertinoIcons.house_fill, size: 30),
-                  label: 'Home',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(CupertinoIcons.doc_text_fill, size: 30),
-                  label: 'Quotes',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(CupertinoIcons.hourglass, size: 30),
-                  label: 'Upcoming',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(CupertinoIcons.person_fill, size: 30),
-                  label: 'My Account',
-                ),
-              ],
-              onTap: _onItemTapped,
-              currentIndex: _selectedIndex,
-            ),
-            tabBuilder: (context, index) {
-              return CupertinoTabView(
-                builder: (context) {
-                  return Stack(
-                    children: [
-                      Positioned.fill(child: _getSelectedScreen()),
-                      Positioned(
-                        bottom: 16,
-                        right: 16,
-                        child: CupertinoButton.filled(
-                          padding: EdgeInsets.all(16),
-                          borderRadius: BorderRadius.circular(16),
-                          child:
-                              Icon(CupertinoIcons.chat_bubble_fill, size: 30),
-                          onPressed: () {
-                            if (kDebugMode) {
-                              print('Chat button pressed');
-                            }
-                            _showChatBottomSheet(context);
-                          },
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              );
-            },
-          );
-  }
-
-// Helper method to build navigation items
-  Widget _buildNavItem(BuildContext context,
-      {required IconData icon,
-      required String title,
-      required VoidCallback onTap}) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: CupertinoListTile(
-        leading: Icon(icon,
-            size: 30, color: CupertinoTheme.of(context).primaryColor),
-        title:
-            Text(title, style: CupertinoTheme.of(context).textTheme.textStyle),
-        onTap: onTap,
-        padding: EdgeInsets.all(12),
-        backgroundColor: CupertinoColors.systemBackground,
-        backgroundColorActivated: CupertinoColors.systemGrey.withOpacity(0.2),
-      ),
-    );
-  }
-
-// Helper method to build navigation icons for app bar
-
-// Helper method to build notification button
-  Widget _buildNotificationButton(BuildContext context) {
-    return Stack(
+// Add this method inside _InsuranceHomeScreenState
+Widget _buildNotificationButton(BuildContext context) {
+  return IconButton(
+    icon: Stack(
       children: [
-        CupertinoButton(
-          padding: EdgeInsets.zero,
-          child: Icon(CupertinoIcons.bell_fill, size: 20),
-          onPressed: () {
-            Navigator.push(
-              context,
-              CupertinoPageRoute(
-                builder: (context) =>
-                    NotificationsScreen(notifications: notifications),
-              ),
-            );
-          },
-        ),
+        Icon(Icons.notifications, size: 30, color: Colors.black87),
         if (notifications.isNotEmpty)
           Positioned(
-            right: 4,
-            top: 4,
+            right: 0,
+            top: 0,
             child: Container(
-              padding: EdgeInsets.all(4),
+              padding: EdgeInsets.all(2),
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: CupertinoColors.systemRed,
-                boxShadow: [
-                  BoxShadow(
-                    color: CupertinoColors.black.withOpacity(0.3),
-                    blurRadius: 4,
-                    offset: Offset(0, 2),
-                  ),
-                ],
+                color: Colors.red,
+                borderRadius: BorderRadius.circular(8),
               ),
-              constraints: BoxConstraints(minWidth: 20, minHeight: 20),
+              constraints: BoxConstraints(
+                minWidth: 16,
+                minHeight: 16,
+              ),
               child: Text(
                 '${notifications.length}',
                 style: TextStyle(
-                  color: CupertinoColors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  fontSize: 10,
                 ),
                 textAlign: TextAlign.center,
               ),
             ),
           ),
       ],
-    );
-  }
+    ),
+    tooltip: 'Notifications',
+    onPressed: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => NotificationsScreen(notifications: notifications),
+        ),
+      );
+    },
+  );
+}
 
+@override
+Widget build(BuildContext context) {
+  return kIsWeb
+      ? LayoutBuilder(
+          builder: (context, constraints) {
+            bool isDesktop = constraints.maxWidth > 800;
+
+            return Scaffold(
+              backgroundColor: Colors.white,
+              appBar: AppBar(
+                title: const Text('BIMA GUARDIAN'),
+                backgroundColor: Colors.white,
+                elevation: 4,
+                shadowColor: Colors.black.withOpacity(0.2),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
+                ),
+                actions: isDesktop
+                    ? [_buildNotificationButton(context)]
+                    : null,
+                leading: isDesktop
+                    ? null
+                    : Builder(
+                        builder: (BuildContext drawerContext) {
+                          return IconButton(
+                            icon: const Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: Icon(Icons.menu, size: 30),
+                            ),
+                            onPressed: () {
+                              Scaffold.of(drawerContext).openDrawer();
+                            },
+                          );
+                        },
+                      ),
+              ),
+              drawer: isDesktop
+                  ? null
+                  : Drawer(
+                      elevation: 8,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: SafeArea(
+                        child: Column(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).primaryColor,
+                                borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(16),
+                                ),
+                              ),
+                              child: const Text(
+                                'BIMA GUARDIAN',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            ListTile(
+                              leading: const Padding(
+                                padding: EdgeInsets.all(8.0),
+                                child: Icon(Icons.home, size: 24),
+                              ),
+                              title: const Text('Home'),
+                              onTap: () {
+                                _onItemTapped(0);
+                                Navigator.pop(context);
+                              },
+                            ),
+                            ListTile(
+                              leading: const Padding(
+                                padding: EdgeInsets.all(8.0),
+                                child: Icon(Icons.description, size: 24),
+                              ),
+                              title: const Text('Quotes'),
+                              onTap: () {
+                                _onItemTapped(1);
+                                Navigator.pop(context);
+                              },
+                            ),
+                            ListTile(
+                              leading: const Padding(
+                                padding: EdgeInsets.all(8.0),
+                                child: Icon(Icons.hourglass_empty, size: 24),
+                              ),
+                              title: const Text('Upcoming'),
+                              onTap: () {
+                                _onItemTapped(2);
+                                Navigator.pop(context);
+                              },
+                            ),
+                            ListTile(
+                              leading: const Padding(
+                                padding: EdgeInsets.all(8.0),
+                                child: Icon(Icons.account_circle, size: 24),
+                              ),
+                              title: const Text('My Account'),
+                              onTap: () {
+                                _onItemTapped(3);
+                                Navigator.pop(context);
+                              },
+                            ),
+                            if (userRole == UserRole.admin)
+                              ListTile(
+                                leading: const Padding(
+                                  padding: EdgeInsets.all(8.0),
+                                  child: Icon(Icons.admin_panel_settings, size: 24),
+                                ),
+                                title: const Text('Admin Panel'),
+                                onTap: () {
+                                  Navigator.pushNamed(context, '/admin');
+                                  Navigator.pop(context);
+                                },
+                              ),
+                            ListTile(
+                              leading: const Padding(
+                                padding: EdgeInsets.all(8.0),
+                                child: Icon(Icons.notifications, size: 24),
+                              ),
+                              title: const Text('Notifications'),
+                              onTap: () {
+                                // Implement notification logic
+                                Navigator.pop(context, (_buildNotificationButton(context)));
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+              body: Row(
+                children: [
+                  if (isDesktop)
+                    Container(
+                      width: 280,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.only(
+                          topRight: Radius.circular(16),
+                          bottomRight: Radius.circular(28),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black,
+                            blurRadius: 12,
+                            offset: Offset(2, 0),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 16),
+                          _buildNavItem(
+                            context,
+                            icon: Icons.home,
+                            title: 'Home',
+                            onTap: () => _onItemTapped(0),
+                          ),
+                          _buildNavItem(
+                            context,
+                            icon: Icons.description,
+                            title: 'Quotes',
+                            onTap: () => _onItemTapped(1),
+                          ),
+                          _buildNavItem(
+                            context,
+                            icon: Icons.hourglass_empty,
+                            title: 'Upcoming',
+                            onTap: () => _onItemTapped(2),
+                          ),
+                          _buildNavItem(
+                            context,
+                            icon: Icons.account_circle,
+                            title: 'My Account',
+                            onTap: () => _onItemTapped(3),
+                          ),
+                          if (userRole == UserRole.admin)
+                            _buildNavItem(
+                              context,
+                              icon: Icons.admin_panel_settings,
+                              title: 'Admin Panel',
+                              onTap: () =>
+                                  Navigator.pushNamed(context, '/admin'),
+                            ),
+                        ],
+                      ),
+                    ),
+                  Expanded(child: _getSelectedScreen()),
+                  if (isDesktop)
+                    Container(
+                      width: 280,
+                      padding: const EdgeInsets.all(24),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(16),
+                          bottomLeft: Radius.circular(16),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black,
+                            blurRadius: 12,
+                            offset: Offset(-2, 0),
+                          ),
+                        ],
+                      ),
+                      child: SafeArea(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Trending in Insurance',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleLarge
+                                    ?.copyWith(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                              ),
+                              const SizedBox(height: 16),
+                              trendingTopics.isNotEmpty
+                                  ? ListView.builder(
+                                      shrinkWrap: true,
+                                      physics:
+                                          const NeverScrollableScrollPhysics(),
+                                      itemCount: trendingTopics.length,
+                                      itemBuilder: (context, index) {
+                                        return Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 8),
+                                          child: Card(
+                                            elevation: 4,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                            child: ListTile(
+                                              title: Text(
+                                                trendingTopics[index]
+                                                    .toString()
+                                                    .split('.')
+                                                    .last, // Convert PolicyType to String
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodyMedium,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    )
+                                  : const Center(child: CircularProgressIndicator()),
+                              const SizedBox(height: 24),
+                              Text(
+                                'Learn more about Insurance',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleLarge
+                                    ?.copyWith(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                              ),
+                              const SizedBox(height: 16),
+                              blogPosts.isNotEmpty
+                                  ? ListView.builder(
+                                      shrinkWrap: true,
+                                      physics:
+                                          const NeverScrollableScrollPhysics(),
+                                      itemCount: blogPosts.length,
+                                      itemBuilder: (context, index) {
+                                        return Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 8),
+                                          child: Card(
+                                            elevation: 4,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                            child: ListTile(
+                                              title: Text(
+                                                blogPosts[index]
+                                                    .toString()
+                                                    .split('.')
+                                                    .last, // Convert PolicyType to String
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodyMedium,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    )
+                                  : const Center(child: CircularProgressIndicator()),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              floatingActionButton: FloatingActionButton(
+                onPressed: () {
+                  if (kDebugMode) {
+                    print('Chat button pressed');
+                  }
+                  _showChatBottomSheet(context);
+                },
+                elevation: 6,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: Icon(Icons.chat, size: 30),
+                ),
+              ),
+            );
+          },
+        )
+      : Scaffold(
+          backgroundColor: Colors.white,
+          body: _getSelectedScreen(),
+          bottomNavigationBar: BottomNavigationBar(
+            items: const [
+              BottomNavigationBarItem(
+                icon: Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: Icon(Icons.home, size: 30),
+                ),
+                label: 'Home',
+              ),
+              BottomNavigationBarItem(
+                icon: Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: Icon(Icons.description, size: 30),
+                ),
+                label: 'Quotes',
+              ),
+              BottomNavigationBarItem(
+                icon: Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: Icon(Icons.hourglass_empty, size: 30),
+                ),
+                label: 'Upcoming',
+              ),
+              BottomNavigationBarItem(
+                icon: Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: Icon(Icons.account_circle, size: 30),
+                ),
+                label: 'My Account',
+              ),
+            ],
+            currentIndex: _selectedIndex,
+            onTap: _onItemTapped,
+            selectedItemColor: Theme.of(context).primaryColor,
+            unselectedItemColor: Colors.grey,
+            elevation: 8,
+            backgroundColor: Colors.white,
+            type: BottomNavigationBarType.fixed,
+            showSelectedLabels: true,
+            showUnselectedLabels: true,
+          ),
+          floatingActionButton: FloatingActionButton(
+            onPressed: () {
+              if (kDebugMode) {
+                print('Chat button pressed');
+              }
+              _showChatBottomSheet(context);
+            },
+            elevation: 6,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Padding(
+              padding: EdgeInsets.all(8.0),
+              child: Icon(Icons.chat, size: 30),
+            ),
+          ),
+        );
+}
+
+// Updated _buildNavItem to match Material Design with elevation and rounded corners
+Widget _buildNavItem(BuildContext context, {required IconData icon, required String title, required VoidCallback onTap}) {
+  return Padding(
+    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    child: Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ListTile(
+        leading: Padding(
+          padding: EdgeInsets.all(8.0),
+          child: Icon(icon, size: 24),
+        ),
+        title: Text(title),
+        onTap: onTap,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      ),
+    ),
+  );
+}
 // _showChatBottomSheet (unchanged)
   void _showChatBottomSheet(BuildContext context) {
     final TextEditingController chatController = TextEditingController();

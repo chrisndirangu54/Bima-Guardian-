@@ -40,6 +40,7 @@ class _CoverReportScreenState extends State<CoverReportScreen> {
               .map(
                 (item) => Cover(
                   id: item['id'],
+                  name: item['name'], // Added the required 'name' parameter
                   type: item['type'],
                   subtype: item['subtype'],
                   companyId: item['company'],

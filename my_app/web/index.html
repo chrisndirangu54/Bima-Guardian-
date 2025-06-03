@@ -2,35 +2,18 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bima Guardian</title>
-  <!-- iOS meta tags & icons -->
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Bima Guardian">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
-  <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js"></script>
-  <!-- Firebase Configuration -->
-  <script>
-    const firebaseConfig = {
-    apiKey: 'AIzaSyC8lJ8hOd9BoD-ZR-IwTW6Byn4NoRu6cFQ',
-    appId: '1:60440379548:web:963bad9492c5888ed62d59',
-    messagingSenderId: '60440379548',
-    projectId: 'bimaapp2025may',
-    authDomain: 'bimaapp2025may.firebaseapp.com',
-    storageBucket: 'bimaapp2025may.firebasestorage.app',
-  };
-    firebase.initializeApp(firebaseConfig);
-  </script>
-  <script src="main.dart.js" type="application/javascript"></script>
+  <!-- Stripe JavaScript SDK for flutter_stripe on web -->
+  <script src="https://js.stripe.com/v3/"></script>
 </head>
 <body>
-  <script src="flutter_bootstrap.js" async></script>
+  <div id="app-container"></div>
+  <script src="flutter_bootstrap.js" defer></script>
 </body>
 </html>

@@ -2,6 +2,7 @@ import 'package:my_app/insurance_app.dart';
 
 class Cover {
   final String id;
+  final String name; // e.g.,vehicleId', 'propertyId'
   final String insuredItemId;
   final String companyId;
   final String type;
@@ -21,6 +22,7 @@ class Cover {
 
   Cover({
     required this.id,
+    required this.name,
     required this.insuredItemId,
     required this.companyId,
     required this.type,
@@ -39,6 +41,7 @@ class Cover {
 
   Map<String, dynamic> toJson() => {
     'id': id,
+    'name': name,
     'insuredItemId': insuredItemId,
     'companyId': companyId,
     'type': type,
@@ -54,9 +57,9 @@ class Cover {
     'startDate': startDate.toIso8601String(),
     'endDate': endDate?.toIso8601String(), // Handle nullable endDate
   };
-
   factory Cover.fromJson(Map<String, dynamic> json) => Cover(
     id: json['id'] as String,
+    name: json['name'] as String,
     insuredItemId: json['insuredItemId'] as String,
     companyId: json['companyId'] as String,
     type: json['type'] as String,
@@ -80,9 +83,9 @@ class Cover {
             : null, // Handle nullable endDate
   );
 
-  /// Creates a new [Cover] instance with the given fields replaced by new values.
   Cover copyWith({
     String? id,
+    String? name,
     String? insuredItemId,
     String? companyId,
     String? type,
@@ -100,6 +103,7 @@ class Cover {
   }) {
     return Cover(
       id: id ?? this.id,
+      name: name ?? this.name,
       insuredItemId: insuredItemId ?? this.insuredItemId,
       companyId: companyId ?? this.companyId,
       type: type ?? this.type,
