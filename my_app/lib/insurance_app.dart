@@ -2183,7 +2183,7 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                           crossAxisSpacing: 16,
                           mainAxisSpacing: 16,
                         ),
-                        itemCount: (policyTypes as List<String>).length,
+                        itemCount: (policyTypes).length,
                         itemBuilder: (context, index) {
                           if (kDebugMode) {
                             print(
@@ -4356,7 +4356,9 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
     try {
       subtypes = await InsuranceHomeScreen.getPolicySubtypes(policyType.id)
           .timeout(const Duration(seconds: 2), onTimeout: () {
-        print('Subtypes request timed out');
+        if (kDebugMode) {
+          print('Subtypes request timed out');
+        }
         return [PolicySubtype(
           id: '1',
           name: 'Standard',
@@ -4365,7 +4367,9 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
         )];
       });
     } catch (e) {
-      print('Error fetching subtypes: $e');
+      if (kDebugMode) {
+        print('Error fetching subtypes: $e');
+      }
       subtypes = [PolicySubtype(
         id: '1',
         name: 'Standard',
@@ -4380,13 +4384,17 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
       for (final subtype in subtypes) {
         final types = await InsuranceHomeScreen.getCoverageTypes(subtype.id)
             .timeout(const Duration(seconds: 2), onTimeout: () {
-          print('Coverage types request timed out');
+          if (kDebugMode) {
+            print('Coverage types request timed out');
+          }
           return [CoverageType(id: '1', name: 'Basic', description: '')];
         });
         coverageTypes.addAll(types);
       }
     } catch (e) {
-      print('Error fetching coverage types: $e');
+      if (kDebugMode) {
+        print('Error fetching coverage types: $e');
+      }
       coverageTypes = [CoverageType(id: '1', name: 'Basic', description: '')];
     }
 
@@ -4394,18 +4402,13 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
     final coverageOptions = coverageTypes.map((c) => c.name).toList();
 
     // Get PDF template fields with fallback
-    Map<String, FieldDefinition> fields = {};
     try {
       if (pdfTemplateKey.isNotEmpty) {
-        final pdfTemplate = await InsuranceHomeScreen.getPDFTemplate(pdfTemplateKey)
-            .timeout(const Duration(seconds: 2), onTimeout: () {
-          print('PDF template request timed out');
-          return null;
-        });
-        fields = pdfTemplate?.fields ?? {};
       }
     } catch (e) {
-      print('Error fetching PDF template: $e');
+      if (kDebugMode) {
+        print('Error fetching PDF template: $e');
+      }
     }
 
 
@@ -4457,6 +4460,15 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(
           final name = dialogState.responses['name']?.toString() ?? 'Unknown';
           final email = dialogState.responses['email']?.toString() ?? '';
           // Additional validation and submission logic
+          if (name.isEmpty || email.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Name and Email are required'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
         },
       ),
     ];
