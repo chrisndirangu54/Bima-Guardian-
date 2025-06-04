@@ -228,7 +228,7 @@ class MyApp extends StatelessWidget {
             vertical: 20,
           ), // Increased padding
         ),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           color: const Color(0xFFFFFFFF), // White
           elevation: 6, // Increased elevation
           shadowColor:
@@ -370,7 +370,7 @@ class MyApp extends StatelessWidget {
             vertical: 20,
           ), // Increased padding
         ),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           color: const Color(0xFF2A2A2A), // Dark gray
           elevation: 6, // Increased elevation
           shadowColor:
