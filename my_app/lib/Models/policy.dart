@@ -30,6 +30,14 @@ class PolicyType {
         description: json['description'],
         pdfTemplateKey: json['pdfTemplateKey'], // Nullable in fromJson
       );
+
+  // Added fromFirestore factory method
+  factory PolicyType.fromFirestore(Map<String, dynamic> data) => PolicyType(
+        id: data['id'] ?? '',
+        name: data['name'] ?? '',
+        description: data['description'] ?? '',
+        pdfTemplateKey: data['pdfTemplateKey'],
+      );
 }
 
 class PolicySubtype {
@@ -62,6 +70,15 @@ class PolicySubtype {
         description: json['description'],
         pdfTemplateKey: json['pdfTemplateKey'], // Nullable in fromJson
       );
+
+  // Added fromFirestore factory method
+  factory PolicySubtype.fromFirestore(Map<String, dynamic> data) => PolicySubtype(
+        id: data['id'] ?? '',
+        name: data['name'] ?? '',
+        policyTypeId: data['policyTypeId'] ?? '',
+        description: data['description'] ?? '',
+        pdfTemplateKey: data['pdfTemplateKey'],
+      );
 }
 
 class CoverageType {
@@ -90,7 +107,14 @@ class CoverageType {
         description: json['description'],
         pdfTemplateKey: json['pdfTemplateKey'], // Nullable in fromJson
       );
-      
+
+  // Added fromFirestore factory method
+  factory CoverageType.fromFirestore(Map<String, dynamic> data) => CoverageType(
+        id: data['id'] ?? '',
+        name: data['name'] ?? '',
+        description: data['description'] ?? '',
+        pdfTemplateKey: data['pdfTemplateKey'],
+      );
 }
 
 class Policy {
@@ -148,65 +172,85 @@ class Policy {
             : null,
         pdfTemplateKey: json['pdfTemplateKey'],
       );
-@override
-String toString() {
-  return 'Policy(id: $id, name: $name, insuredItemId: $insuredItemId, companyId: $companyId, type: ${type.name}, subtype: ${subtype.name}, coverageType: ${coverageType.name}, status: ${status.name}, endDate: $endDate, pdfTemplateKey: $pdfTemplateKey)';
-}
 
-static Future<Policy> fromCover(Cover updatedCover) async {
-  try {
-    // Fetch PolicyType
-    final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
-    final policyType = policyTypes.firstWhere(
-      (t) => t.name.toLowerCase() == updatedCover.type.toLowerCase(),
-      orElse: () => PolicyType(
-        id: updatedCover.type,
-        name: updatedCover.type,
-        description: '',
-      ),
-    );
+  // Added fromFirestore factory method
+  factory Policy.fromFirestore(Map<String, dynamic> data) => Policy(
+        id: data['id'] ?? '',
+        name: data['name'] ?? '',
+        insuredItemId: data['insuredItemId'] ?? '',
+        companyId: data['companyId'] ?? '',
+        type: PolicyType.fromFirestore(data['type'] ?? {}),
+        subtype: PolicySubtype.fromFirestore(data['subtype'] ?? {}),
+        coverageType: CoverageType.fromFirestore(data['coverageType'] ?? {}),
+        status: CoverStatus.values.firstWhere(
+          (e) => e.name == data['status'],
+          orElse: () => CoverStatus.active,
+        ),
+        endDate: data['expirationDate'] != null
+            ? DateTime.parse(data['expirationDate'])
+            : null,
+        pdfTemplateKey: data['pdfTemplateKey'],
+      );
 
-    // Fetch PolicySubtype
-    final subtypes = await InsuranceHomeScreen.getPolicySubtypes(policyType.id);
-    final policySubtype = subtypes.firstWhere(
-      (s) => s.name.toLowerCase() == updatedCover.subtype.toLowerCase(),
-      orElse: () => PolicySubtype(
-        id: updatedCover.subtype,
-        name: updatedCover.subtype,
-        policyTypeId: policyType.id,
-        description: '',
-      ),
-    );
-
-    // Fetch CoverageType
-    final coverageTypes = await InsuranceHomeScreen.getCoverageTypes();
-    final coverageType = coverageTypes.firstWhere(
-      (c) => c.name.toLowerCase() == updatedCover.coverageType.toLowerCase(),
-      orElse: () => CoverageType(
-        id: updatedCover.coverageType,
-        name: updatedCover.coverageType,
-        description: '',
-      ),
-    );
-
-    // Create Policy
-    return Policy(
-      id: updatedCover.id,
-      name: updatedCover.name, // Add name from Cover
-      insuredItemId: updatedCover.insuredItemId,
-      companyId: updatedCover.companyId,
-      type: policyType,
-      subtype: policySubtype,
-      coverageType: coverageType,
-      status: updatedCover.status,
-      endDate: updatedCover.expirationDate,
-      pdfTemplateKey: updatedCover.pdfTemplateKey,
-    );
-  } catch (e) {
-    if (kDebugMode) {
-      print('Error converting Cover to Policy: $e');
-    }
-    throw Exception('Failed to convert Cover to Policy: $e');
+  @override
+  String toString() {
+    return 'Policy(id: $id, name: $name, insuredItemId: $insuredItemId, companyId: $companyId, type: ${type.name}, subtype: ${subtype.name}, coverageType: ${coverageType.name}, status: ${status.name}, endDate: $endDate, pdfTemplateKey: $pdfTemplateKey)';
   }
-}
+
+  static Future<Policy> fromCover(Cover updatedCover) async {
+    try {
+      // Fetch PolicyType
+      final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
+      final policyType = policyTypes.firstWhere(
+        (t) => t.name.toLowerCase() == updatedCover.type.toLowerCase(),
+        orElse: () => PolicyType(
+          id: updatedCover.type,
+          name: updatedCover.type,
+          description: '',
+        ),
+      );
+
+      // Fetch PolicySubtype
+      final subtypes = await InsuranceHomeScreen.getPolicySubtypes(policyType.id);
+      final policySubtype = subtypes.firstWhere(
+        (s) => s.name.toLowerCase() == updatedCover.subtype.toLowerCase(),
+        orElse: () => PolicySubtype(
+          id: updatedCover.subtype,
+          name: updatedCover.subtype,
+          policyTypeId: policyType.id,
+          description: '',
+        ),
+      );
+
+      // Fetch CoverageType
+      final coverageTypes = await InsuranceHomeScreen.getCoverageTypes(policyType.id);
+      final coverageType = coverageTypes.firstWhere(
+        (c) => c.name.toLowerCase() == updatedCover.coverageType.toLowerCase(),
+        orElse: () => CoverageType(
+          id: updatedCover.coverageType,
+          name: updatedCover.coverageType,
+          description: '',
+        ),
+      );
+
+      // Create Policy
+      return Policy(
+        id: updatedCover.id,
+        name: updatedCover.name, // Add name from Cover
+        insuredItemId: updatedCover.insuredItemId,
+        companyId: updatedCover.companyId,
+        type: policyType,
+        subtype: policySubtype,
+        coverageType: coverageType,
+        status: updatedCover.status,
+        endDate: updatedCover.expirationDate,
+        pdfTemplateKey: updatedCover.pdfTemplateKey,
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error converting Cover to Policy: $e');
+      }
+      throw Exception('Failed to convert Cover to Policy: $e');
+    }
+  }
 }
