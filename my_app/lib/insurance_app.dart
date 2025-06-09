@@ -2242,7 +2242,7 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                           crossAxisSpacing: 16,
                           mainAxisSpacing: 16,
                         ),
-                        itemCount: (policyTypes as List<String>).length,
+                        itemCount: (policyTypes).length,
                         itemBuilder: (context, index) {
                           if (kDebugMode) {
                             print(
@@ -2407,380 +2407,395 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     return result;
   }
 
-Widget _buildMyAccountScreen(BuildContext context) {
-  final themeProvider = Provider.of<ThemeProvider>(context);
+  Widget _buildMyAccountScreen(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
 
-  return Scaffold(
-    appBar: AppBar(
-      title: const Text('My Account'),
-      elevation: 4,
-      shadowColor: Colors.grey.withOpacity(0.5),
-    ),
-    backgroundColor: Colors.grey[100],
-    body: SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Settings-style grouped list
-            Card(
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('My Account'),
+        elevation: 4,
+        shadowColor: Colors.grey.withOpacity(0.5),
+      ),
+      backgroundColor: Colors.grey[100],
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Settings-style grouped list
+              Card(
+                elevation: 4,
+                shadowColor: Colors.grey.withOpacity(0.3),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12.0),
+                ),
+                margin:
+                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Column(
+                  children: [
+                    // Policy Reports Row
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12.0),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const CoverReportScreen(),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16.0,
+                            vertical: 12.0,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                color: Colors.grey[300]!,
+                                width: 0.5,
+                              ),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.all(4.0),
+                                child: Icon(
+                                  Icons.description_outlined,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                  size: 24,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Policy Reports',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyLarge
+                                      ?.copyWith(
+                                        fontSize: 16,
+                                      ),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.all(4.0),
+                                child: Icon(
+                                  Icons.arrow_forward_ios,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                  size: 18,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Theme Toggle Row
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0,
+                        vertical: 12.0,
+                      ),
+                      child: Row(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(4.0),
+                            child: Icon(
+                              Icons.dark_mode_outlined,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Dark Mode',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyLarge
+                                  ?.copyWith(
+                                    fontSize: 16,
+                                  ),
+                            ),
+                          ),
+                          Switch(
+                            value: themeProvider.themeMode == ThemeMode.dark,
+                            onChanged: (value) {
+                              themeProvider.toggleTheme(value);
+                            },
+                            activeColor: Colors.green,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Logout Button
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.0),
+                    ),
+                    elevation: 4,
+                    shadowColor: Colors.grey.withOpacity(0.3),
+                    padding: const EdgeInsets.symmetric(vertical: 12.0),
+                    minimumSize: const Size(double.infinity, 48),
+                  ),
+                  onPressed: () async {
+                    try {
+                      await FirebaseAuth.instance.signOut();
+                      if (kDebugMode) {
+                        print('User signed out');
+                      }
+                      await FirebaseAuth.instance.signInAnonymously();
+                    } catch (e) {
+                      if (kDebugMode) {
+                        print('Error signing out: $e');
+                      }
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12.0),
+                          ),
+                          title: const Text('Error'),
+                          content: Text('Failed to sign out: $e'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text('OK'),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                  },
+                  child: Text(
+                    'Log Out',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          fontSize: 16,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuotesScreen() {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Quotes'),
+        elevation: 4,
+        shadowColor: Colors.grey.withOpacity(0.5),
+      ),
+      backgroundColor: Colors.grey[100],
+      body: ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+        itemCount: quotes.length,
+        itemBuilder: (context, index) {
+          final quote = quotes[index];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: Card(
               elevation: 4,
               shadowColor: Colors.grey.withOpacity(0.3),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12.0),
               ),
-              margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: Column(
-                children: [
-                  // Policy Reports Row
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(12.0),
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => const CoverReportScreen(),
-                          ),
-                        );
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16.0,
-                          vertical: 12.0,
-                        ),
-                        decoration: BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(
-                              color: Colors.grey[300]!,
-                              width: 0.5,
-                            ),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.all(4.0),
-                              child: Icon(
-                                Icons.description_outlined,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                size: 24,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                'Policy Reports',
-                                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                      fontSize: 16,
-                                    ),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.all(4.0),
-                              child: Icon(
-                                Icons.arrow_forward_ios,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                size: 18,
-                              ),
-                            ),
-                          ],
-                        ),
+              child: ListTile(
+                contentPadding: const EdgeInsets.all(16.0),
+                title: Text(
+                  '${quote.type} - ${quote.subtype}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
+                ),
+                subtitle: Text(
+                  'Premium: KES ${quote.premium.toStringAsFixed(2)}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${quote.generatedAt.day}/${quote.generatedAt.month}/${quote.generatedAt.year}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
-                  ),
-                  // Theme Toggle Row
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16.0,
-                      vertical: 12.0,
+                    const SizedBox(width: 8),
+                    Padding(
+                      padding: const EdgeInsets.all(4.0),
+                      child: Icon(
+                        Icons.arrow_forward_ios,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        size: 20,
+                      ),
                     ),
-                    child: Row(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(4.0),
-                          child: Icon(
-                            Icons.dark_mode_outlined,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            size: 24,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Dark Mode',
-                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                  fontSize: 16,
-                                ),
-                          ),
-                        ),
-                        Switch(
-                          value: themeProvider.themeMode == ThemeMode.dark,
-                          onChanged: (value) {
-                            themeProvider.toggleTheme(value);
-                          },
-                          activeColor: Colors.green,
+                  ],
+                ),
+                onTap: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12.0),
+                      ),
+                      title: Text('${quote.type} - ${quote.subtype}'),
+                      content: Text(
+                        'Premium: KES ${quote.premium.toStringAsFixed(2)}\nGenerated: ${quote.generatedAt.day}/${quote.generatedAt.month}/${quote.generatedAt.year}',
+                      ),
+                      actions: [
+                        TextButton(
+                          child: const Text('Close'),
+                          onPressed: () => Navigator.pop(context),
                         ),
                       ],
                     ),
-                  ),
-                ],
-              ),
-            ),
-            // Logout Button
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.0),
-                  ),
-                  elevation: 4,
-                  shadowColor: Colors.grey.withOpacity(0.3),
-                  padding: const EdgeInsets.symmetric(vertical: 12.0),
-                  minimumSize: const Size(double.infinity, 48),
-                ),
-                onPressed: () async {
-                  try {
-                    await FirebaseAuth.instance.signOut();
-                    if (kDebugMode) {
-                      print('User signed out');
-                    }
-                    await FirebaseAuth.instance.signInAnonymously();
-                  } catch (e) {
-                    if (kDebugMode) {
-                      print('Error signing out: $e');
-                    }
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12.0),
-                        ),
-                        title: const Text('Error'),
-                        content: Text('Failed to sign out: $e'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('OK'),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
+                  );
                 },
-                child: Text(
-                  'Log Out',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontSize: 16,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
               ),
             ),
-          ],
-        ),
+          );
+        },
       ),
-    ),
-  );
-}
+    );
+  }
 
-Widget _buildQuotesScreen() {
-  return Scaffold(
-    appBar: AppBar(
-      title: const Text('Quotes'),
-      elevation: 4,
-      shadowColor: Colors.grey.withOpacity(0.5),
-    ),
-    backgroundColor: Colors.grey[100],
-    body: ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-      itemCount: quotes.length,
-      itemBuilder: (context, index) {
-        final quote = quotes[index];
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8.0),
-          child: Card(
-            elevation: 4,
-            shadowColor: Colors.grey.withOpacity(0.3),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12.0),
-            ),
-            child: ListTile(
-              contentPadding: const EdgeInsets.all(16.0),
-              title: Text(
-                '${quote.type} - ${quote.subtype}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
-                ),
+  Widget _buildUpcomingScreen() {
+    final upcomingPolicies = policies.where((policy) {
+      if (policy.endDate == null) return false;
+      final daysUntilExpiration =
+          policy.endDate!.difference(DateTime.now()).inDays;
+      return daysUntilExpiration <= 30 && daysUntilExpiration > 0;
+    }).toList();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Upcoming Expirations'),
+        elevation: 4,
+        shadowColor: Colors.grey.withOpacity(0.5),
+      ),
+      backgroundColor: Colors.grey[100],
+      body: ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+        itemCount: upcomingPolicies.length,
+        itemBuilder: (context, index) {
+          final policy = upcomingPolicies[index];
+          final daysUntilExpiration =
+              policy.endDate!.difference(DateTime.now()).inDays;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: Card(
+              elevation: 4,
+              shadowColor: Colors.grey.withOpacity(0.3),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12.0),
               ),
-              subtitle: Text(
-                'Premium: KES ${quote.premium.toStringAsFixed(2)}',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '${quote.generatedAt.day}/${quote.generatedAt.month}/${quote.generatedAt.year}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+              child: ListTile(
+                contentPadding: const EdgeInsets.all(16.0),
+                title: Text(
+                  '${policy.type} - ${policy.subtype}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
                   ),
-                  const SizedBox(width: 8),
-                  Padding(
-                    padding: const EdgeInsets.all(4.0),
-                    child: Icon(
-                      Icons.arrow_forward_ios,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      size: 20,
-                    ),
+                ),
+                subtitle: Text(
+                  'Expires in $daysUntilExpiration days',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: daysUntilExpiration <= 7
+                        ? Colors.red
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
-                ],
-              ),
-              onTap: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12.0),
-                    ),
-                    title: Text('${quote.type} - ${quote.subtype}'),
-                    content: Text(
-                      'Premium: KES ${quote.premium.toStringAsFixed(2)}\nGenerated: ${quote.generatedAt.day}/${quote.generatedAt.month}/${quote.generatedAt.year}',
-                    ),
-                    actions: [
-                      TextButton(
-                        child: const Text('Close'),
-                        onPressed: () => Navigator.pop(context),
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(4.0),
+                      child: Icon(
+                        Icons.warning_amber_rounded,
+                        color: daysUntilExpiration <= 7
+                            ? Colors.red
+                            : Colors.amber,
+                        size: 24,
                       ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        );
-      },
-    ),
-  );
-}
-
-Widget _buildUpcomingScreen() {
-  final upcomingPolicies = policies.where((policy) {
-    if (policy.endDate == null) return false;
-    final daysUntilExpiration = policy.endDate!.difference(DateTime.now()).inDays;
-    return daysUntilExpiration <= 30 && daysUntilExpiration > 0;
-  }).toList();
-
-  return Scaffold(
-    appBar: AppBar(
-      title: const Text('Upcoming Expirations'),
-      elevation: 4,
-      shadowColor: Colors.grey.withOpacity(0.5),
-    ),
-    backgroundColor: Colors.grey[100],
-    body: ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-      itemCount: upcomingPolicies.length,
-      itemBuilder: (context, index) {
-        final policy = upcomingPolicies[index];
-        final daysUntilExpiration = policy.endDate!.difference(DateTime.now()).inDays;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8.0),
-          child: Card(
-            elevation: 4,
-            shadowColor: Colors.grey.withOpacity(0.3),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12.0),
-            ),
-            child: ListTile(
-              contentPadding: const EdgeInsets.all(16.0),
-              title: Text(
-                '${policy.type} - ${policy.subtype}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
-                ),
-              ),
-              subtitle: Text(
-                'Expires in $daysUntilExpiration days',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: daysUntilExpiration <= 7
-                      ? Colors.red
-                      : Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(4.0),
-                    child: Icon(
-                      Icons.warning_amber_rounded,
-                      color: daysUntilExpiration <= 7
-                          ? Colors.red
-                          : Colors.amber,
-                      size: 24,
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Padding(
-                    padding: const EdgeInsets.all(4.0),
-                    child: Icon(
-                      Icons.arrow_forward_ios,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      size: 20,
-                    ),
-                  ),
-                ],
-              ),
-              onTap: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12.0),
-                    ),
-                    title: Text('${policy.type} - ${policy.subtype}'),
-                    content: Text('Expires in $daysUntilExpiration days'),
-                    actions: [
-                      TextButton(
-                        child: const Text('Close'),
-                        onPressed: () => Navigator.pop(context),
+                    const SizedBox(width: 8),
+                    Padding(
+                      padding: const EdgeInsets.all(4.0),
+                      child: Icon(
+                        Icons.arrow_forward_ios,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        size: 20,
                       ),
-                      TextButton(
-                        child: const Text('Renew'),
-                        onPressed: () {
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Renewal initiated')),
-                          );
-                        },
+                    ),
+                  ],
+                ),
+                onTap: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12.0),
                       ),
-                    ],
-                  ),
-                );
-              },
+                      title: Text('${policy.type} - ${policy.subtype}'),
+                      content: Text('Expires in $daysUntilExpiration days'),
+                      actions: [
+                        TextButton(
+                          child: const Text('Close'),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                        TextButton(
+                          child: const Text('Renew'),
+                          onPressed: () {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text('Renewal initiated')),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ),
-          ),
-        );
-      },
-    ),
-  );
-}
-
-
+          );
+        },
+      ),
+    );
+  }
 
   Future<void> fetchTrendingTopics() async {
     setState(() {
@@ -2803,464 +2818,473 @@ Widget _buildUpcomingScreen() {
   }
 
 // Add this method inside _InsuranceHomeScreenState
-Widget _buildNotificationButton(BuildContext context) {
-  return IconButton(
-    icon: Stack(
-      children: [
-        Icon(Icons.notifications, size: 30, color: Colors.black87),
-        if (notifications.isNotEmpty)
-          Positioned(
-            right: 0,
-            top: 0,
-            child: Container(
-              padding: EdgeInsets.all(2),
-              decoration: BoxDecoration(
-                color: Colors.red,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              constraints: BoxConstraints(
-                minWidth: 16,
-                minHeight: 16,
-              ),
-              child: Text(
-                '${notifications.length}',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
+  Widget _buildNotificationButton(BuildContext context) {
+    return IconButton(
+      icon: Stack(
+        children: [
+          Icon(Icons.notifications, size: 30, color: Colors.black87),
+          if (notifications.isNotEmpty)
+            Positioned(
+              right: 0,
+              top: 0,
+              child: Container(
+                padding: EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                textAlign: TextAlign.center,
+                constraints: BoxConstraints(
+                  minWidth: 16,
+                  minHeight: 16,
+                ),
+                child: Text(
+                  '${notifications.length}',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
               ),
             ),
+        ],
+      ),
+      tooltip: 'Notifications',
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                NotificationsScreen(notifications: notifications),
           ),
-      ],
-    ),
-    tooltip: 'Notifications',
-    onPressed: () {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => NotificationsScreen(notifications: notifications),
-        ),
-      );
-    },
-  );
-}
+        );
+      },
+    );
+  }
 
-@override
-Widget build(BuildContext context) {
-  return kIsWeb
-      ? LayoutBuilder(
-          builder: (context, constraints) {
-            bool isDesktop = constraints.maxWidth > 800;
+  @override
+  Widget build(BuildContext context) {
+    return kIsWeb
+        ? LayoutBuilder(
+            builder: (context, constraints) {
+              bool isDesktop = constraints.maxWidth > 800;
 
-            return Scaffold(
-              backgroundColor: Colors.white,
-              appBar: AppBar(
-                title: const Text('BIMA GUARDIAN'),
+              return Scaffold(
                 backgroundColor: Colors.white,
-                elevation: 4,
-                shadowColor: Colors.black.withOpacity(0.2),
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
+                appBar: AppBar(
+                  title: const Text('BIMA GUARDIAN'),
+                  backgroundColor: Colors.white,
+                  elevation: 4,
+                  shadowColor: Colors.black.withOpacity(0.2),
+                  shape: const RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.vertical(bottom: Radius.circular(12)),
+                  ),
+                  actions:
+                      isDesktop ? [_buildNotificationButton(context)] : null,
+                  leading: isDesktop
+                      ? null
+                      : Builder(
+                          builder: (BuildContext drawerContext) {
+                            return IconButton(
+                              icon: const Padding(
+                                padding: EdgeInsets.all(8.0),
+                                child: Icon(Icons.menu, size: 30),
+                              ),
+                              onPressed: () {
+                                Scaffold.of(drawerContext).openDrawer();
+                              },
+                            );
+                          },
+                        ),
                 ),
-                actions: isDesktop
-                    ? [_buildNotificationButton(context)]
-                    : null,
-                leading: isDesktop
+                drawer: isDesktop
                     ? null
-                    : Builder(
-                        builder: (BuildContext drawerContext) {
-                          return IconButton(
-                            icon: const Padding(
-                              padding: EdgeInsets.all(8.0),
-                              child: Icon(Icons.menu, size: 30),
-                            ),
-                            onPressed: () {
-                              Scaffold.of(drawerContext).openDrawer();
-                            },
-                          );
-                        },
-                      ),
-              ),
-              drawer: isDesktop
-                  ? null
-                  : Drawer(
-                      elevation: 8,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: SafeArea(
-                        child: Column(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).primaryColor,
-                                borderRadius: const BorderRadius.vertical(
-                                  top: Radius.circular(16),
+                    : Drawer(
+                        elevation: 8,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: SafeArea(
+                          child: Column(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).primaryColor,
+                                  borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(16),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'BIMA GUARDIAN',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
-                              child: const Text(
-                                'BIMA GUARDIAN',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            ListTile(
-                              leading: const Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: Icon(Icons.home, size: 24),
-                              ),
-                              title: const Text('Home'),
-                              onTap: () {
-                                _onItemTapped(0);
-                                Navigator.pop(context);
-                              },
-                            ),
-                            ListTile(
-                              leading: const Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: Icon(Icons.description, size: 24),
-                              ),
-                              title: const Text('Quotes'),
-                              onTap: () {
-                                _onItemTapped(1);
-                                Navigator.pop(context);
-                              },
-                            ),
-                            ListTile(
-                              leading: const Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: Icon(Icons.hourglass_empty, size: 24),
-                              ),
-                              title: const Text('Upcoming'),
-                              onTap: () {
-                                _onItemTapped(2);
-                                Navigator.pop(context);
-                              },
-                            ),
-                            ListTile(
-                              leading: const Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: Icon(Icons.account_circle, size: 24),
-                              ),
-                              title: const Text('My Account'),
-                              onTap: () {
-                                _onItemTapped(3);
-                                Navigator.pop(context);
-                              },
-                            ),
-                            if (userRole == UserRole.admin)
                               ListTile(
                                 leading: const Padding(
                                   padding: EdgeInsets.all(8.0),
-                                  child: Icon(Icons.admin_panel_settings, size: 24),
+                                  child: Icon(Icons.home, size: 24),
                                 ),
-                                title: const Text('Admin Panel'),
+                                title: const Text('Home'),
                                 onTap: () {
-                                  Navigator.pushNamed(context, '/admin');
+                                  _onItemTapped(0);
                                   Navigator.pop(context);
                                 },
                               ),
-                            ListTile(
-                              leading: const Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: Icon(Icons.notifications, size: 24),
+                              ListTile(
+                                leading: const Padding(
+                                  padding: EdgeInsets.all(8.0),
+                                  child: Icon(Icons.description, size: 24),
+                                ),
+                                title: const Text('Quotes'),
+                                onTap: () {
+                                  _onItemTapped(1);
+                                  Navigator.pop(context);
+                                },
                               ),
-                              title: const Text('Notifications'),
-                              onTap: () {
-                                // Implement notification logic
-                                Navigator.pop(context, (_buildNotificationButton(context)));
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-              body: Row(
-                children: [
-                  if (isDesktop)
-                    Container(
-                      width: 280,
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.only(
-                          topRight: Radius.circular(16),
-                          bottomRight: Radius.circular(28),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black,
-                            blurRadius: 12,
-                            offset: Offset(2, 0),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        children: [
-                          const SizedBox(height: 16),
-                          _buildNavItem(
-                            context,
-                            icon: Icons.home,
-                            title: 'Home',
-                            onTap: () => _onItemTapped(0),
-                          ),
-                          _buildNavItem(
-                            context,
-                            icon: Icons.description,
-                            title: 'Quotes',
-                            onTap: () => _onItemTapped(1),
-                          ),
-                          _buildNavItem(
-                            context,
-                            icon: Icons.hourglass_empty,
-                            title: 'Upcoming',
-                            onTap: () => _onItemTapped(2),
-                          ),
-                          _buildNavItem(
-                            context,
-                            icon: Icons.account_circle,
-                            title: 'My Account',
-                            onTap: () => _onItemTapped(3),
-                          ),
-                          if (userRole == UserRole.admin)
-                            _buildNavItem(
-                              context,
-                              icon: Icons.admin_panel_settings,
-                              title: 'Admin Panel',
-                              onTap: () =>
-                                  Navigator.pushNamed(context, '/admin'),
-                            ),
-                        ],
-                      ),
-                    ),
-                  Expanded(child: _getSelectedScreen()),
-                  if (isDesktop)
-                    Container(
-                      width: 280,
-                      padding: const EdgeInsets.all(24),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.only(
-                          topLeft: Radius.circular(16),
-                          bottomLeft: Radius.circular(16),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black,
-                            blurRadius: 12,
-                            offset: Offset(-2, 0),
-                          ),
-                        ],
-                      ),
-                      child: SafeArea(
-                        child: SingleChildScrollView(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Trending in Insurance',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleLarge
-                                    ?.copyWith(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                              ListTile(
+                                leading: const Padding(
+                                  padding: EdgeInsets.all(8.0),
+                                  child: Icon(Icons.hourglass_empty, size: 24),
+                                ),
+                                title: const Text('Upcoming'),
+                                onTap: () {
+                                  _onItemTapped(2);
+                                  Navigator.pop(context);
+                                },
                               ),
-                              const SizedBox(height: 16),
-                              trendingTopics.isNotEmpty
-                                  ? ListView.builder(
-                                      shrinkWrap: true,
-                                      physics:
-                                          const NeverScrollableScrollPhysics(),
-                                      itemCount: trendingTopics.length,
-                                      itemBuilder: (context, index) {
-                                        return Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                              vertical: 8),
-                                          child: Card(
-                                            elevation: 4,
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                            ),
-                                            child: ListTile(
-                                              title: Text(
-                                                trendingTopics[index]
-                                                    .toString()
-                                                    .split('.')
-                                                    .last, // Convert PolicyType to String
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .bodyMedium,
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    )
-                                  : const Center(child: CircularProgressIndicator()),
-                              const SizedBox(height: 24),
-                              Text(
-                                'Learn more about Insurance',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleLarge
-                                    ?.copyWith(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                              ListTile(
+                                leading: const Padding(
+                                  padding: EdgeInsets.all(8.0),
+                                  child: Icon(Icons.account_circle, size: 24),
+                                ),
+                                title: const Text('My Account'),
+                                onTap: () {
+                                  _onItemTapped(3);
+                                  Navigator.pop(context);
+                                },
                               ),
-                              const SizedBox(height: 16),
-                              blogPosts.isNotEmpty
-                                  ? ListView.builder(
-                                      shrinkWrap: true,
-                                      physics:
-                                          const NeverScrollableScrollPhysics(),
-                                      itemCount: blogPosts.length,
-                                      itemBuilder: (context, index) {
-                                        return Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                              vertical: 8),
-                                          child: Card(
-                                            elevation: 4,
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                            ),
-                                            child: ListTile(
-                                              title: Text(
-                                                blogPosts[index]
-                                                    .toString()
-                                                    .split('.')
-                                                    .last, // Convert PolicyType to String
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .bodyMedium,
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    )
-                                  : const Center(child: CircularProgressIndicator()),
+                              if (userRole == UserRole.admin)
+                                ListTile(
+                                  leading: const Padding(
+                                    padding: EdgeInsets.all(8.0),
+                                    child: Icon(Icons.admin_panel_settings,
+                                        size: 24),
+                                  ),
+                                  title: const Text('Admin Panel'),
+                                  onTap: () {
+                                    Navigator.pushNamed(context, '/admin');
+                                    Navigator.pop(context);
+                                  },
+                                ),
+                              ListTile(
+                                leading: const Padding(
+                                  padding: EdgeInsets.all(8.0),
+                                  child: Icon(Icons.notifications, size: 24),
+                                ),
+                                title: const Text('Notifications'),
+                                onTap: () {
+                                  // Implement notification logic
+                                  Navigator.pop(context,
+                                      (_buildNotificationButton(context)));
+                                },
+                              ),
                             ],
                           ),
                         ),
                       ),
-                    ),
-                ],
-              ),
-              floatingActionButton: FloatingActionButton(
-                onPressed: () {
-                  if (kDebugMode) {
-                    print('Chat button pressed');
-                  }
-                  _showChatBottomSheet(context);
-                },
-                elevation: 6,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+                body: Row(
+                  children: [
+                    if (isDesktop)
+                      Container(
+                        width: 280,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.only(
+                            topRight: Radius.circular(16),
+                            bottomRight: Radius.circular(28),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black,
+                              blurRadius: 12,
+                              offset: Offset(2, 0),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            const SizedBox(height: 16),
+                            _buildNavItem(
+                              context,
+                              icon: Icons.home,
+                              title: 'Home',
+                              onTap: () => _onItemTapped(0),
+                            ),
+                            _buildNavItem(
+                              context,
+                              icon: Icons.description,
+                              title: 'Quotes',
+                              onTap: () => _onItemTapped(1),
+                            ),
+                            _buildNavItem(
+                              context,
+                              icon: Icons.hourglass_empty,
+                              title: 'Upcoming',
+                              onTap: () => _onItemTapped(2),
+                            ),
+                            _buildNavItem(
+                              context,
+                              icon: Icons.account_circle,
+                              title: 'My Account',
+                              onTap: () => _onItemTapped(3),
+                            ),
+                            if (userRole == UserRole.admin)
+                              _buildNavItem(
+                                context,
+                                icon: Icons.admin_panel_settings,
+                                title: 'Admin Panel',
+                                onTap: () =>
+                                    Navigator.pushNamed(context, '/admin'),
+                              ),
+                          ],
+                        ),
+                      ),
+                    Expanded(child: _getSelectedScreen()),
+                    if (isDesktop)
+                      Container(
+                        width: 280,
+                        padding: const EdgeInsets.all(24),
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(16),
+                            bottomLeft: Radius.circular(16),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black,
+                              blurRadius: 12,
+                              offset: Offset(-2, 0),
+                            ),
+                          ],
+                        ),
+                        child: SafeArea(
+                          child: SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Trending in Insurance',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleLarge
+                                      ?.copyWith(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                ),
+                                const SizedBox(height: 16),
+                                trendingTopics.isNotEmpty
+                                    ? ListView.builder(
+                                        shrinkWrap: true,
+                                        physics:
+                                            const NeverScrollableScrollPhysics(),
+                                        itemCount: trendingTopics.length,
+                                        itemBuilder: (context, index) {
+                                          return Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                vertical: 8),
+                                            child: Card(
+                                              elevation: 4,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              child: ListTile(
+                                                title: Text(
+                                                  trendingTopics[index]
+                                                      .toString()
+                                                      .split('.')
+                                                      .last, // Convert PolicyType to String
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodyMedium,
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      )
+                                    : const Center(
+                                        child: CircularProgressIndicator()),
+                                const SizedBox(height: 24),
+                                Text(
+                                  'Learn more about Insurance',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleLarge
+                                      ?.copyWith(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                ),
+                                const SizedBox(height: 16),
+                                blogPosts.isNotEmpty
+                                    ? ListView.builder(
+                                        shrinkWrap: true,
+                                        physics:
+                                            const NeverScrollableScrollPhysics(),
+                                        itemCount: blogPosts.length,
+                                        itemBuilder: (context, index) {
+                                          return Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                vertical: 8),
+                                            child: Card(
+                                              elevation: 4,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              child: ListTile(
+                                                title: Text(
+                                                  blogPosts[index]
+                                                      .toString()
+                                                      .split('.')
+                                                      .last, // Convert PolicyType to String
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodyMedium,
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      )
+                                    : const Center(
+                                        child: CircularProgressIndicator()),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-                child: const Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: Icon(Icons.chat, size: 30),
+                floatingActionButton: FloatingActionButton(
+                  onPressed: () {
+                    if (kDebugMode) {
+                      print('Chat button pressed');
+                    }
+                    _showChatBottomSheet(context);
+                  },
+                  elevation: 6,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Icon(Icons.chat, size: 30),
+                  ),
                 ),
-              ),
-            );
-          },
-        )
-      : Scaffold(
-          backgroundColor: Colors.white,
-          body: _getSelectedScreen(),
-          bottomNavigationBar: BottomNavigationBar(
-            items: const [
-              BottomNavigationBarItem(
-                icon: Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: Icon(Icons.home, size: 30),
-                ),
-                label: 'Home',
-              ),
-              BottomNavigationBarItem(
-                icon: Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: Icon(Icons.description, size: 30),
-                ),
-                label: 'Quotes',
-              ),
-              BottomNavigationBarItem(
-                icon: Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: Icon(Icons.hourglass_empty, size: 30),
-                ),
-                label: 'Upcoming',
-              ),
-              BottomNavigationBarItem(
-                icon: Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: Icon(Icons.account_circle, size: 30),
-                ),
-                label: 'My Account',
-              ),
-            ],
-            currentIndex: _selectedIndex,
-            onTap: _onItemTapped,
-            selectedItemColor: Theme.of(context).primaryColor,
-            unselectedItemColor: Colors.grey,
-            elevation: 8,
-            backgroundColor: Colors.white,
-            type: BottomNavigationBarType.fixed,
-            showSelectedLabels: true,
-            showUnselectedLabels: true,
-          ),
-          floatingActionButton: FloatingActionButton(
-            onPressed: () {
-              if (kDebugMode) {
-                print('Chat button pressed');
-              }
-              _showChatBottomSheet(context);
+              );
             },
-            elevation: 6,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+          )
+        : Scaffold(
+            backgroundColor: Colors.white,
+            body: _getSelectedScreen(),
+            bottomNavigationBar: BottomNavigationBar(
+              items: const [
+                BottomNavigationBarItem(
+                  icon: Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Icon(Icons.home, size: 30),
+                  ),
+                  label: 'Home',
+                ),
+                BottomNavigationBarItem(
+                  icon: Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Icon(Icons.description, size: 30),
+                  ),
+                  label: 'Quotes',
+                ),
+                BottomNavigationBarItem(
+                  icon: Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Icon(Icons.hourglass_empty, size: 30),
+                  ),
+                  label: 'Upcoming',
+                ),
+                BottomNavigationBarItem(
+                  icon: Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Icon(Icons.account_circle, size: 30),
+                  ),
+                  label: 'My Account',
+                ),
+              ],
+              currentIndex: _selectedIndex,
+              onTap: _onItemTapped,
+              selectedItemColor: Theme.of(context).primaryColor,
+              unselectedItemColor: Colors.grey,
+              elevation: 8,
+              backgroundColor: Colors.white,
+              type: BottomNavigationBarType.fixed,
+              showSelectedLabels: true,
+              showUnselectedLabels: true,
             ),
-            child: const Padding(
-              padding: EdgeInsets.all(8.0),
-              child: Icon(Icons.chat, size: 30),
+            floatingActionButton: FloatingActionButton(
+              onPressed: () {
+                if (kDebugMode) {
+                  print('Chat button pressed');
+                }
+                _showChatBottomSheet(context);
+              },
+              elevation: 6,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Padding(
+                padding: EdgeInsets.all(8.0),
+                child: Icon(Icons.chat, size: 30),
+              ),
             ),
-          ),
-        );
-}
+          );
+  }
 
 // Updated _buildNavItem to match Material Design with elevation and rounded corners
-Widget _buildNavItem(BuildContext context, {required IconData icon, required String title, required VoidCallback onTap}) {
-  return Padding(
-    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-    child: Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ListTile(
-        leading: Padding(
-          padding: EdgeInsets.all(8.0),
-          child: Icon(icon, size: 24),
-        ),
-        title: Text(title),
-        onTap: onTap,
+  Widget _buildNavItem(BuildContext context,
+      {required IconData icon,
+      required String title,
+      required VoidCallback onTap}) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Card(
+        elevation: 4,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
-        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: ListTile(
+          leading: Padding(
+            padding: EdgeInsets.all(8.0),
+            child: Icon(icon, size: 24),
+          ),
+          title: Text(title),
+          onTap: onTap,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
+
 // _showChatBottomSheet (unchanged)
   void _showChatBottomSheet(BuildContext context) {
     final TextEditingController chatController = TextEditingController();
