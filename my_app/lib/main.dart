@@ -95,196 +95,69 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
+    // Define the modern accent color (Electric Cyan)
+    const modernAccent = Color(0xFF00D1D1);
+    const oliveGreen = Color.fromARGB(255, 171, 253, 6); // Olive green for containers
+    const secondaryOlive = Color.fromARGB(255, 145, 175, 88); // Olive green
+    const lightCream = Color(0xFFEFFBDB); // Light cream for contrast
+    const darkTeal = Color(0xFF10212B); // Dark teal for primary elements
+
     return MaterialApp(
       title: 'Bima Guardian',
       theme: ThemeData(
-        primaryColor:
-            const Color.fromARGB(255, 35, 31, 242), // American flag blue
-        scaffoldBackgroundColor: const Color(0xFFFFFFFF), // White
-        colorScheme: const ColorScheme.light(
-          primary: Color.fromARGB(255, 31, 27, 239), // Blue
-          secondary: Color(0xFFB22234), // Red
-          tertiary: Color(0xFFFFD700), // Gold
-          surface: Color(0xFFFFFFFF), // White
-          onPrimary: Color(0xFFFFFFFF), // White on blue
-          onSecondary: Color(0xFFFFFFFF), // White on red
-          onTertiary: Color(0xFF000000), // Black on gold
-          onSurface: Color(0xFF000000), // Black on white
-          error: Color(0xFFE57373), // Error red
+        primaryColor: darkTeal, // Dark teal
+        scaffoldBackgroundColor: Colors.white, // White background
+        colorScheme: ColorScheme.light(
+          primary: darkTeal, // Dark teal
+          secondary: darkTeal, // Olive green
+          tertiary: modernAccent, // Electric cyan
+          surface: lightCream, // White surface
+          onPrimary: Colors.white, // White on dark teal
+          onSecondary: Colors.white, // White on olive green
+          onTertiary: Colors.black, // Black on cyan
+          onSurface: const Color(0xFF10212B), // Dark teal on white
+          error: const Color(0xFFE57373), // Error red
         ),
         textTheme: GoogleFonts.robotoTextTheme()
             .apply(
-              bodyColor: const Color(0xFF000000),
-              displayColor: const Color(0xFF000000),
+              bodyColor: const Color(0xFF10212B),
+              displayColor: const Color(0xFF10212B),
             )
             .copyWith(
               titleLarge: GoogleFonts.lora(
                 fontSize: 22,
                 fontWeight: FontWeight.w600,
-                color: const Color(0xFF000000),
+                color: const Color(0xFF10212B),
               ),
               bodyLarge: GoogleFonts.roboto(
                 fontSize: 16,
                 fontWeight: FontWeight.w400,
-                color: const Color(0xFF000000),
+                color: const Color(0xFF10212B),
               ),
-            ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFB22234), // Red
-            foregroundColor: const Color(0xFFFFFFFF), // White
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12), // Softer corners
-            ),
-            padding: const EdgeInsets.symmetric(
-              vertical: 16,
-              horizontal: 24,
-            ), // Increased padding
-            elevation: 8, // Higher elevation
-            shadowColor:
-                const Color(0xFF000000).withOpacity(0.3), // Pronounced shadow
-            textStyle: GoogleFonts.roboto(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-        textButtonTheme: TextButtonThemeData(
-          style: TextButton.styleFrom(
-            foregroundColor: const Color.fromARGB(255, 49, 46, 239), // Blue
-            textStyle: GoogleFonts.roboto(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
-            padding: const EdgeInsets.symmetric(
-              vertical: 12,
-              horizontal: 16,
-            ), // Increased padding
-          ),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12), // Softer corners
-            borderSide: const BorderSide(color: Color(0xFFBBBBBB)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFFBBBBBB)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(
-                color: Color.fromARGB(255, 48, 45, 251), width: 2), // Blue
-          ),
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFFE57373)),
-          ),
-          focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFFE57373), width: 2),
-          ),
-          labelStyle: GoogleFonts.roboto(
-            color: const Color(0xFF757575),
-            fontSize: 16,
-          ),
-          hintStyle: GoogleFonts.roboto(
-            color: const Color(0xFF757575),
-            fontSize: 16,
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-            vertical: 20,
-            horizontal: 16,
-          ), // Increased padding
-        ),
-        appBarTheme: AppBarTheme(
-          backgroundColor: const Color(0xFFFFFFFF), // White
-          foregroundColor: const Color(0xFF000000), // Black
-          elevation: 4, // Increased elevation
-          shadowColor:
-              const Color(0xFF000000).withOpacity(0.2), // Pronounced shadow
-          titleTextStyle: GoogleFonts.lora(
-            color: const Color(0xFF000000),
-            fontSize: 22,
-            fontWeight: FontWeight.w600,
-          ),
-          centerTitle: true, // iOS-style centered title
-        ),
-        dividerTheme: const DividerThemeData(
-          color: Color(0xFFBBBBBB),
-          thickness: 1,
-        ),
-        iconTheme: const IconThemeData(color: Color(0xFF000000)),
-        floatingActionButtonTheme: FloatingActionButtonThemeData(
-          backgroundColor: const Color(0xFFFFD700), // Gold
-          foregroundColor: const Color(0xFF000000), // Black
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16), // Softer corners
-          ),
-          elevation: 10, // Higher elevation
-          highlightElevation: 12,
-          extendedPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 20,
-          ), // Increased padding
-        ),
-        cardTheme: CardThemeData(
-          color: const Color(0xFFFFFFFF), // White
-          elevation: 6, // Increased elevation
-          shadowColor:
-              const Color(0xFF000000).withOpacity(0.25), // Pronounced shadow
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12), // Softer corners
-          ),
-          margin: const EdgeInsets.all(12), // Increased spacing
-        ),
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-      ),
-      darkTheme: ThemeData(
-        primaryColor: const Color.fromARGB(255, 34, 31, 228), // Blue
-        scaffoldBackgroundColor: const Color(0xFF2A2A2A), // Dark gray
-        colorScheme: const ColorScheme.dark(
-          primary: Color.fromARGB(255, 34, 31, 255), // Blue
-          secondary: Color(0xFFB22234), // Red
-          tertiary: Color(0xFFFFD700), // Gold
-          surface: Color(0xFF2A2A2A), // Dark gray
-          onPrimary: Color(0xFFFFFFFF), // White on blue
-          onSecondary: Color(0xFFFFFFFF), // White on red
-          onTertiary: Color(0xFF000000), // Black on gold
-          onSurface: Color(0xFFFFFFFF), // White on dark
-          error: Color(0xFFE57373), // Error red
-        ),
-        textTheme: GoogleFonts.robotoTextTheme()
-            .apply(
-              bodyColor: const Color(0xFFFFFFFF),
-              displayColor: const Color(0xFFFFFFFF),
-            )
-            .copyWith(
-              titleLarge: GoogleFonts.lora(
-                fontSize: 22,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFFFFFFFF),
-              ),
-              bodyLarge: GoogleFonts.roboto(
-                fontSize: 16,
+              bodyMedium: GoogleFonts.roboto(
+                fontSize: 14,
                 fontWeight: FontWeight.w400,
-                color: const Color(0xFFFFFFFF),
+                color: Colors.white,
+              ),
+              bodySmall: GoogleFonts.roboto(
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
+                color: const Color.fromARGB(255, 0, 0, 0),
               ),
             ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFB22234), // Red
-            foregroundColor: const Color(0xFFFFFFFF), // White
+            backgroundColor: const Color(0xFF10212B), // Dark teal
+            foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
             padding: const EdgeInsets.symmetric(
               vertical: 16,
               horizontal: 24,
-            ), // Increased padding
-            elevation: 8, // Higher elevation
-            shadowColor:
-                const Color(0xFF000000).withOpacity(0.4), // Pronounced shadow
+            ),
+            elevation: 4,
+            shadowColor: const Color(0xFF10212B).withOpacity(0.3),
             textStyle: GoogleFonts.roboto(
               fontSize: 16,
               fontWeight: FontWeight.w500,
@@ -293,7 +166,7 @@ class MyApp extends StatelessWidget {
         ),
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(
-            foregroundColor: const Color(0xFFFFD700), // Gold
+            foregroundColor: const Color(0xFF10212B), // Dark teal
             textStyle: GoogleFonts.roboto(
               fontSize: 16,
               fontWeight: FontWeight.w500,
@@ -301,22 +174,22 @@ class MyApp extends StatelessWidget {
             padding: const EdgeInsets.symmetric(
               vertical: 12,
               horizontal: 16,
-            ), // Increased padding
+            ),
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFF757575)),
+            borderSide: const BorderSide(color: Color.fromARGB(255, 178, 180, 174)), // Olive
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFF757575)),
+            borderSide: const BorderSide(color: modernAccent), // Olive
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide:
-                const BorderSide(color: Color(0xFF3C3B6E), width: 2), // Blue
+            borderSide: const BorderSide(
+                color: Color(0xFF10212B), width: 2), // Dark teal
           ),
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
@@ -327,58 +200,205 @@ class MyApp extends StatelessWidget {
             borderSide: const BorderSide(color: Color(0xFFE57373), width: 2),
           ),
           labelStyle: GoogleFonts.roboto(
-            color: const Color(0xFF757575),
+            color: oliveGreen, // Olive
             fontSize: 16,
           ),
           hintStyle: GoogleFonts.roboto(
-            color: const Color(0xFF757575),
+            color: const Color.fromARGB(255, 78, 79, 78).withOpacity(0.7), // Olive
             fontSize: 16,
           ),
           contentPadding: const EdgeInsets.symmetric(
             vertical: 20,
             horizontal: 16,
-          ), // Increased padding
+          ),
         ),
         appBarTheme: AppBarTheme(
-          backgroundColor: const Color(0xFF2A2A2A), // Dark gray
-          foregroundColor: const Color(0xFFFFFFFF), // White
-          elevation: 4, // Increased elevation
-          shadowColor:
-              const Color(0xFF000000).withOpacity(0.3), // Pronounced shadow
+          backgroundColor: const Color(0xFF10212B), // Dark teal
+          foregroundColor: Colors.white,
+          elevation: 4,
+          shadowColor: const Color(0xFF000000).withOpacity(0.2),
           titleTextStyle: GoogleFonts.lora(
-            color: const Color(0xFFFFFFFF),
+            color: Colors.white,
             fontSize: 22,
             fontWeight: FontWeight.w600,
           ),
-          centerTitle: true, // iOS-style centered title
+          centerTitle: true,
         ),
         dividerTheme: const DividerThemeData(
-          color: Color(0xFF757575),
+          color: Color.fromARGB(255, 119, 145, 68), // Olive
           thickness: 1,
         ),
-        iconTheme: const IconThemeData(color: Color(0xFFFFFFFF)),
+        iconTheme: const IconThemeData(color: lightCream), // Dark teal
         floatingActionButtonTheme: FloatingActionButtonThemeData(
-          backgroundColor: const Color(0xFFFFD700), // Gold
-          foregroundColor: const Color(0xFF000000), // Black
+          backgroundColor: modernAccent, // Electric cyan
+          foregroundColor: Colors.black,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          elevation: 10, // Higher elevation
+          elevation: 10,
           highlightElevation: 12,
           extendedPadding: const EdgeInsets.symmetric(
             horizontal: 20,
             vertical: 20,
-          ), // Increased padding
+          ),
         ),
-        cardTheme: CardThemeData(
-          color: const Color(0xFF2A2A2A), // Dark gray
-          elevation: 6, // Increased elevation
-          shadowColor:
-              const Color(0xFF000000).withOpacity(0.35), // Pronounced shadow
+        cardTheme: CardTheme(
+          color: secondaryOlive, // Olive green for containers/cards
+          elevation: 6,
+          shadowColor: Colors.black,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          margin: const EdgeInsets.all(12), // Increased spacing
+          margin: const EdgeInsets.all(12),
+        ),
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+      ),
+      darkTheme: ThemeData(
+        primaryColor: const Color.fromARGB(255, 2, 30, 46), // Dark teal
+        scaffoldBackgroundColor: Colors.black, // White background
+        colorScheme: ColorScheme.dark(
+          primary: const Color.fromARGB(255, 6, 109, 169), // Olive green
+          secondary: Colors.blue, // Electric cyan
+          tertiary: const Color.fromARGB(255, 9, 9, 9), // Light cream
+          surface: const Color.fromARGB(255, 31, 31, 31), // White surface
+          onPrimary: const Color.fromARGB(255, 33, 32, 32), // White on olive
+          onSecondary: Colors.black, // Black on cyan
+          onTertiary: const Color(0xFF10212B), // Dark teal on cream
+          onSurface: const Color.fromARGB(255, 74, 108, 2), // Dark teal on white
+          error: const Color(0xFFE57373), // Error red
+        ),
+        textTheme: GoogleFonts.robotoTextTheme()
+            .apply(
+              bodyColor: const Color.fromARGB(255, 5, 149, 233),
+              displayColor: const Color.fromARGB(255, 9, 150, 231),
+            )
+            .copyWith(
+              titleLarge: GoogleFonts.lora(
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
+                color: const Color.fromARGB(255, 117, 158, 93),
+              ),
+              bodyLarge: GoogleFonts.roboto(
+                fontSize: 16,
+                fontWeight: FontWeight.w400,
+                color: const Color.fromARGB(255, 94, 134, 70),
+              ),
+              bodyMedium: GoogleFonts.roboto(
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
+                color: Colors.white,
+              ),
+              bodySmall: GoogleFonts.roboto(
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
+                color: const Color.fromARGB(255, 0, 0, 0),
+              ),
+
+            ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: oliveGreen, // Olive
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.symmetric(
+              vertical: 16,
+              horizontal: 24,
+            ),
+            elevation: 8,
+            shadowColor: const Color(0xFF000000).withOpacity(0.4),
+            textStyle: GoogleFonts.roboto(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            foregroundColor: modernAccent, // Electric cyan
+            textStyle: GoogleFonts.roboto(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+            padding: const EdgeInsets.symmetric(
+              vertical: 12,
+              horizontal: 16,
+            ),
+          ),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color.fromARGB(255, 31, 132, 226)), // Olive
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color.fromARGB(255, 5, 56, 198)), // Olive
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: modernAccent, width: 2), // Cyan
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFFE57373)),
+          ),
+          focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFFE57373), width: 2),
+          ),
+          labelStyle: GoogleFonts.roboto(
+            color: const Color.fromARGB(255, 20, 148, 246), // Olive
+            fontSize: 16,
+          ),
+          hintStyle: GoogleFonts.roboto(
+            color: const Color.fromARGB(255, 208, 224, 229).withOpacity(0.7), // Olive
+            fontSize: 16,
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            vertical: 20,
+            horizontal: 16,
+          ),
+        ),
+        appBarTheme: AppBarTheme(
+          backgroundColor: const Color(0xFF10212B), // Dark teal
+          foregroundColor: Colors.white,
+          elevation: 4,
+          shadowColor: const Color(0xFF000000).withOpacity(0.3),
+          titleTextStyle: GoogleFonts.lora(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.w600,
+          ),
+          centerTitle: true,
+        ),
+        dividerTheme: const DividerThemeData(
+          color: oliveGreen, // Olive
+          thickness: 1,
+        ),
+        iconTheme: const IconThemeData(color: Color(0xFF10212B)), // Dark teal
+        floatingActionButtonTheme: FloatingActionButtonThemeData(
+          backgroundColor: modernAccent, // Electric cyan
+          foregroundColor: Colors.black,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 10,
+          highlightElevation: 12,
+          extendedPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 20,
+          ),
+        ),
+        cardTheme: CardTheme(
+          color: const Color.fromARGB(255, 13, 13, 23), // Olive green for containers/cards
+          elevation: 6,
+          shadowColor: const Color(0xFF000000).withOpacity(0.35),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(12),
         ),
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),

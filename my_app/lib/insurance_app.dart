@@ -2295,15 +2295,15 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
 Widget? getCustomEmojiWidget(String? iconName) {
   if (iconName == null) return const Text('🔧', style: TextStyle(fontSize: 24));
   switch (iconName.toLowerCase()) {
-    case 'car':
-      return const Text('🚗', style: TextStyle(fontSize: 24));
-    case 'health':
+    case 'MOTOR':
+      return const Text('🚘', style: TextStyle(fontSize: 24));
+    case 'MEDICAL':
       return const Text('🏥', style: TextStyle(fontSize: 24));
-    case 'travel':
+    case 'TRAVEL':
       return const Text('✈️', style: TextStyle(fontSize: 24));
-    case 'property':
+    case 'PROPERTY':
       return const Text('🏠', style: TextStyle(fontSize: 24));
-    case 'wiba':
+    case 'WIBA':
       return const Text('💼', style: TextStyle(fontSize: 24));
     default:
       return const Text('🔧', style: TextStyle(fontSize: 24));
@@ -2313,15 +2313,15 @@ Widget? getCustomEmojiWidget(String? iconName) {
 // Fallback version also returns emoji as Text widget
 Widget fallbackEmojiWidget(String type) {
   switch (type.toLowerCase()) {
-    case 'motor':
-      return const Text('🚗', style: TextStyle(fontSize: 24));
-    case 'medical':
+    case 'MOTOR':
+      return const Text('🚘', style: TextStyle(fontSize: 24));
+    case 'MEDICAL':
       return const Text('🏥', style: TextStyle(fontSize: 24));
-    case 'travel':
+    case 'TRAVEL':
       return const Text('✈️', style: TextStyle(fontSize: 24));
-    case 'property':
+    case 'PROPERTY':
       return const Text('🏠', style: TextStyle(fontSize: 24));
-    case 'wiba':
+    case 'WIBA':
       return const Text('💼', style: TextStyle(fontSize: 24));
     default:
       return const Text('🔧', style: TextStyle(fontSize: 24));
@@ -2341,7 +2341,6 @@ Widget fallbackEmojiWidget(String type) {
         elevation: 4,
         shadowColor: Colors.grey.withOpacity(0.5),
       ),
-      backgroundColor: Colors.grey[100],
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -2535,7 +2534,6 @@ Widget fallbackEmojiWidget(String type) {
         elevation: 4,
         shadowColor: Colors.grey.withOpacity(0.5),
       ),
-      backgroundColor: Colors.grey[100],
       body: ListView.builder(
         padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
         itemCount: quotes.length,
@@ -2626,9 +2624,8 @@ Widget fallbackEmojiWidget(String type) {
       appBar: AppBar(
         title: const Text('Upcoming Expirations'),
         elevation: 4,
-        shadowColor: Colors.grey.withOpacity(0.5),
+        shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
       ),
-      backgroundColor: Colors.grey[100],
       body: ListView.builder(
         padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
         itemCount: upcomingPolicies.length,
@@ -2747,7 +2744,7 @@ Widget fallbackEmojiWidget(String type) {
     return IconButton(
       icon: Stack(
         children: [
-          Icon(Icons.notifications, size: 30, color: Colors.black87),
+          Icon(Icons.notifications, size: 30, color: const Color.fromARGB(221, 148, 183, 82)),
           if (notifications.isNotEmpty)
             Positioned(
               right: 0,
@@ -2798,9 +2795,12 @@ Widget fallbackEmojiWidget(String type) {
                 backgroundColor: Colors.white,
                 appBar: AppBar(
                   title: const Text('BIMA GUARDIAN'),
-                  backgroundColor: Colors.white,
+                  backgroundColor: Theme.of(context).primaryColor,
                   elevation: 4,
-                  shadowColor: Colors.black.withOpacity(0.2),
+                  shadowColor: ThemeData()
+                      .colorScheme
+                      .shadow
+                      .withOpacity(0.5),
                   shape: const RoundedRectangleBorder(
                     borderRadius:
                         BorderRadius.vertical(bottom: Radius.circular(12)),
@@ -2841,10 +2841,10 @@ Widget fallbackEmojiWidget(String type) {
                                     top: Radius.circular(16),
                                   ),
                                 ),
-                                child: const Text(
+                                child: Text(
                                   'BIMA GUARDIAN',
                                   style: TextStyle(
-                                    color: Colors.white,
+                                    color: Theme.of(context).secondaryHeaderColor,
                                     fontSize: 20,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -2928,13 +2928,13 @@ Widget fallbackEmojiWidget(String type) {
                     if (isDesktop)
                       Container(
                         width: 280,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.only(
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surface,
+                          borderRadius: const BorderRadius.only(
                             topRight: Radius.circular(16),
                             bottomRight: Radius.circular(28),
                           ),
-                          boxShadow: [
+                          boxShadow: const [
                             BoxShadow(
                               color: Colors.black,
                               blurRadius: 12,
@@ -2985,8 +2985,8 @@ Widget fallbackEmojiWidget(String type) {
                       Container(
                         width: 280,
                         padding: const EdgeInsets.all(24),
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surface,
                           borderRadius: BorderRadius.only(
                             topLeft: Radius.circular(16),
                             bottomLeft: Radius.circular(16),
