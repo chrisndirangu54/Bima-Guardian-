@@ -3,6 +3,7 @@
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Default [FirebaseOptions] for use with your Firebase apps.
 ///
@@ -84,4 +85,10 @@ class DefaultFirebaseOptions {
     storageBucket: 'bimaapp2025may.firebasestorage.app',
   );
 
+static Future<void> enableFirestorePersistence() async {
+  FirebaseFirestore.instance.settings = const Settings(
+    persistenceEnabled: true,
+    cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+  );
+}
 }

@@ -57,7 +57,7 @@ class _AdminPanelState extends State<AdminPanel> {
             endDate: data['expirationDate'] != null
                 ? (data['expirationDate'] as Timestamp).toDate()
                 : null,
-            pdfTemplateKey: data['pdfTemplateKey'] as String?, name: '',
+            name: '',
           );
         }).toList();
       });
@@ -89,7 +89,6 @@ class _AdminPanelState extends State<AdminPanel> {
           'status': policy.status.toString(),
           'insuredItemId': policy.insuredItemId,
           'coverageType': policy.coverageType,
-          'pdfTemplateKey': policy.pdfTemplateKey,
           'endDate': policy.endDate != null
               ? Timestamp.fromDate(policy.endDate!)
               : null,
@@ -284,7 +283,7 @@ class _AdminPanelState extends State<AdminPanel> {
             : policy.endDate,
         companyId: policy.companyId,
         coverageType: policy.coverageType,
-        pdfTemplateKey: policy.pdfTemplateKey, name: '',
+        name: '',
       );
 
       // Update Firestore
@@ -299,7 +298,6 @@ class _AdminPanelState extends State<AdminPanel> {
         'status': updatedPolicy.status.toString(),
         'insuredItemId': updatedPolicy.insuredItemId,
         'coverageType': updatedPolicy.coverageType,
-        'pdfTemplateKey': updatedPolicy.pdfTemplateKey,
         'endDate': updatedPolicy.endDate != null
             ? Timestamp.fromDate(updatedPolicy.endDate!)
             : null,

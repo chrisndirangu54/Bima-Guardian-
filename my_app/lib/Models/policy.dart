@@ -127,7 +127,6 @@ class Policy {
   final CoverageType coverageType;
   final CoverStatus status;
   final DateTime? endDate;
-  final String? pdfTemplateKey; // Kept as nullable as per original
 
   Policy({
     required this.id,
@@ -139,7 +138,6 @@ class Policy {
     required this.coverageType,
     required this.status,
     required this.endDate,
-    this.pdfTemplateKey, // Kept optional
   });
 
   Map<String, dynamic> toJson() => {
@@ -152,7 +150,6 @@ class Policy {
         'coverageType': coverageType.toJson(),
         'status': status.name,
         'expirationDate': endDate?.toIso8601String(),
-        'pdfTemplateKey': pdfTemplateKey,
       };
 
   factory Policy.fromJson(Map<String, dynamic> json) => Policy(
@@ -170,7 +167,6 @@ class Policy {
         endDate: json['expirationDate'] != null
             ? DateTime.parse(json['expirationDate'])
             : null,
-        pdfTemplateKey: json['pdfTemplateKey'],
       );
 
   // Added fromFirestore factory method
@@ -189,12 +185,11 @@ class Policy {
         endDate: data['expirationDate'] != null
             ? DateTime.parse(data['expirationDate'])
             : null,
-        pdfTemplateKey: data['pdfTemplateKey'],
       );
 
   @override
   String toString() {
-    return 'Policy(id: $id, name: $name, insuredItemId: $insuredItemId, companyId: $companyId, type: ${type.name}, subtype: ${subtype.name}, coverageType: ${coverageType.name}, status: ${status.name}, endDate: $endDate, pdfTemplateKey: $pdfTemplateKey)';
+    return 'Policy(id: $id, name: $name, insuredItemId: $insuredItemId, companyId: $companyId, type: ${type.name}, subtype: ${subtype.name}, coverageType: ${coverageType.name}, status: ${status.name}, endDate: $endDate, )';
   }
 
   static Future<Policy> fromCover(Cover updatedCover) async {
@@ -244,7 +239,6 @@ class Policy {
         coverageType: coverageType,
         status: updatedCover.status,
         endDate: updatedCover.expirationDate,
-        pdfTemplateKey: updatedCover.pdfTemplateKey,
       );
     } catch (e) {
       if (kDebugMode) {
