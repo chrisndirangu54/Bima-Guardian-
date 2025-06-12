@@ -79,6 +79,9 @@ class PolicySubtype {
         description: data['description'] ?? '',
         pdfTemplateKey: data['pdfTemplateKey'],
       );
+
+  @override
+  String toString() => name;
 }
 
 class CoverageType {
@@ -115,6 +118,13 @@ class CoverageType {
         description: data['description'] ?? '',
         pdfTemplateKey: data['pdfTemplateKey'],
       );
+
+
+
+
+ @override
+  String toString() => name;
+
 }
 
 class Policy {

@@ -11,7 +11,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:my_app/Models/Insured_item.dart';
-import 'package:my_app/Models/company.dart';
+import 'package:my_app/Models/company.dart' as company_models;
 import 'package:my_app/Models/cover.dart';
 import 'package:my_app/Models/field_definition.dart';
 import 'package:my_app/Models/pdf_template.dart';
@@ -93,7 +93,7 @@ class Quote {
 class InsuranceHomeScreen extends StatefulWidget {
   const InsuranceHomeScreen({super.key});
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  static List<Company> _cachedCompanies = [];
+  static List<company_models.Company> _cachedCompanies = [];
 
   // Add this static method to access cachedPdfTemplates from the state
   static Map<String, PDFTemplate> _cachedPdfTemplates = {};
@@ -125,7 +125,7 @@ class InsuranceHomeScreen extends StatefulWidget {
     return _cachedPdfTemplates;
   }
 
-  static Future<List<Company>> getCompanies() async {
+  static Future<List<company_models.Company>> getCompanies() async {
     try {
       // Check cache first
       if (_cachedCompanies.isNotEmpty) {
@@ -140,7 +140,7 @@ class InsuranceHomeScreen extends StatefulWidget {
           .timeout(const Duration(seconds: 5));
       
       final companies = snapshot.docs
-          .map((doc) => Company.fromFirestore(doc.data()))
+          .map((doc) => company_models.Company.fromFirestore(doc.data()))
           .toList();
 
       // Return Firestore data if not empty, otherwise return defaults
@@ -151,10 +151,10 @@ class InsuranceHomeScreen extends StatefulWidget {
       } else {
         await Future.delayed(const Duration(seconds: 1));
         final defaults = [
-          Company(
+          company_models.Company(
             id: 'default',
             name: 'Default Company',
-            pdfTemplateKey: ['default_template'],
+            pdfTemplateKey: ['default_template'], 
           ),
         ];
         _cachedCompanies = defaults; // Cache defaults
@@ -165,10 +165,11 @@ class InsuranceHomeScreen extends StatefulWidget {
       // Fallback to defaults on error
       await Future.delayed(const Duration(seconds: 1));
       final defaults = [
-        Company(
+        company_models.Company(
           id: 'default',
           name: 'Default Company',
           pdfTemplateKey: ['default_template'],
+  
         ),
       ];
       _cachedCompanies = defaults; // Cache defaults
@@ -326,19 +327,23 @@ class InsuranceHomeScreen extends StatefulWidget {
   @override
   State<InsuranceHomeScreen> createState() => _InsuranceHomeScreenState();
 
-  static Future<List<Company>> loadCompanies() async {
+  static Future<List<company_models.Company>> loadCompanies() async {
     try {
       await Future.delayed(const Duration(seconds: 1));
       return [
-        Company(id: '1', name: 'AIG', pdfTemplateKey: const []),
-        Company(id: '2', name: 'Cigna', pdfTemplateKey: const []),
-        Company(id: '3', name: 'UnitedHealth', pdfTemplateKey: const []),
+        company_models.Company(id: '1', name: 'AIG', pdfTemplateKey: const [], ),
+        company_models.Company(
+          id: '2',
+          name: 'Cigna',
+          pdfTemplateKey: const [],
+        ),
+        company_models.Company(id: '3', name: 'UnitedHealth', pdfTemplateKey: const [], )
       ];
     } catch (e) {
       if (kDebugMode) {
         print('Error in loadCompanies: $e');
       }
-      return [Company(id: '1', name: 'AIG', pdfTemplateKey: const [])];
+      return [company_models.Company(id: '1', name: 'AIG', pdfTemplateKey: const [], )];
     }
   }
 }
@@ -347,7 +352,7 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
   List<InsuredItem> insuredItems = [];
   List<Cover> covers = [];
   List<Quote> quotes = [];
-  List<Company> companies = [];
+  List<company_models.Company> companies = [];
   List<Map<String, dynamic>> notifications = []; // Changed from List<dynamic>
   bool isLoading = false;
   bool _hasLoadedInsuredItems = false;
@@ -3915,6 +3920,7 @@ Future<void> _showInsuredItemDialog(
                         },
                         onAutofillPreviousPolicy: autofillFromPreviousPolicy,
                         onAutofillLogbook: autofillFromLogbook,
+                        showCompanyDialog: _showCompanyDialog, // <-- Added required argument
                       ),
                     ),
                   );
@@ -3946,29 +3952,40 @@ Future<void> _showCompanyDialog(
   String type,
   String subtype,
   String coverageType,
-  Map<String, String> details,
-) async {
+  Map<String, String> details, {
+  String? preSelectedCompany,
+  required String subtypeId,
+  required String coverageTypeId,
+}) async {
   try {
     final companies = await InsuranceHomeScreen.getCompanies();
     final cachedPdfTemplates = await InsuranceHomeScreen.getCachedPdfTemplates();
-    final eligibleCompanies = companies
-        .where((c) => c.pdfTemplateKey.any((key) => cachedPdfTemplates.containsKey(key)))
-        .toList();
+    final eligibleCompanies = companies.where((c) {
+      final matchesSubtype = c.policySubtype?.id == subtypeId;
+      final matchesCoverage = c.coverageType?.id == coverageTypeId;
+      return matchesSubtype || matchesCoverage;
+    }).toList();
 
     if (eligibleCompanies.isEmpty) {
-      if (kDebugMode) print('No eligible companies with compatible PDF templates');
+      if (kDebugMode) print('No eligible companies for subtypeId: $subtypeId, coverageTypeId: $coverageTypeId');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('No companies with compatible PDF templates available'),
+          content: Text('No companies available for this policy'),
           backgroundColor: Color(0xFF8B0000),
         ),
       );
       return;
     }
 
-    String companyId = eligibleCompanies.first.id;
-    String pdfTemplateKey = eligibleCompanies.first.pdfTemplateKey
-        .firstWhere((key) => cachedPdfTemplates.containsKey(key), orElse: () => 'default_template');
+    // Pre-select company if provided and valid
+    String companyId = preSelectedCompany != null &&
+            eligibleCompanies.any((c) => c.name == preSelectedCompany)
+        ? eligibleCompanies.firstWhere((c) => c.name == preSelectedCompany).id
+        : eligibleCompanies.first.id;
+    String pdfTemplateKey = eligibleCompanies
+        .firstWhere((c) => c.id == companyId)
+        .pdfTemplateKey
+        .firstWhere((key) => cachedPdfTemplates.containsKey(key), orElse: () => 'default');
 
     showDialog(
       context: context,
@@ -4021,7 +4038,7 @@ Future<void> _showCompanyDialog(
                       final company = eligibleCompanies.firstWhere((c) => c.id == companyId);
                       pdfTemplateKey = company.pdfTemplateKey.firstWhere(
                         (key) => cachedPdfTemplates.containsKey(key),
-                        orElse: () => 'default_template',
+                        orElse: () => 'default',
                       );
                     }),
                   ),
@@ -4071,8 +4088,18 @@ Future<void> _showCompanyDialog(
                   ),
                 ),
                 ElevatedButton(
-                  onPressed: () {
+                  onPressed: () async {
                     Navigator.pop(dialogContext);
+                    await FirebaseFirestore.instance.collection('form_submissions').add({
+                      'user_id': details['insured_item_id'] ?? 'unknown',
+                      'type': type,
+                      'subtype': subtype,
+                      'coverage_type': coverageType,
+                      'company_id': companyId,
+                      'pdf_template_key': pdfTemplateKey,
+                      'details': details,
+                      'timestamp': FieldValue.serverTimestamp(),
+                    });
                     handleCoverSubmission(
                       context,
                       type,
@@ -5051,7 +5078,10 @@ class DialogStepConfig {
   }
 }
 
-// Generic dialog widget with progress indicator
+// Generic dialog widget with progress indicatorimport 'package:flutter/material.dart';
+
+
+
 class GenericInsuranceDialog extends StatefulWidget {
   final String insuranceType;
   final int step;
@@ -5061,6 +5091,12 @@ class GenericInsuranceDialog extends StatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback onSubmit;
   final void Function(BuildContext, String, String, String)? onFinalSubmit;
+  final Future<void> Function(
+    BuildContext context,
+    PolicyType policyType,
+    PolicySubtype subtype,
+    CoverageType coverageType,
+  ) showInsuredItemDialog;
 
   const GenericInsuranceDialog({
     super.key,
@@ -5072,6 +5108,7 @@ class GenericInsuranceDialog extends StatefulWidget {
     this.onBack,
     required this.onSubmit,
     this.onFinalSubmit,
+    required this.showInsuredItemDialog,
   });
 
   @override
@@ -5095,7 +5132,7 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
   }
 
   Future<List<FieldConfig>> _getFields() async {
-    if (kDebugMode) print('Using default fields for ${widget.config.title}');
+    if (kDebugMode) print('Fetching fields for ${widget.config.title}');
     return widget.config.fields;
   }
 
@@ -5209,11 +5246,22 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
                     (widget.config.customValidator == null ||
                         widget.config.customValidator!(widget.dialogState.responses))) {
                   widget.dialogState.saveProgress(widget.insuranceType, widget.step);
-                  if (widget.config.nextStep == 'summary' && widget.onFinalSubmit != null) {
+                  if (kDebugMode) print('Form validated, nextStep: ${widget.config.nextStep}');
+                  if (widget.config.nextStep == 'summary') {
                     final typeName = widget.insuranceType;
                     final subtypeName = widget.dialogState.responses['subtype'] ?? '';
                     final coverageName = widget.dialogState.responses['coverage_type'] ?? '';
+                    if (subtypeName.isEmpty || coverageName.isEmpty) {
+                      if (kDebugMode) print('Missing subtype or coverage: $subtypeName, $coverageName');
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please select a subtype and coverage type')),
+                        );
+                      }
+                      return;
+                    }
                     try {
+                      if (kDebugMode) print('Processing summary for $typeName, $subtypeName, $coverageName');
                       final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
                       final policyType = policyTypes.firstWhere(
                         (t) => t.name.toLowerCase() == typeName.toLowerCase(),
@@ -5235,33 +5283,40 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
                         orElse: () => CoverageType(id: '1', name: coverageName, description: ''),
                       );
 
-                      final state = context.findAncestorStateOfType<_InsuranceHomeScreenState>();
-                      await state?._showInsuredItemDialog(
-                        context,
-                        policyType,
-                        subtype,
-                        coverageType,
-                      );
-                      widget.dialogState.resetForNewCycle();
+                      if (mounted) {
+                        if (kDebugMode) print('Calling showInsuredItemDialog');
+                        await widget.showInsuredItemDialog(
+                          context,
+                          policyType,
+                          subtype,
+                          coverageType,
+                        );
+                        widget.dialogState.resetForNewCycle();
+                      }
                     } catch (e, stackTrace) {
                       if (kDebugMode) print('Error triggering insured item dialog: $e\n$stackTrace');
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Failed to proceed. Please try again.')),
-                      );
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Failed to proceed. Please try again.')),
+                        );
+                      }
                     }
                   } else {
                     widget.onSubmit();
                   }
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Please correct the errors in the form',
-                        style: GoogleFonts.roboto(color: Colors.white),
+                  if (kDebugMode) print('Form validation failed');
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Please correct the errors in the form',
+                          style: GoogleFonts.roboto(color: Colors.white),
+                        ),
+                        backgroundColor: colorProvider.color,
                       ),
-                      backgroundColor: colorProvider.color,
-                    ),
-                  );
+                    );
+                  }
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -5517,6 +5572,12 @@ Future<void> showInsuranceDialog(
             }
           },
           onFinalSubmit: onFinalSubmit,
+          showInsuredItemDialog: (BuildContext context, PolicyType policyType, PolicySubtype subtype, CoverageType coverageType) async {
+            final state = context.findAncestorStateOfType<_InsuranceHomeScreenState>();
+            if (state != null) {
+              await state._showInsuredItemDialog(context, policyType, subtype, coverageType);
+            }
+          },
         ),
       ),
     );

@@ -1,11 +1,16 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:my_app/Models/Insured_item.dart';
+import 'package:my_app/Models/company.dart';
 import 'package:my_app/Models/field_definition.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:my_app/insurance_app.dart';
+
 
 class GenericDialog extends StatelessWidget {
   final String title;
@@ -50,69 +55,135 @@ class GenericDialog extends StatelessWidget {
   }
 }
 
-// Dialog for selecting insurance company
+
 class CompanySelectionDialog extends StatelessWidget {
   final String? previousCompany;
-  final List<String> availableCompanies;
+  final String subtypeId;
+  final String coverageTypeId;
   final Function(String?) onConfirm;
 
   const CompanySelectionDialog({
     super.key,
     this.previousCompany,
-    required this.availableCompanies,
+    required this.subtypeId,
+    required this.coverageTypeId,
     required this.onConfirm,
   });
 
   @override
   Widget build(BuildContext context) {
-    String? selectedCompany = previousCompany;
     return AlertDialog(
-      title: Text(previousCompany != null
-          ? 'Previous Insurer Detected: $previousCompany'
-          : 'Select Insurance Company'),
-      content: StatefulBuilder(
-        builder: (context, setState) {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (previousCompany != null)
-                Text(
-                    'Do you want to proceed with $previousCompany or choose another?'),
-              DropdownButton<String>(
-                value: selectedCompany,
-                hint: const Text('Select Company'),
-                items: [
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      title: Text(
+        previousCompany != null
+            ? 'Previous Insurer Detected: $previousCompany'
+            : 'Select Insurance Company',
+        style: GoogleFonts.lora(
+          color: const Color(0xFF1B263B),
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      content: FutureBuilder<List<Company>>(
+        future: InsuranceHomeScreen.getCompanies(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(semanticsLabel: 'Loading companies'));
+          }
+          if (snapshot.hasError) {
+            if (kDebugMode) print('Error loading companies: ${snapshot.error}');
+            return const Text('Failed to load companies');
+          }
+
+          final companies = snapshot.data ?? [];
+          final eligibleCompanies = companies.where((c) {
+            final matchesSubtype = c.policySubtype?.id == subtypeId;
+            final matchesCoverage = c.coverageType?.id == coverageTypeId;
+            return matchesSubtype || matchesCoverage;
+          }).toList();
+
+          if (eligibleCompanies.isEmpty) {
+            return const Text('No eligible companies available for this policy');
+          }
+
+          final companyNames = eligibleCompanies.map((c) => c.name).toList();
+          String? selectedCompany = previousCompany != null && companyNames.contains(previousCompany)
+              ? previousCompany
+              : null;
+
+          return StatefulBuilder(
+            builder: (context, setState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                   if (previousCompany != null)
-                    DropdownMenuItem(
-                      value: previousCompany,
-                      child: Text(previousCompany!),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: Text(
+                        'Proceed with $previousCompany or choose another?',
+                        style: GoogleFonts.roboto(color: const Color(0xFF1B263B)),
+                      ),
                     ),
-                  ...availableCompanies
-                      .where((company) => company != previousCompany)
-                      .map((company) => DropdownMenuItem(
-                            value: company,
-                            child: Text(company),
-                          )),
+                  DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      labelText: 'Company',
+                      labelStyle: GoogleFonts.roboto(color: const Color(0xFFD3D3D3)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Color(0xFFD3D3D3)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Color(0xFFD3D3D3)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Color(0xFF8B0000)),
+                      ),
+                    ),
+                    value: selectedCompany,
+                    hint: Text('Select Company', style: GoogleFonts.roboto()),
+                    items: companyNames
+                        .map((company) => DropdownMenuItem(
+                              value: company,
+                              child: Text(
+                                company,
+                                style: GoogleFonts.roboto(color: const Color(0xFF1B263B)),
+                              ),
+                            ))
+                        .toList(),
+                    onChanged: (value) => setState(() => selectedCompany = value),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(
+                          'Cancel',
+                          style: GoogleFonts.roboto(color: const Color(0xFFD3D3D3)),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          onConfirm(selectedCompany);
+                          Navigator.pop(context);
+                        },
+                        child: Text(
+                          'Confirm',
+                          style: GoogleFonts.roboto(color: const Color(0xFF8B0000)),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
-                onChanged: (value) => setState(() => selectedCompany = value),
-              ),
-            ],
+              );
+            },
           );
         },
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: () {
-            onConfirm(selectedCompany);
-            Navigator.pop(context);
-          },
-          child: const Text('Confirm'),
-        ),
-      ],
     );
   }
 }
@@ -122,10 +193,20 @@ class CoverDetailScreen extends StatefulWidget {
   final String subtype;
   final String coverageType;
   final InsuredItem? insuredItem;
-  final Function(Map<String, String>) onSubmit;
+  final Function(Map<String, String>) onSubmit; // Not used directly
   final Function(File, Map<String, String>?, String?) onAutofillPreviousPolicy;
   final Function(File, Map<String, String>?) onAutofillLogbook;
   final Map<String, FieldDefinition> fields;
+  final Future<void> Function(
+    BuildContext context,
+    String type,
+    String subtype,
+    String coverageType,
+    Map<String, String> details, {
+    String? preSelectedCompany,
+    required String subtypeId,
+    required String coverageTypeId,
+  }) showCompanyDialog; // New callback
 
   const CoverDetailScreen({
     super.key,
@@ -137,6 +218,7 @@ class CoverDetailScreen extends StatefulWidget {
     required this.onAutofillPreviousPolicy,
     required this.onAutofillLogbook,
     required this.fields,
+    required this.showCompanyDialog, // Add to constructor
   });
 
   @override
@@ -160,13 +242,8 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
   File? _logbookFile;
   File? _previousPolicyFile;
   String? _selectedCompany;
-  final List<String> _availableCompanies = [
-    'Company A',
-    'Company B',
-    'Jubilee Insurance',
-    'CIC Insurance',
-    'APA Insurance',
-  ];
+  String? _subtypeId;
+  String? _coverageTypeId;
 
   @override
   void initState() {
@@ -181,12 +258,9 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
       _regnoController.text = widget.insuredItem!.regno ?? '';
       _propertyValueController.text = widget.insuredItem!.propertyValue ?? '';
       _chassisNumberController.text = widget.insuredItem!.chassisNumber ?? '';
-      _healthConditionController.text =
-          widget.insuredItem!.details['health_condition'] ?? '';
-      _travelDestinationController.text =
-          widget.insuredItem!.details['travel_destination'] ?? '';
-      _employeeCountController.text =
-          widget.insuredItem!.details['employee_count'] ?? '';
+      _healthConditionController.text = widget.insuredItem!.details['health_condition'] ?? '';
+      _travelDestinationController.text = widget.insuredItem!.details['travel_destination'] ?? '';
+      _employeeCountController.text = widget.insuredItem!.details['employee_count'] ?? '';
       _logbookFile = widget.insuredItem!.logbookPath != null
           ? File(widget.insuredItem!.logbookPath!)
           : null;
@@ -195,15 +269,36 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
           : null;
       _selectedCompany = widget.insuredItem!.details['insurer'];
     }
+
+    // Fetch subtypeId and coverageTypeId
+    _initializeIds();
+  }
+
+  Future<void> _initializeIds() async {
+    try {
+      final subtype = Company.allPolicySubtypes.firstWhere(
+        (s) => s.name.toLowerCase() == widget.subtype.toLowerCase(),
+        orElse: () => Company.allPolicySubtypes.first,
+      );
+      final coverageType = Company.allCoverageTypes.firstWhere(
+        (c) => c.name.toLowerCase() == widget.coverageType.toLowerCase(),
+        orElse: () => Company.allCoverageTypes.first,
+      );
+
+      setState(() {
+        _subtypeId = subtype.id;
+        _coverageTypeId = coverageType.id;
+      });
+    } catch (e, stackTrace) {
+      if (kDebugMode) print('Error initializing IDs: $e\n$stackTrace');
+    }
   }
 
   Future<Map<String, String>?> _performOCR(File file) async {
     try {
-      // Encode file to base64 for OpenAI API
       final bytes = await file.readAsBytes();
       final base64Image = base64Encode(bytes);
 
-      // Prepare OpenAI API request
       final requestBody = {
         'model': 'gpt-4o',
         'messages': [
@@ -213,7 +308,7 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
               {
                 'type': 'text',
                 'text':
-                    'Extract the following fields from the provided document (logbook or insurance policy): name, email, phone, id_number, kra_pin, vehicle_value, regno, chassis_number, health_condition, travel_destination, employee_count, insurer. Return as a JSON object.'
+                    'Extract the following fields from the provided document (logbook or insurance policy): name, email, phone, id_number, kra_pin, vehicle_value, regno, chassis_number, health_condition, travel_destination, employee_count, insurer. Return as a JSON object.',
               },
               {
                 'type': 'image_url',
@@ -225,7 +320,6 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
         'max_tokens': 300
       };
 
-      // Send to OpenAI API
       final response = await http.post(
         Uri.parse('https://api.openai.com/v1/chat/completions'),
         headers: {
@@ -237,13 +331,12 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final extracted = jsonDecode(data['choices'][0]['message']['content'])
-            as Map<String, dynamic>;
+        final extracted = jsonDecode(data['choices'][0]['message']['content']) as Map<String, dynamic>;
         return extracted.map((key, value) => MapEntry(key, value.toString()));
       }
       return null;
     } catch (e) {
-      print('OpenAI OCR Error: $e');
+      if (kDebugMode) print('OpenAI OCR Error: $e');
       return null;
     }
   }
@@ -346,26 +439,30 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
             extractedData: extractedData,
             onConfirm: (selectedData) {
               _autofillFields(selectedData);
-              showDialog(
-                context: context,
-                builder: (context) => CompanySelectionDialog(
-                  previousCompany: previousCompany,
-                  availableCompanies: _availableCompanies,
-                  onConfirm: (selectedCompany) {
-                    setState(() => _selectedCompany = selectedCompany);
-                    widget.onAutofillPreviousPolicy(
-                        _previousPolicyFile!, selectedData, selectedCompany);
-                    FirebaseFirestore.instance
-                        .collection('autofilled_forms')
-                        .add({
-                      'user_id': widget.insuredItem?.id ?? 'unknown',
-                      'fields': selectedData,
-                      'insurer': selectedCompany,
-                      'timestamp': FieldValue.serverTimestamp(),
-                    });
-                  },
-                ),
-              );
+              if (_subtypeId != null && _coverageTypeId != null) {
+                showDialog(
+                  context: context,
+                  builder: (context) => CompanySelectionDialog(
+                    previousCompany: previousCompany,
+                    subtypeId: _subtypeId!,
+                    coverageTypeId: _coverageTypeId!,
+                    onConfirm: (selectedCompany) {
+                      setState(() => _selectedCompany = selectedCompany);
+                      widget.onAutofillPreviousPolicy(_previousPolicyFile!, selectedData, selectedCompany);
+                      FirebaseFirestore.instance.collection('autofilled_forms').add({
+                        'user_id': widget.insuredItem?.id ?? 'unknown',
+                        'fields': selectedData,
+                        'insurer': selectedCompany ?? 'none',
+                        'timestamp': FieldValue.serverTimestamp(),
+                      });
+                    },
+                  ),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Policy details not loaded yet')),
+                );
+              }
             },
           ),
         );
@@ -394,99 +491,62 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
               children: [
                 const Text(
                   'Personal Details',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 TextFormField(
                   controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Name',
-                  ),
+                  decoration: const InputDecoration(labelText: 'Name'),
                   validator: widget.fields['name']?.validator != null
-                      ? (String? value) => value != null
-                          ? widget.fields['name']!.validator!(value)
-                          : 'Required'
-                      : (String? value) =>
-                          value == null || value.isEmpty ? 'Required' : null,
+                      ? (String? value) =>
+                          value != null ? widget.fields['name']!.validator!(value) : 'Required'
+                      : (String? value) => value == null || value.isEmpty ? 'Required' : null,
                 ),
                 TextFormField(
                   controller: _emailController,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                  ),
+                  decoration: const InputDecoration(labelText: 'Email'),
                   validator: widget.fields['email']?.validator != null
-                      ? (String? value) => value != null
-                          ? widget.fields['email']!.validator!(value)
-                          : 'Required'
+                      ? (String? value) =>
+                          value != null ? widget.fields['email']!.validator!(value) : 'Required'
                       : (String? value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Required';
-                          }
-                          if (!RegExp(
-                                  r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
-                              .hasMatch(value)) {
-                            return 'Invalid email';
-                          }
+                          if (value == null || value.isEmpty) return 'Required';
+                          if (!RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
+                              .hasMatch(value)) return 'Invalid email';
                           return null;
                         },
                 ),
                 TextFormField(
                   controller: _phoneController,
-                  decoration: const InputDecoration(
-                    labelText: 'Phone',
-                  ),
+                  decoration: const InputDecoration(labelText: 'Phone'),
                   validator: widget.fields['phone']?.validator != null
-                      ? (String? value) => value != null
-                          ? widget.fields['phone']!.validator!(value)
-                          : 'Required'
+                      ? (String? value) =>
+                          value != null ? widget.fields['phone']!.validator!(value) : 'Required'
                       : (String? value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Required';
-                          }
-                          if (!RegExp(r'^[+\d\s\-\(\)]{8,15}$')
-                              .hasMatch(value)) {
-                            return 'Invalid phone number';
-                          }
+                          if (value == null || value.isEmpty) return 'Required';
+                          if (!RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)) return 'Invalid phone number';
                           return null;
                         },
                 ),
                 TextFormField(
                   controller: _idNumberController,
-                  decoration: const InputDecoration(
-                    labelText: 'ID Number',
-                  ),
+                  decoration: const InputDecoration(labelText: 'ID Number'),
                   validator: widget.fields['id_number']?.validator != null
-                      ? (String? value) => value != null
-                          ? widget.fields['id_number']!.validator!(value)
-                          : 'Required'
+                      ? (String? value) =>
+                          value != null ? widget.fields['id_number']!.validator!(value) : 'Required'
                       : (String? value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Required';
-                          }
-                          if (!RegExp(r'^\d{8,}$').hasMatch(value)) {
-                            return 'Invalid ID number';
-                          }
+                          if (value == null || value.isEmpty) return 'Required';
+                          if (!RegExp(r'^\d{8,}$').hasMatch(value)) return 'Invalid ID number';
                           return null;
                         },
                 ),
                 TextFormField(
                   controller: _kraPinController,
-                  decoration: const InputDecoration(
-                    labelText: 'KRA PIN',
-                  ),
+                  decoration: const InputDecoration(labelText: 'KRA PIN'),
                   validator: widget.fields['kra_pin']?.validator != null
-                      ? (String? value) => value != null
-                          ? widget.fields['kra_pin']!.validator!(value)
-                          : 'Required'
+                      ? (String? value) =>
+                          value != null ? widget.fields['kra_pin']!.validator!(value) : 'Required'
                       : (String? value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Required';
-                          }
-                          if (!RegExp(r'^[A-Z]\d{9}[A-Z]$').hasMatch(value)) {
-                            return 'Invalid KRA PIN';
-                          }
+                          if (value == null || value.isEmpty) return 'Required';
+                          if (!RegExp(r'^[A-Z]\d{9}[A-Z]$').hasMatch(value)) return 'Invalid KRA PIN';
                           return null;
                         },
                 ),
@@ -494,76 +554,50 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                   const SizedBox(height: 16),
                   const Text(
                     'Vehicle Details',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   TextFormField(
                     controller: _vehicleValueController,
-                    decoration: const InputDecoration(
-                      labelText: 'Vehicle Value',
-                    ),
+                    decoration: const InputDecoration(labelText: 'Vehicle Value'),
                     validator: widget.fields['vehicle_value']?.validator != null
-                        ? (String? value) => value != null
-                            ? widget.fields['vehicle_value']!.validator!(value)
-                            : 'Required'
+                        ? (String? value) =>
+                            value != null ? widget.fields['vehicle_value']!.validator!(value) : 'Required'
                         : (String? value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Required';
-                            }
-                            if (double.tryParse(value) == null) {
-                              return 'Invalid value';
-                            }
+                            if (value == null || value.isEmpty) return 'Required';
+                            if (double.tryParse(value) == null) return 'Invalid value';
                             return null;
                           },
                   ),
                   TextFormField(
                     controller: _regnoController,
-                    decoration: const InputDecoration(
-                      labelText: 'Registration Number',
-                    ),
+                    decoration: const InputDecoration(labelText: 'Registration Number'),
                     validator: widget.fields['regno']?.validator != null
-                        ? (String? value) => value != null
-                            ? widget.fields['regno']!.validator!(value)
-                            : 'Required'
-                        : (String? value) =>
-                            value == null || value.isEmpty ? 'Required' : null,
+                        ? (String? value) =>
+                            value != null ? widget.fields['regno']!.validator!(value) : 'Required'
+                        : (String? value) => value == null || value.isEmpty ? 'Required' : null,
                   ),
                   TextFormField(
                     controller: _chassisNumberController,
-                    decoration: const InputDecoration(
-                      labelText: 'Chassis Number',
-                    ),
-                    validator: widget.fields['chassis_number']?.validator !=
-                            null
-                        ? (String? value) => value != null
-                            ? widget.fields['chassis_number']!.validator!(value)
-                            : 'Required'
-                        : (String? value) =>
-                            value == null || value.isEmpty ? 'Required' : null,
+                    decoration: const InputDecoration(labelText: 'Chassis Number'),
+                    validator: widget.fields['chassis_number']?.validator != null
+                        ? (String? value) =>
+                            value != null ? widget.fields['chassis_number']!.validator!(value) : 'Required'
+                        : (String? value) => value == null || value.isEmpty ? 'Required' : null,
                   ),
                   ElevatedButton(
                     onPressed: _uploadLogbook,
-                    child: Text(
-                      _logbookFile == null
-                          ? 'Upload Logbook'
-                          : 'Logbook Uploaded',
-                    ),
+                    child: Text(_logbookFile == null ? 'Upload Logbook' : 'Logbook Uploaded'),
                   ),
                   ElevatedButton(
                     onPressed: _uploadPreviousPolicy,
-                    child: Text(
-                      _previousPolicyFile == null
-                          ? 'Upload Previous Policy'
-                          : 'Previous Policy Uploaded',
-                    ),
+                    child: Text(_previousPolicyFile == null ? 'Upload Previous Policy' : 'Previous Policy Uploaded'),
                   ),
                   if (_selectedCompany != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 8.0),
                       child: Text(
                         'Selected Insurer: $_selectedCompany',
+                        style: GoogleFonts.roboto(color: const Color(0xFF1B263B)),
                       ),
                     ),
                 ],
@@ -571,75 +605,47 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                   const SizedBox(height: 16),
                   const Text(
                     'Medical Details',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   TextFormField(
                     controller: _healthConditionController,
-                    decoration: const InputDecoration(
-                      labelText: 'Health Conditions (if any)',
-                    ),
-                    validator:
-                        widget.fields['health_condition']?.validator != null
-                            ? (String? value) => value != null
-                                ? widget.fields['health_condition']!
-                                    .validator!(value)
-                                : null
-                            : null,
+                    decoration: const InputDecoration(labelText: 'Health Conditions (if any)'),
+                    validator: widget.fields['health_condition']?.validator != null
+                        ? (String? value) =>
+                            value != null ? widget.fields['health_condition']!.validator!(value) : null
+                        : null,
                   ),
                 ],
                 if (widget.type == 'travel') ...[
                   const SizedBox(height: 16),
                   const Text(
                     'Travel Details',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   TextFormField(
                     controller: _travelDestinationController,
-                    decoration: const InputDecoration(
-                      labelText: 'Travel Destination',
-                    ),
-                    validator: widget.fields['travel_destination']?.validator !=
-                            null
-                        ? (String? value) => value != null
-                            ? widget
-                                .fields['travel_destination']!.validator!(value)
-                            : 'Required'
-                        : (String? value) =>
-                            value == null || value.isEmpty ? 'Required' : null,
+                    decoration: const InputDecoration(labelText: 'Travel Destination'),
+                    validator: widget.fields['travel_destination']?.validator != null
+                        ? (String? value) =>
+                            value != null ? widget.fields['travel_destination']!.validator!(value) : 'Required'
+                        : (String? value) => value == null || value.isEmpty ? 'Required' : null,
                   ),
                 ],
                 if (widget.type == 'property') ...[
                   const SizedBox(height: 16),
                   const Text(
                     'Property Details',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   TextFormField(
                     controller: _propertyValueController,
-                    decoration: const InputDecoration(
-                      labelText: 'Property Value',
-                    ),
-                    validator: widget.fields['property_value']?.validator !=
-                            null
-                        ? (String? value) => value != null
-                            ? widget.fields['property_value']!.validator!(value)
-                            : 'Required'
+                    decoration: const InputDecoration(labelText: 'Property Value'),
+                    validator: widget.fields['property_value']?.validator != null
+                        ? (String? value) =>
+                            value != null ? widget.fields['property_value']!.validator!(value) : 'Required'
                         : (String? value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Required';
-                            }
-                            if (double.tryParse(value) == null) {
-                              return 'Invalid value';
-                            }
+                            if (value == null || value.isEmpty) return 'Required';
+                            if (double.tryParse(value) == null) return 'Invalid value';
                             return null;
                           },
                   ),
@@ -648,78 +654,72 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                   const SizedBox(height: 16),
                   const Text(
                     'WIBA Details',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   TextFormField(
                     controller: _employeeCountController,
-                    decoration: const InputDecoration(
-                      labelText: 'Number of Employees',
-                    ),
-                    validator: widget.fields['employee_count']?.validator !=
-                            null
-                        ? (String? value) => value != null
-                            ? widget.fields['employee_count']!.validator!(value)
-                            : 'Required'
+                    decoration: const InputDecoration(labelText: 'Number of Employees'),
+                    validator: widget.fields['employee_count']?.validator != null
+                        ? (String? value) =>
+                            value != null ? widget.fields['employee_count']!.validator!(value) : 'Required'
                         : (String? value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Required';
-                            }
-                            if (int.tryParse(value) == null) {
-                              return 'Invalid number';
-                            }
+                            if (value == null || value.isEmpty) return 'Required';
+                            if (int.tryParse(value) == null) return 'Invalid number';
                             return null;
                           },
                   ),
                 ],
                 const SizedBox(height: 16),
                 ElevatedButton(
-                  onPressed: () {
+                  onPressed: () async {
                     if (_formKey.currentState!.validate()) {
                       final details = {
-                        if (widget.insuredItem != null)
-                          'insured_item_id': widget.insuredItem!.id,
+                        if (widget.insuredItem != null) 'insured_item_id': widget.insuredItem!.id,
                         'name': _nameController.text,
                         'email': _emailController.text,
                         'phone': _phoneController.text,
                         'id_number': _idNumberController.text,
                         'kra_pin': _kraPinController.text,
-                        'insurer': _selectedCompany ?? '',
                         if (widget.type == 'motor') ...{
                           'vehicle_value': _vehicleValueController.text,
                           'regno': _regnoController.text,
                           'chassis_number': _chassisNumberController.text,
                           'logbook_path': _logbookFile?.path ?? '',
-                          'previous_policy_path':
-                              _previousPolicyFile?.path ?? '',
+                          'previous_policy_path': _previousPolicyFile?.path ?? '',
                         },
-                        if (widget.type == 'medical')
-                          'health_condition': _healthConditionController.text,
-                        if (widget.type == 'travel')
-                          'travel_destination':
-                              _travelDestinationController.text,
-                        if (widget.type == 'property')
-                          'property_value': _propertyValueController.text,
-                        if (widget.type == 'wiba')
-                          'employee_count': _employeeCountController.text,
+                        if (widget.type == 'medical') 'health_condition': _healthConditionController.text,
+                        if (widget.type == 'travel') 'travel_destination': _travelDestinationController.text,
+                        if (widget.type == 'property') 'property_value': _propertyValueController.text,
+                        if (widget.type == 'wiba') 'employee_count': _employeeCountController.text,
                       };
-                      widget.onSubmit(details);
-                      FirebaseFirestore.instance
-                          .collection('form_submissions')
-                          .add({
-                        'user_id': widget.insuredItem?.id ?? 'unknown',
-                        'type': widget.type,
-                        'subtype': widget.subtype,
-                        'coverage_type': widget.coverageType,
-                        'details': details,
-                        'timestamp': FieldValue.serverTimestamp(),
-                      });
-                      Navigator.pop(context);
+
+                      if (_subtypeId != null && _coverageTypeId != null) {
+                        await widget.showCompanyDialog(
+                          context,
+                          widget.type,
+                          widget.subtype,
+                          widget.coverageType,
+                          details,
+                          subtypeId: _subtypeId!,
+                          coverageTypeId: _coverageTypeId!,
+                          preSelectedCompany: _selectedCompany,
+                        );
+                        Navigator.pop(context);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Policy details not loaded yet')),
+                        );
+                      }
                     }
                   },
-                  child: const Text('Next'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF8B0000),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: Text(
+                    'Next',
+                    style: GoogleFonts.roboto(color: Colors.white, fontWeight: FontWeight.w500),
+                  ),
                 ),
               ],
             ),
