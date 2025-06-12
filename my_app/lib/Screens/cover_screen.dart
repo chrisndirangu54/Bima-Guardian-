@@ -7,7 +7,6 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-// Dialog for selecting extracted data
 class GenericDialog extends StatelessWidget {
   final String title;
   final Map<String, String> extractedData;
@@ -22,11 +21,14 @@ class GenericDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Filter out 'insurer' to avoid premature company selection
+    final filteredData = Map<String, String>.from(extractedData)..remove('insurer');
+
     return AlertDialog(
       title: Text(title),
       content: SingleChildScrollView(
         child: Column(
-          children: extractedData.entries.map((entry) {
+          children: filteredData.entries.map((entry) {
             return ListTile(
               title: Text('${entry.key}: ${entry.value}'),
               onTap: () => onConfirm({entry.key: entry.value}),
@@ -40,7 +42,7 @@ class GenericDialog extends StatelessWidget {
           child: const Text('Cancel'),
         ),
         TextButton(
-          onPressed: () => onConfirm(extractedData),
+          onPressed: () => onConfirm(filteredData),
           child: const Text('Apply All'),
         ),
       ],

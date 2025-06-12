@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -11,7 +12,6 @@ import 'package:my_app/Screens/Policy_report_screen.dart';
 import 'package:my_app/Screens/admin_panel.dart';
 import 'package:my_app/insurance_app.dart';
 import 'firebase_options.dart';
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -23,32 +23,53 @@ void main() async {
     if (kDebugMode) {
       print('Firebase initialized successfully');
     }
-  } catch (e) {
-    if (kDebugMode) {
-      print('Error initializing Firebase: $e');
-    }
-  }
 
-  // Sign in anonymously
-  try {
-    if (FirebaseAuth.instance.currentUser == null) {
-      await FirebaseAuth.instance.signInAnonymously();
+    // Configure Firestore persistence (before any Firestore operations)
+    if (!kIsWeb) {
+      // Enable persistence for native platforms
+      await DefaultFirebaseOptions.enableFirestorePersistence();
+    } else {
+      // Disable persistence for web to avoid IndexedDB issues
+      FirebaseFirestore.instance.settings = const Settings(
+        persistenceEnabled: false,
+      );
       if (kDebugMode) {
-        print(
-            'Signed in anonymously: ${FirebaseAuth.instance.currentUser?.uid}');
+        print('Firestore persistence disabled for web');
       }
     }
   } catch (e) {
     if (kDebugMode) {
-      print('Error signing in anonymously: $e');
+      print('Error initializing Firebase or Firestore settings: $e');
     }
   }
 
+// Sign in anonymously
+try {
+  await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+  if (FirebaseAuth.instance.currentUser == null) {
+    final userCredential = await FirebaseAuth.instance.signInAnonymously();
+    if (kDebugMode) print('Signed in anonymously: ${userCredential.user?.uid}');
+    await initializeUserData(userCredential.user!.uid);
+  } else {
+    if (kDebugMode) print('User already authenticated: ${FirebaseAuth.instance.currentUser?.uid}');
+  }
+} catch (e, stackTrace) {
+  if (kDebugMode) print('Error signing in anonymously: $e\n$stackTrace');
+}
+
   // Request Firebase Messaging permissions
   try {
-    await FirebaseMessaging.instance.requestPermission();
+    final settings = await FirebaseMessaging.instance.requestPermission(
+      alert: true,
+      announcement: false,
+      badge: true,
+      carPlay: false,
+      criticalAlert: false,
+      provisional: false,
+      sound: true,
+    );
     if (kDebugMode) {
-      print('Firebase Messaging permission requested');
+      print('Firebase Messaging permission status: ${settings.authorizationStatus}');
     }
   } catch (e) {
     if (kDebugMode) {
@@ -59,7 +80,7 @@ void main() async {
   // Initialize Stripe
   if (!kIsWeb) {
     try {
-      Stripe.publishableKey = 'your-stripe-publishable-key';
+      Stripe.publishableKey = 'your-stripe-publishable-key'; // Replace with actual key
       await Stripe.instance.applySettings();
       if (kDebugMode) {
         print('Stripe initialized for native platforms');
@@ -71,9 +92,11 @@ void main() async {
     }
   } else {
     if (kDebugMode) {
-      print(
-          'Stripe initialization (native parts) skipped on web (kIsWeb is true).');
+      print('Stripe initialization (native parts) skipped on web (kIsWeb is true).');
     }
+    // Optional: Initialize Stripe for web if using flutter_stripe_web
+    // Stripe.publishableKey = 'your-stripe-publishable-key';
+    // Add web-specific Stripe setup here if needed
   }
 
   runApp(
@@ -86,6 +109,37 @@ void main() async {
       child: const MyApp(),
     ),
   );
+}
+
+Future<void> initializeUserData(String userId) async {
+  try {
+    var userDoc = FirebaseFirestore.instance.collection('users').doc(userId);
+    await userDoc.set({
+      'createdAt': FieldValue.serverTimestamp(),
+      'details': {'name': 'Anonymous', 'email': ''},
+    }, SetOptions(merge: true));
+    await userDoc.collection('policies').doc('default').set({
+      'id': 'default',
+      'type': 'Motor',
+      'status': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    await userDoc.collection('quotes').doc('default').set({
+      'id': 'default',
+      'type': 'Motor',
+      'amount': 0,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    await userDoc.collection('insured_items').doc('default').set({
+      'id': 'default',
+      'type': 'Motor',
+      'name': 'Default Item',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    if (kDebugMode) print('Initialized default user details for $userId');
+  } catch (e, stackTrace) {
+    if (kDebugMode) print('Error initializing user details: $e\n$stackTrace');
+  }
 }
 
 class MyApp extends StatelessWidget {
