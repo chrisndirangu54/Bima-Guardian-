@@ -1,1 +1,39 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"bimaapp2025may","appId":"1:60440379548:android:80d1ec07ef1e3ea5d62d59","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"bimaapp2025may","configurations":{"android":"1:60440379548:android:80d1ec07ef1e3ea5d62d59","ios":"1:60440379548:ios:177372424f6d77f4d62d59","macos":"1:60440379548:ios:177372424f6d77f4d62d59","web":"1:60440379548:web:963bad9492c5888ed62d59","windows":"1:60440379548:web:8f78c1766ad95ed6d62d59"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "bimaapp2025may",
+          "appId": "1:60440379548:android:80d1ec07ef1e3ea5d62d59",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "bimaapp2025may",
+          "configurations": {
+            "android": "1:60440379548:android:80d1ec07ef1e3ea5d62d59",
+            "ios": "1:60440379548:ios:177372424f6d77f4d62d59",
+            "macos": "1:60440379548:ios:177372424f6d77f4d62d59",
+            "web": "1:60440379548:web:963bad9492c5888ed62d59",
+            "windows": "1:60440379548:web:8f78c1766ad95ed6d62d59"
+          }
+        }
+      }
+    }
+  },
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

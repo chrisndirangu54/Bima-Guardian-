@@ -4714,6 +4714,20 @@ class ConfigCache {
   final Map<String, Future<Map<String, List<DialogStepConfig>>>> _fetching = {};
   final Map<String, Map<String, List<DialogStepConfig>>> _cache = {};
 
+  // Add this method to check if the cache is stale
+  Future<bool> _isCacheStale(String typeName) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final timestamp = prefs.getInt('cache_timestamp_$typeName') ?? 0;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      // Consider cache stale if older than 1 hour
+      return now - timestamp > Duration(hours: 1).inMilliseconds;
+    } catch (e) {
+      logger.e('Error checking cache staleness: $e');
+      return true;
+    }
+  }
+
   Future<T> retryOperation<T>(
     Future<T> Function() operation,
     int maxAttempts, {
@@ -4788,18 +4802,38 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(String type) asy
   configs.addAll(await _fetchAndCacheConfigs(normalizedType));
   return configs;
 }
-
+Future<List<DialogStepConfig>?> _loadCachedConfigs(String type) async {
+  final prefs = await SharedPreferences.getInstance();
+  final jsonString = prefs.getString('insurance_configs_$type');
+  if (jsonString != null) {
+    final List<dynamic> jsonList = jsonDecode(jsonString);
+    final configs = jsonList.map((json) => DialogStepConfig.fromJson(json)).toList();
+    if (kDebugMode) print('Loaded cached configs for $type: ${configs.map((c) => {'title': c.title, 'nextStep': c.nextStep}).toList()}');
+    return configs;
+  }
+  return null;
+}
 Future<Map<String, List<DialogStepConfig>>> _fetchAndCacheConfigs(String normalizedType) async {
   final configs = <String, List<DialogStepConfig>>{};
-  final dialogState = DialogState();
-  dialogState.setCurrentType(normalizedType);
   try {
+    // Check if cached configs are valid and not stale
+    final cachedConfigs = await _loadCachedConfigs(normalizedType);
+    if (cachedConfigs != null && _isValidConfigs(cachedConfigs) && !(await _isCacheStale(normalizedType))) {
+      if (kDebugMode) print('Using valid cached configs for $normalizedType');
+      configs[normalizedType] = cachedConfigs;
+      return configs;
+    }
+
+    // Clear stale cache
+    await clearCachedConfigs(normalizedType);
+    if (kDebugMode) print('Cleared stale cache for $normalizedType');
+
     List<PolicyType> policyTypes = await retryOperation(
       InsuranceHomeScreen.getPolicyTypes,
       3,
       delay: const Duration(seconds: 1),
     ).timeout(const Duration(seconds: 8), onTimeout: () {
-      logger.i('Policy types timeout for $normalizedType');
+      if (kDebugMode) print('Policy types timeout for $normalizedType');
       return [PolicyType(id: '1', name: normalizedType, description: '')];
     });
 
@@ -4814,24 +4848,13 @@ Future<Map<String, List<DialogStepConfig>>> _fetchAndCacheConfigs(String normali
         3,
         delay: const Duration(seconds: 1),
       ).timeout(const Duration(seconds: 5), onTimeout: () {
-        logger.i('Subtypes timeout for $normalizedType');
+        if (kDebugMode) print('Subtypes timeout for $normalizedType');
         return [
-          PolicySubtype(
-            id: '1',
-            name: 'Standard',
-            policyTypeId: policyType.id,
-            description: '',
-          ),
-          PolicySubtype(
-            id: '2',
-            name: 'Premium',
-            policyTypeId: policyType.id,
-            description: '',
-          ),
+          PolicySubtype(id: '1', name: 'Standard', policyTypeId: policyType.id, description: ''),
+          PolicySubtype(id: '2', name: 'Premium', policyTypeId: policyType.id, description: ''),
         ];
       });
 
-      // Deduplicate coverage types by name
       List<CoverageType> coverageTypes = [];
       for (final subtype in subtypes) {
         final types = await retryOperation(
@@ -4839,7 +4862,7 @@ Future<Map<String, List<DialogStepConfig>>> _fetchAndCacheConfigs(String normali
           3,
           delay: const Duration(seconds: 1),
         ).timeout(const Duration(seconds: 5), onTimeout: () {
-          logger.i('Coverage types timeout for $normalizedType');
+          if (kDebugMode) print('Coverage types timeout for $normalizedType');
           return [
             CoverageType(id: '1', name: 'Basic', description: ''),
             CoverageType(id: '2', name: 'Comprehensive', description: ''),
@@ -4855,8 +4878,10 @@ Future<Map<String, List<DialogStepConfig>>> _fetchAndCacheConfigs(String normali
       final coverageOptions = coverageTypes.isNotEmpty
           ? coverageTypes.map((c) => c.name).toSet().toList()
           : ['Basic', 'Comprehensive'];
-      logger.i('Subtypes for $normalizedType: $subtypeOptions');
-      logger.i('Coverage types for $normalizedType: $coverageOptions');
+      if (kDebugMode) {
+        print('Subtypes for $normalizedType: $subtypeOptions');
+        print('Coverage types for $normalizedType: $coverageOptions');
+      }
 
       configs[typeName] = [
         DialogStepConfig(
@@ -4879,10 +4904,9 @@ Future<Map<String, List<DialogStepConfig>>> _fetchAndCacheConfigs(String normali
               validator: (value) => value?.isNotEmpty == true ? null : 'Please select a coverage type',
             ),
           ],
-          nextStep: 'personal_details',
+          nextStep: 'summary',
           customCallback: null,
         ),
-
         DialogStepConfig(
           title: 'Summary',
           fields: [
@@ -4891,7 +4915,7 @@ Future<Map<String, List<DialogStepConfig>>> _fetchAndCacheConfigs(String normali
               label: 'Selected Subtype',
               type: 'text',
               isRequired: false,
-              initialValue: dialogState?.responses['subtype'] ?? 'Not selected',
+              initialValue: null, // Set dynamically in GenericInsuranceDialog
               validator: null,
             ),
             FieldConfig(
@@ -4899,18 +4923,16 @@ Future<Map<String, List<DialogStepConfig>>> _fetchAndCacheConfigs(String normali
               label: 'Selected Coverage Type',
               type: 'text',
               isRequired: false,
-              initialValue: dialogState?.responses['coverage_type'] ?? 'Not selected',
+              initialValue: null, // Set dynamically in GenericInsuranceDialog
               validator: null,
             ),
-
           ],
+          nextStep: null,
           customCallback: (context, dialogState) async {
-            logger.i('Summary callback for $normalizedType: ${dialogState.responses}');
+            if (kDebugMode) print('Summary callback for $normalizedType: ${dialogState.responses}');
             final subtype = dialogState.responses['subtype'] ?? '';
             final coverage = dialogState.responses['coverage_type'] ?? '';
-            final name = dialogState.responses['name'] ?? '';
-            final email = dialogState.responses['email'] ?? '';
-            if (subtype.isEmpty || coverage.isEmpty || name.isEmpty || email.isEmpty) {
+            if (subtype.isEmpty || coverage.isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('Please complete all required fields'),
@@ -4923,33 +4945,33 @@ Future<Map<String, List<DialogStepConfig>>> _fetchAndCacheConfigs(String normali
       ];
 
       configs[typeName]!.forEach((config) {
-        logger.i('Step: ${config.title}, Fields: ${config.fields.map((f) => f.key).toList()}');
+        if (kDebugMode) print('Step: ${config.title}, Fields: ${config.fields.map((f) => f.key).toList()}, nextStep: ${config.nextStep}');
       });
 
       if (_isValidConfigs(configs[typeName]!)) {
         await _cacheConfigs(normalizedType, configs[typeName]!);
+        if (kDebugMode) print('Cached ${configs[typeName]!.length} configs for $normalizedType with timestamp');
       } else {
-        logger.w('Invalid configs for $normalizedType, not caching');
+        if (kDebugMode) print('Invalid configs for $normalizedType, not caching');
       }
     }
 
     if (!typeFound) {
-      logger.i('No policy type found for $normalizedType, using default');
+      if (kDebugMode) print('No policy type found for $normalizedType, using default');
       configs[normalizedType] = _defaultConfigs(normalizedType)[normalizedType]!;
       await _cacheConfigs(normalizedType, configs[normalizedType]!);
     }
   } catch (e, stackTrace) {
-    logger.e('Error fetching configs for $normalizedType: $e', error: e, stackTrace: stackTrace);
+    if (kDebugMode) print('Error fetching configs for $normalizedType: $e\n$stackTrace');
     configs[normalizedType] = _defaultConfigs(normalizedType)[normalizedType]!;
     await _cacheConfigs(normalizedType, configs[normalizedType]!);
   }
-  logger.i('Generated ${configs[normalizedType]!.length} steps for $normalizedType');
+  if (kDebugMode) print('Generated ${configs[normalizedType]!.length} steps for $normalizedType');
   return configs;
 }
 
-
 Map<String, List<DialogStepConfig>> _defaultConfigs(String normalizedType) {
-  logger.i('Using default configs for $normalizedType');
+  if (kDebugMode) print('Using default configs for $normalizedType');
   return {
     normalizedType: [
       DialogStepConfig(
@@ -4972,7 +4994,6 @@ Map<String, List<DialogStepConfig>> _defaultConfigs(String normalizedType) {
             validator: (value) => value?.isNotEmpty == true ? null : 'Please select a coverage type',
           ),
         ],
-
         nextStep: 'summary',
         customCallback: null,
       ),
@@ -4984,7 +5005,7 @@ Map<String, List<DialogStepConfig>> _defaultConfigs(String normalizedType) {
             label: 'Selected Subtype',
             type: 'text',
             isRequired: false,
-            initialValue: 'Not selected',
+            initialValue: null, // Set dynamically in GenericInsuranceDialog
             validator: null,
           ),
           FieldConfig(
@@ -4992,18 +5013,16 @@ Map<String, List<DialogStepConfig>> _defaultConfigs(String normalizedType) {
             label: 'Selected Coverage Type',
             type: 'text',
             isRequired: false,
-            initialValue: 'Not selected',
+            initialValue: null, // Set dynamically in GenericInsuranceDialog
             validator: null,
           ),
-
         ],
+        nextStep: null,
         customCallback: (context, dialogState) async {
-          logger.i('Summary callback for $normalizedType: ${dialogState.responses}');
+          if (kDebugMode) print('Summary callback for $normalizedType: ${dialogState.responses}');
           final subtype = dialogState.responses['subtype'] ?? '';
           final coverage = dialogState.responses['coverage_type'] ?? '';
-          final name = dialogState.responses['name'] ?? '';
-          final email = dialogState.responses['email'] ?? '';
-          if (subtype.isEmpty || coverage.isEmpty || name.isEmpty || email.isEmpty) {
+          if (subtype.isEmpty || coverage.isEmpty) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Please complete all required fields'),
@@ -5016,6 +5035,7 @@ Map<String, List<DialogStepConfig>> _defaultConfigs(String normalizedType) {
     ],
   };
 }
+
   Future<void> clearCachedConfigs(String typeName) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -5526,6 +5546,17 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
           isRequired: field.isRequired,
           validator: field.validator,
         );
+      } else if (field.key == 'subtype_summary' || field.key == 'coverage_summary') {
+        // Dynamically set initialValue for summary fields
+        final responseKey = field.key == 'subtype_summary' ? 'subtype' : 'coverage_type';
+        return FieldConfig(
+          key: field.key,
+          label: field.label,
+          type: field.type,
+          isRequired: field.isRequired,
+          initialValue: widget.dialogState.responses[responseKey] ?? 'Not selected',
+          validator: field.validator,
+        );
       }
       return field;
     }).toList();
@@ -5621,7 +5652,11 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
                     padding: const EdgeInsets.only(bottom: 16.0),
                     child: FormFieldWidget(
                       config: field,
-                      value: widget.dialogState.responses[field.key] ?? field.initialValue,
+                      value: field.key == 'subtype_summary'
+                          ? widget.dialogState.responses['subtype'] ?? 'Not selected'
+                          : field.key == 'coverage_summary'
+                              ? widget.dialogState.responses['coverage_type'] ?? 'Not selected'
+                              : widget.dialogState.responses[field.key] ?? field.initialValue,
                       onChanged: (value) {
                         widget.dialogState.updateResponse(field.key, value);
                         if (kDebugMode) print('Field ${field.key} updated: $value');
@@ -5689,14 +5724,20 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
                       (widget.config.customValidator == null ||
                           widget.config.customValidator!(widget.dialogState.responses))) {
                     formKey.currentState!.save();
-                    widget.dialogState.saveProgress(widget.insuranceType, widget.step + 1);
+                    // Only save progress for non-final steps
+                    if (widget.config.nextStep != null) {
+                      widget.dialogState.saveProgress(widget.insuranceType, widget.step + 1);
+                    }
                     if (kDebugMode) {
                       print('Form validated, nextStep: ${widget.config.nextStep}, responses: ${widget.dialogState.responses}');
                       for (var field in fields) {
-                        print('Field ${field.key}: ${widget.dialogState.responses[field.key]}');
+                        print('Field ${field.key}: ${widget.dialogState.responses[field.key] ?? 'null'}');
                       }
                     }
                     if (widget.config.nextStep == 'summary') {
+                      widget.onSubmit();
+                    } else {
+                      // Final step (Summary)
                       final typeName = widget.insuranceType;
                       final subtypeName = widget.dialogState.responses['subtype']?.toString() ?? '';
                       final coverageName = widget.dialogState.responses['coverage_type']?.toString() ?? '';
@@ -5750,8 +5791,6 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
                           );
                         }
                       }
-                    } else {
-                      widget.onSubmit();
                     }
                   } else {
                     if (kDebugMode) print('Required fields missing for ${widget.config.title}');
@@ -5792,7 +5831,7 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
               child: Text(
-                widget.config.nextStep == 'summary' ? 'Submit' : 'Next',
+                widget.config.nextStep == null ? 'Submit' : 'Next',
                 style: GoogleFonts.roboto(
                   color: Colors.white,
                   fontWeight: FontWeight.w500,
