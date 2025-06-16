@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:async/async.dart';
 import 'package:web/web.dart' as web; // Use this instead of dart:html
 
 // Remove this import; see below for correct usage.
@@ -129,7 +130,9 @@ class InsuranceHomeScreen extends StatefulWidget {
     try {
       // Check cache first
       if (_cachedCompanies.isNotEmpty) {
-        if (kDebugMode) print('Using cached companies: ${_cachedCompanies.length}');
+        if (kDebugMode) {
+          print('Using cached companies: ${_cachedCompanies.length}');
+        }
         return _cachedCompanies;
       }
 
@@ -138,7 +141,7 @@ class InsuranceHomeScreen extends StatefulWidget {
           .collection('companies')
           .get(const GetOptions(source: Source.serverAndCache))
           .timeout(const Duration(seconds: 5));
-      
+
       final companies = snapshot.docs
           .map((doc) => company_models.Company.fromFirestore(doc.data()))
           .toList();
@@ -146,7 +149,9 @@ class InsuranceHomeScreen extends StatefulWidget {
       // Return Firestore data if not empty, otherwise return defaults
       if (companies.isNotEmpty) {
         _cachedCompanies = companies; // Update cache
-        if (kDebugMode) print('Loaded ${companies.length} companies from Firestore');
+        if (kDebugMode) {
+          print('Loaded ${companies.length} companies from Firestore');
+        }
         return companies;
       } else {
         await Future.delayed(const Duration(seconds: 1));
@@ -154,7 +159,7 @@ class InsuranceHomeScreen extends StatefulWidget {
           company_models.Company(
             id: 'default',
             name: 'Default Company',
-            pdfTemplateKey: ['default_template'], 
+            pdfTemplateKey: ['default_template'],
           ),
         ];
         _cachedCompanies = defaults; // Cache defaults
@@ -169,7 +174,6 @@ class InsuranceHomeScreen extends StatefulWidget {
           id: 'default',
           name: 'Default Company',
           pdfTemplateKey: ['default_template'],
-  
         ),
       ];
       _cachedCompanies = defaults; // Cache defaults
@@ -331,19 +335,33 @@ class InsuranceHomeScreen extends StatefulWidget {
     try {
       await Future.delayed(const Duration(seconds: 1));
       return [
-        company_models.Company(id: '1', name: 'AIG', pdfTemplateKey: const [], ),
+        company_models.Company(
+          id: '1',
+          name: 'AIG',
+          pdfTemplateKey: const [],
+        ),
         company_models.Company(
           id: '2',
           name: 'Cigna',
           pdfTemplateKey: const [],
         ),
-        company_models.Company(id: '3', name: 'UnitedHealth', pdfTemplateKey: const [], )
+        company_models.Company(
+          id: '3',
+          name: 'UnitedHealth',
+          pdfTemplateKey: const [],
+        )
       ];
     } catch (e) {
       if (kDebugMode) {
         print('Error in loadCompanies: $e');
       }
-      return [company_models.Company(id: '1', name: 'AIG', pdfTemplateKey: const [], )];
+      return [
+        company_models.Company(
+          id: '1',
+          name: 'AIG',
+          pdfTemplateKey: const [],
+        )
+      ];
     }
   }
 }
@@ -391,6 +409,7 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
   File? _previousPolicyFile;
   List<String> trendingTopics = [];
   List<String> blogPosts = [];
+  late bool _isDialogOpening = false;
 
   String pdfTemplateKey = 'default_template';
   List<PolicyType> cachedPolicyTypes = [];
@@ -469,6 +488,7 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     _checkUserRole();
     _setupFirebaseMessaging();
     _checkCoverExpirations();
+    _preloadConfigs(); // Preload configurations
     _autofillUserDetails();
   }
 
@@ -484,6 +504,14 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
 
       _loadNotifications();
       _startChatbot();
+    }
+  }
+
+  void _preloadConfigs() async {
+    final types = ['motor', 'medical', 'travel', 'property', 'wiba'];
+    for (final type in types) {
+      await ConfigCache().getInsuranceConfigs(type);
+      logger.i('Preloaded configs for $type');
     }
   }
 
@@ -2149,7 +2177,7 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                                     fit: BoxFit.cover,
                                     errorBuilder: (context, error, stackTrace) {
                                       //if (kDebugMode) {
-                                        //print('Image load error: $error');
+                                      //print('Image load error: $error');
                                       //}
                                       return Container(
                                         color: Theme.of(context)
@@ -2185,8 +2213,8 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                               Map<String, List<DialogStepConfig>>>(
                             future: configCache.containsKey(currentType)
                                 ? Future.value(configCache[currentType])
-                                : getInsuranceConfigs(
-                                        currentType)
+                                : ConfigCache()
+                                    .getInsuranceConfigs(currentType)
                                     .timeout(const Duration(seconds: 100),
                                         onTimeout: () {
                                     if (kDebugMode) {
@@ -2310,7 +2338,7 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                               }
                               try {
                                 await showInsuranceDialog(
-                                  context,
+                                  this.context,
                                   policyType.name,
                                   scaffoldMessengerKey: scaffoldMessengerKey,
                                   onFinalSubmit: null,
@@ -2321,9 +2349,11 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                                 }
                                 scaffoldMessengerKey.currentState?.showSnackBar(
                                   SnackBar(
-                                      content:
-                                          Text('Failed to show dialog: $e')),
+                                    content: Text('Failed to show dialog: $e'),
+                                  ),
                                 );
+                              } finally {
+                                _isDialogOpening = false;
                               }
                             },
                             borderRadius: BorderRadius.circular(16),
@@ -3447,545 +3477,463 @@ class _InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     );
   }
 
-Future<void> _showInsuredItemDialog(
-  BuildContext context,
-  PolicyType type,
-  PolicySubtype subtype,
-  CoverageType coverageType,
-) async {
-  String? insuredItemId;
-  bool createNew = insuredItems.isEmpty;
+  Future<void> _showInsuredItemDialog(
+    BuildContext context,
+    PolicyType type,
+    PolicySubtype subtype,
+    CoverageType coverageType,
+  ) async {
+    String? insuredItemId;
+    bool createNew = insuredItems.isEmpty;
 
-  // Fetch pdfTemplateKey
-  String? pdfTemplateKey;
-  if (coverageType.pdfTemplateKey != null) {
-    pdfTemplateKey = coverageType.pdfTemplateKey;
-  } else if (subtype.pdfTemplateKey != null) {
-    pdfTemplateKey = subtype.pdfTemplateKey;
-  } else {
-    pdfTemplateKey = type.pdfTemplateKey;
-  }
-
-  const List<String> inpatientLimits = ['100000', '500000', '1000000', '2000000'];
-  const List<String> medicalServices = ['general', 'surgery', 'dental', 'optical', 'maternity'];
-  const List<String> underwriters = ['Aetna', 'Cigna', 'UnitedHealth', 'Humana', 'Kaiser'];
-  const List<String> vehicleTypes = ['private', 'commercial', 'motorcycle', 'psv'];
-
-  // Field definitions (unchanged from provided code)
-  final Map<String, FieldDefinition> travelFields = {
-    'name': FieldDefinition(
-      expectedType: ExpectedType.name,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value) ? null : 'Invalid name',
-    ),
-    'email': FieldDefinition(
-      expectedType: ExpectedType.email,
-      validator: (value) => value.isEmpty ||
-              RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$').hasMatch(value)
-          ? null
-          : 'Invalid email',
-    ),
-    'phone': FieldDefinition(
-      expectedType: ExpectedType.phone,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value) ? null : 'Invalid phone number',
-    ),
-    'destination': FieldDefinition(
-      expectedType: ExpectedType.text,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z\s\,\-]+$').hasMatch(value)
-              ? null
-              : 'Invalid destination (use letters, commas, or hyphens)',
-    ),
-    'travel_start_date': FieldDefinition(
-      expectedType: ExpectedType.text,
-      validator: (value) {
-        if (value.isEmpty) return null;
-        try {
-          DateTime.parse(value);
-          return null;
-        } catch (e) {
-          return 'Invalid date format (use YYYY-MM-DD)';
-        }
-      },
-    ),
-    'travel_end_date': FieldDefinition(
-      expectedType: ExpectedType.text,
-      validator: (value) {
-        if (value.isEmpty) return null;
-        try {
-          DateTime.parse(value);
-          return null;
-        } catch (e) {
-          return 'Invalid date format (use YYYY-MM-DD)';
-        }
-      },
-    ),
-    'number_of_travelers': FieldDefinition(
-      expectedType: ExpectedType.number,
-      validator: (value) {
-        if (value.isEmpty) return null;
-        int? val = int.tryParse(value);
-        return val != null && val >= 1 ? null : 'Must have at least 1 traveler';
-      },
-    ),
-    'coverage_limit': FieldDefinition(
-      expectedType: ExpectedType.number,
-      validator: (value) {
-        if (value.isEmpty) return null;
-        double? val = double.tryParse(value);
-        return val != null && val >= 0 ? null : 'Invalid coverage limit';
-      },
-    ),
-  };
-
-  final Map<String, FieldDefinition> wibaFields = {
-    'name': FieldDefinition(
-      expectedType: ExpectedType.name,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value) ? null : 'Invalid name',
-    ),
-    'email': FieldDefinition(
-      expectedType: ExpectedType.email,
-      validator: (value) => value.isEmpty ||
-              RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$').hasMatch(value)
-          ? null
-          : 'Invalid email',
-    ),
-    'phone': FieldDefinition(
-      expectedType: ExpectedType.phone,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value) ? null : 'Invalid phone number',
-    ),
-    'business_name': FieldDefinition(
-      expectedType: ExpectedType.text,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z0-9\s\-\.]+$').hasMatch(value)
-              ? null
-              : 'Invalid business name',
-    ),
-    'number_of_employees': FieldDefinition(
-      expectedType: ExpectedType.number,
-      validator: (value) {
-        if (value.isEmpty) return null;
-        int? val = int.tryParse(value);
-        return val != null && val >= 1 ? null : 'Must have at least 1 employee';
-      },
-    ),
-    'coverage_limit': FieldDefinition(
-      expectedType: ExpectedType.number,
-      validator: (value) {
-        if (value.isEmpty) return null;
-        double? val = double.tryParse(value);
-        return val != null && val >= 0 ? null : 'Invalid coverage limit';
-      },
-    ),
-    'industry_type': FieldDefinition(
-      expectedType: ExpectedType.text,
-      validator: (value) => ['construction', 'manufacturing', 'services', 'retail'].contains(value)
-          ? null
-          : 'Invalid industry type',
-    ),
-  };
-
-  final Map<String, FieldDefinition> propertyFields = {
-    'name': FieldDefinition(
-      expectedType: ExpectedType.name,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value) ? null : 'Invalid name',
-    ),
-    'email': FieldDefinition(
-      expectedType: ExpectedType.email,
-      validator: (value) => value.isEmpty ||
-              RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$').hasMatch(value)
-          ? null
-          : 'Invalid email',
-    ),
-    'phone': FieldDefinition(
-      expectedType: ExpectedType.phone,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value) ? null : 'Invalid phone number',
-    ),
-    'property_value': FieldDefinition(
-      expectedType: ExpectedType.number,
-      validator: (value) {
-        if (value.isEmpty) return null;
-        double? val = double.tryParse(value);
-        return val != null && val > 0 ? null : 'Invalid property value';
-      },
-    ),
-    'property_type': FieldDefinition(
-      expectedType: ExpectedType.text,
-      validator: (value) => ['residential', 'commercial', 'industrial', 'landlord'].contains(value)
-          ? null
-          : 'Invalid property type',
-    ),
-    'property_location': FieldDefinition(
-      expectedType: ExpectedType.text,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z0-9\s\,\.\-]+$').hasMatch(value)
-              ? null
-              : 'Invalid location (use letters, numbers, commas, or periods)',
-    ),
-    'deed_number': FieldDefinition(
-      expectedType: ExpectedType.text,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z0-9\-\/]{5,20}$').hasMatch(value)
-              ? null
-              : 'Invalid deed number (5-20 alphanumeric characters)',
-    ),
-    'construction_year': FieldDefinition(
-      expectedType: ExpectedType.number,
-      validator: (value) {
-        if (value.isEmpty) return null;
-        int? val = int.tryParse(value);
-        return val != null && val >= 1900 && val <= DateTime.now().year
-            ? null
-            : 'Invalid construction year';
-      },
-    ),
-  };
-
-  final Map<String, FieldDefinition> medicalFields = {
-    'name': FieldDefinition(
-      expectedType: ExpectedType.name,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value) ? null : 'Invalid name',
-    ),
-    'email': FieldDefinition(
-      expectedType: ExpectedType.email,
-      validator: (value) => value.isEmpty ||
-              RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$').hasMatch(value)
-          ? null
-          : 'Invalid email',
-    ),
-    'phone': FieldDefinition(
-      expectedType: ExpectedType.phone,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value) ? null : 'Invalid phone number',
-    ),
-    'age': FieldDefinition(
-      expectedType: ExpectedType.number,
-      validator: (value) {
-        if (value.isEmpty) return null;
-        int? val = int.tryParse(value);
-        return val != null && val >= 0 && val <= 120 ? null : 'Invalid age';
-      },
-    ),
-    'spouse_age': FieldDefinition(
-      expectedType: ExpectedType.number,
-      validator: (value) {
-        if (value.isEmpty) return null;
-        int? val = int.tryParse(value);
-        return val != null && val >= 0 && val <= 120 ? null : 'Invalid spouse age';
-      },
-    ),
-    'children_count': FieldDefinition(
-      expectedType: ExpectedType.number,
-      validator: (value) {
-        if (value.isEmpty) return null;
-        int? val = int.tryParse(value);
-        return val != null && val >= 0 ? null : 'Invalid number of children';
-      },
-    ),
-    'pre_existing_conditions': FieldDefinition(
-      expectedType: ExpectedType.text,
-      validator: (value) => null,
-    ),
-    'beneficiaries': FieldDefinition(
-      expectedType: ExpectedType.number,
-      validator: (value) {
-        if (value.isEmpty) return null;
-        int? val = int.tryParse(value);
-        return val != null && val >= 1 ? null : 'At least 1 beneficiary is required';
-      },
-    ),
-    'inpatient_limit': FieldDefinition(
-      expectedType: ExpectedType.text,
-      validator: (value) => value.isEmpty || inpatientLimits.contains(value) ? null : 'Invalid inpatient limit',
-    ),
-    'outpatient_limit': FieldDefinition(
-      expectedType: ExpectedType.number,
-      validator: (value) {
-        if (value.isEmpty) return null;
-        double? val = double.tryParse(value);
-        return val != null && val >= 0 ? null : 'Invalid outpatient limit';
-      },
-    ),
-    'dental_limit': FieldDefinition(
-      expectedType: ExpectedType.number,
-      validator: (value) {
-        if (value.isEmpty) return null;
-        double? val = double.tryParse(value);
-        return val != null && val >= 0 ? null : 'Invalid dental limit';
-      },
-    ),
-    'optical_limit': FieldDefinition(
-      expectedType: ExpectedType.number,
-      validator: (value) {
-        if (value.isEmpty) return null;
-        double? val = double.tryParse(value);
-        return val != null && val >= 0 ? null : 'Invalid optical limit';
-      },
-    ),
-    'maternity_limit': FieldDefinition(
-      expectedType: ExpectedType.number,
-      validator: (value) {
-        if (value.isEmpty) return null;
-        double? val = double.tryParse(value);
-        return val != null && val >= 0 ? null : 'Invalid maternity limit';
-      },
-    ),
-    'medical_services': FieldDefinition(
-      expectedType: ExpectedType.list,
-      listItemType: ExpectedType.text,
-      validator: (value) {
-        if (value.isEmpty) return null;
-        var services = value.split(', ').map((s) => s.trim()).toList();
-        return services.every((s) => medicalServices.contains(s)) ? null : 'Invalid medical services';
-      },
-    ),
-    'underwriters': FieldDefinition(
-      expectedType: ExpectedType.list,
-      listItemType: ExpectedType.text,
-      validator: (value) {
-        if (value.isEmpty) return null;
-        var selected = value.split(', ').map((s) => s.trim()).toList();
-        return selected.length <= 3 && selected.every((s) => underwriters.contains(s))
-            ? null
-            : 'Select up to 3 valid underwriters';
-      },
-    ),
-  };
-
-  final Map<String, FieldDefinition> motorFields = {
-    'name': FieldDefinition(
-      expectedType: ExpectedType.name,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value) ? null : 'Invalid name',
-    ),
-    'email': FieldDefinition(
-      expectedType: ExpectedType.email,
-      validator: (value) => value.isEmpty ||
-              RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$').hasMatch(value)
-          ? null
-          : 'Invalid email',
-    ),
-    'phone': FieldDefinition(
-      expectedType: ExpectedType.phone,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value) ? null : 'Invalid phone number',
-    ),
-    'chassis_number': FieldDefinition(
-      expectedType: ExpectedType.text,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z0-9\-]{10,20}$').hasMatch(value)
-              ? null
-              : 'Invalid chassis number (10-20 alphanumeric characters)',
-    ),
-    'kra_pin': FieldDefinition(
-      expectedType: ExpectedType.text,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z0-9]{11}$').hasMatch(value)
-              ? null
-              : 'Invalid KRA PIN (11 alphanumeric characters)',
-    ),
-    'regno': FieldDefinition(
-      expectedType: ExpectedType.text,
-      validator: (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z0-9\s\-]{5,10}$').hasMatch(value)
-              ? null
-              : 'Invalid registration number (5-10 alphanumeric characters)',
-    ),
-    'vehicle_value': FieldDefinition(
-      expectedType: ExpectedType.number,
-      validator: (value) {
-        if (value.isEmpty) return null;
-        double? val = double.tryParse(value);
-        return val != null && val > 0 ? null : 'Invalid vehicle value';
-      },
-    ),
-    'vehicle_type': FieldDefinition(
-      expectedType: ExpectedType.text,
-      validator: (value) => value.isEmpty || vehicleTypes.contains(value) ? null : 'Invalid vehicle type',
-    ),
-  };
-
-  // Fetch fields from PDFTemplate or use fieldMap
-  Map<String, FieldDefinition> fields = {};
-  if (pdfTemplateKey != null) {
-    final pdfTemplate = await InsuranceHomeScreen.getPDFTemplate(pdfTemplateKey);
-    if (pdfTemplate != null) {
-      fields = pdfTemplate.fields;
+    // Fetch pdfTemplateKey
+    String? pdfTemplateKey;
+    if (coverageType.pdfTemplateKey != null) {
+      pdfTemplateKey = coverageType.pdfTemplateKey;
+    } else if (subtype.pdfTemplateKey != null) {
+      pdfTemplateKey = subtype.pdfTemplateKey;
+    } else {
+      pdfTemplateKey = type.pdfTemplateKey;
     }
-  }
 
-  // Fallback to fieldMap
-  if (fields.isEmpty) {
-    fields = {
-      'motor': motorFields,
-      'medical': medicalFields,
-      'property': propertyFields,
-      'travel': travelFields,
-      'wiba': wibaFields,
-    }[type.name.toLowerCase()] ?? {};
-  }
+    const List<String> inpatientLimits = [
+      '100000',
+      '500000',
+      '1000000',
+      '2000000'
+    ];
+    const List<String> medicalServices = [
+      'general',
+      'surgery',
+      'dental',
+      'optical',
+      'maternity'
+    ];
+    const List<String> underwriters = [
+      'Aetna',
+      'Cigna',
+      'UnitedHealth',
+      'Humana',
+      'Kaiser'
+    ];
+    const List<String> vehicleTypes = [
+      'private',
+      'commercial',
+      'motorcycle',
+      'psv'
+    ];
 
-  showDialog(
-    context: context,
-    builder: (dialogContext) {
-      return StatefulBuilder(
-        builder: (context, setDialogState) {
-          return AlertDialog(
-            backgroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            title: const Text(
-              'Select or Create Insured Item',
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (!createNew)
-                  DropdownButtonFormField<String>(
-                    decoration: InputDecoration(
-                      labelText: 'Existing Insured Item',
-                      labelStyle: const TextStyle(color: Color(0xFFD3D3D3)),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Color(0xFFD3D3D3)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Color(0xFFD3D3D3)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Color(0xFF8B0000)),
-                      ),
-                    ),
-                    value: insuredItemId,
-                    items: insuredItems
-                        .map(
-                          (item) => DropdownMenuItem(
-                            value: item.id,
-                            child: Text(
-                              '${item.details['name'] ?? 'Item'} (${item.type.toUpperCase()})',
-                              style: const TextStyle(color: Color(0xFF1B263B)),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) => setDialogState(() => insuredItemId = value),
-                  ),
-                if (!createNew)
-                  CheckboxListTile(
-                    title: const Text(
-                      'Create New Insured Item',
-                      style: TextStyle(color: Color(0xFF1B263B)),
-                    ),
-                    value: createNew,
-                    onChanged: (value) => setDialogState(() => createNew = value ?? false),
-                    activeColor: const Color(0xFF8B0000),
-                  ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text(
-                  'Cancel',
-                  style: TextStyle(color: Color(0xFFD3D3D3)),
-                ),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(dialogContext);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => CoverDetailScreen(
-                        type: type.name,
-                        subtype: subtype.name,
-                        coverageType: coverageType.name,
-                        insuredItem: insuredItemId != null
-                            ? insuredItems.firstWhere(
-                                (item) => item.id == insuredItemId,
-                              )
-                            : null,
-                        fields: fields,
-                        onSubmit: (details) {
-                          // CoverDetailScreen handles _showCompanyDialog
-                        },
-                        onAutofillPreviousPolicy: autofillFromPreviousPolicy,
-                        onAutofillLogbook: autofillFromLogbook,
-                        showCompanyDialog: _showCompanyDialog, // <-- Added required argument
-                      ),
-                    ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF8B0000),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: const Text(
-                  'Next',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          );
+    // Field definitions (unchanged from provided code)
+    final Map<String, FieldDefinition> travelFields = {
+      'name': FieldDefinition(
+        expectedType: ExpectedType.name,
+        validator: (value) =>
+            value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
+                ? null
+                : 'Invalid name',
+      ),
+      'email': FieldDefinition(
+        expectedType: ExpectedType.email,
+        validator: (value) => value.isEmpty ||
+                RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
+                    .hasMatch(value)
+            ? null
+            : 'Invalid email',
+      ),
+      'phone': FieldDefinition(
+        expectedType: ExpectedType.phone,
+        validator: (value) =>
+            value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
+                ? null
+                : 'Invalid phone number',
+      ),
+      'destination': FieldDefinition(
+        expectedType: ExpectedType.text,
+        validator: (value) =>
+            value.isEmpty || RegExp(r'^[A-Za-z\s\,\-]+$').hasMatch(value)
+                ? null
+                : 'Invalid destination (use letters, commas, or hyphens)',
+      ),
+      'travel_start_date': FieldDefinition(
+        expectedType: ExpectedType.text,
+        validator: (value) {
+          if (value.isEmpty) return null;
+          try {
+            DateTime.parse(value);
+            return null;
+          } catch (e) {
+            return 'Invalid date format (use YYYY-MM-DD)';
+          }
         },
-      );
-    },
-  );
-}
+      ),
+      'travel_end_date': FieldDefinition(
+        expectedType: ExpectedType.text,
+        validator: (value) {
+          if (value.isEmpty) return null;
+          try {
+            DateTime.parse(value);
+            return null;
+          } catch (e) {
+            return 'Invalid date format (use YYYY-MM-DD)';
+          }
+        },
+      ),
+      'number_of_travelers': FieldDefinition(
+        expectedType: ExpectedType.number,
+        validator: (value) {
+          if (value.isEmpty) return null;
+          int? val = int.tryParse(value);
+          return val != null && val >= 1
+              ? null
+              : 'Must have at least 1 traveler';
+        },
+      ),
+      'coverage_limit': FieldDefinition(
+        expectedType: ExpectedType.number,
+        validator: (value) {
+          if (value.isEmpty) return null;
+          double? val = double.tryParse(value);
+          return val != null && val >= 0 ? null : 'Invalid coverage limit';
+        },
+      ),
+    };
 
-Future<void> _showCompanyDialog(
-  BuildContext context,
-  String type,
-  String subtype,
-  String coverageType,
-  Map<String, String> details, {
-  String? preSelectedCompany,
-  required String subtypeId,
-  required String coverageTypeId,
-}) async {
-  try {
-    final companies = await InsuranceHomeScreen.getCompanies();
-    final cachedPdfTemplates = await InsuranceHomeScreen.getCachedPdfTemplates();
-    final eligibleCompanies = companies.where((c) {
-      final matchesSubtype = c.policySubtype?.id == subtypeId;
-      final matchesCoverage = c.coverageType?.id == coverageTypeId;
-      return matchesSubtype || matchesCoverage;
-    }).toList();
+    final Map<String, FieldDefinition> wibaFields = {
+      'name': FieldDefinition(
+        expectedType: ExpectedType.name,
+        validator: (value) =>
+            value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
+                ? null
+                : 'Invalid name',
+      ),
+      'email': FieldDefinition(
+        expectedType: ExpectedType.email,
+        validator: (value) => value.isEmpty ||
+                RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
+                    .hasMatch(value)
+            ? null
+            : 'Invalid email',
+      ),
+      'phone': FieldDefinition(
+        expectedType: ExpectedType.phone,
+        validator: (value) =>
+            value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
+                ? null
+                : 'Invalid phone number',
+      ),
+      'business_name': FieldDefinition(
+        expectedType: ExpectedType.text,
+        validator: (value) =>
+            value.isEmpty || RegExp(r'^[A-Za-z0-9\s\-\.]+$').hasMatch(value)
+                ? null
+                : 'Invalid business name',
+      ),
+      'number_of_employees': FieldDefinition(
+        expectedType: ExpectedType.number,
+        validator: (value) {
+          if (value.isEmpty) return null;
+          int? val = int.tryParse(value);
+          return val != null && val >= 1
+              ? null
+              : 'Must have at least 1 employee';
+        },
+      ),
+      'coverage_limit': FieldDefinition(
+        expectedType: ExpectedType.number,
+        validator: (value) {
+          if (value.isEmpty) return null;
+          double? val = double.tryParse(value);
+          return val != null && val >= 0 ? null : 'Invalid coverage limit';
+        },
+      ),
+      'industry_type': FieldDefinition(
+        expectedType: ExpectedType.text,
+        validator: (value) => [
+          'construction',
+          'manufacturing',
+          'services',
+          'retail'
+        ].contains(value)
+            ? null
+            : 'Invalid industry type',
+      ),
+    };
 
-    if (eligibleCompanies.isEmpty) {
-      if (kDebugMode) print('No eligible companies for subtypeId: $subtypeId, coverageTypeId: $coverageTypeId');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No companies available for this policy'),
-          backgroundColor: Color(0xFF8B0000),
-        ),
-      );
-      return;
+    final Map<String, FieldDefinition> propertyFields = {
+      'name': FieldDefinition(
+        expectedType: ExpectedType.name,
+        validator: (value) =>
+            value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
+                ? null
+                : 'Invalid name',
+      ),
+      'email': FieldDefinition(
+        expectedType: ExpectedType.email,
+        validator: (value) => value.isEmpty ||
+                RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
+                    .hasMatch(value)
+            ? null
+            : 'Invalid email',
+      ),
+      'phone': FieldDefinition(
+        expectedType: ExpectedType.phone,
+        validator: (value) =>
+            value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
+                ? null
+                : 'Invalid phone number',
+      ),
+      'property_value': FieldDefinition(
+        expectedType: ExpectedType.number,
+        validator: (value) {
+          if (value.isEmpty) return null;
+          double? val = double.tryParse(value);
+          return val != null && val > 0 ? null : 'Invalid property value';
+        },
+      ),
+      'property_type': FieldDefinition(
+        expectedType: ExpectedType.text,
+        validator: (value) => [
+          'residential',
+          'commercial',
+          'industrial',
+          'landlord'
+        ].contains(value)
+            ? null
+            : 'Invalid property type',
+      ),
+      'property_location': FieldDefinition(
+        expectedType: ExpectedType.text,
+        validator: (value) =>
+            value.isEmpty || RegExp(r'^[A-Za-z0-9\s\,\.\-]+$').hasMatch(value)
+                ? null
+                : 'Invalid location (use letters, numbers, commas, or periods)',
+      ),
+      'deed_number': FieldDefinition(
+        expectedType: ExpectedType.text,
+        validator: (value) =>
+            value.isEmpty || RegExp(r'^[A-Za-z0-9\-\/]{5,20}$').hasMatch(value)
+                ? null
+                : 'Invalid deed number (5-20 alphanumeric characters)',
+      ),
+      'construction_year': FieldDefinition(
+        expectedType: ExpectedType.number,
+        validator: (value) {
+          if (value.isEmpty) return null;
+          int? val = int.tryParse(value);
+          return val != null && val >= 1900 && val <= DateTime.now().year
+              ? null
+              : 'Invalid construction year';
+        },
+      ),
+    };
+
+    final Map<String, FieldDefinition> medicalFields = {
+      'name': FieldDefinition(
+        expectedType: ExpectedType.name,
+        validator: (value) =>
+            value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
+                ? null
+                : 'Invalid name',
+      ),
+      'email': FieldDefinition(
+        expectedType: ExpectedType.email,
+        validator: (value) => value.isEmpty ||
+                RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
+                    .hasMatch(value)
+            ? null
+            : 'Invalid email',
+      ),
+      'phone': FieldDefinition(
+        expectedType: ExpectedType.phone,
+        validator: (value) =>
+            value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
+                ? null
+                : 'Invalid phone number',
+      ),
+      'age': FieldDefinition(
+        expectedType: ExpectedType.number,
+        validator: (value) {
+          if (value.isEmpty) return null;
+          int? val = int.tryParse(value);
+          return val != null && val >= 0 && val <= 120 ? null : 'Invalid age';
+        },
+      ),
+      'spouse_age': FieldDefinition(
+        expectedType: ExpectedType.number,
+        validator: (value) {
+          if (value.isEmpty) return null;
+          int? val = int.tryParse(value);
+          return val != null && val >= 0 && val <= 120
+              ? null
+              : 'Invalid spouse age';
+        },
+      ),
+      'children_count': FieldDefinition(
+        expectedType: ExpectedType.number,
+        validator: (value) {
+          if (value.isEmpty) return null;
+          int? val = int.tryParse(value);
+          return val != null && val >= 0 ? null : 'Invalid number of children';
+        },
+      ),
+      'pre_existing_conditions': FieldDefinition(
+        expectedType: ExpectedType.text,
+        validator: (value) => null,
+      ),
+      'beneficiaries': FieldDefinition(
+        expectedType: ExpectedType.number,
+        validator: (value) {
+          if (value.isEmpty) return null;
+          int? val = int.tryParse(value);
+          return val != null && val >= 1
+              ? null
+              : 'At least 1 beneficiary is required';
+        },
+      ),
+      'inpatient_limit': FieldDefinition(
+        expectedType: ExpectedType.text,
+        validator: (value) => value.isEmpty || inpatientLimits.contains(value)
+            ? null
+            : 'Invalid inpatient limit',
+      ),
+      'outpatient_limit': FieldDefinition(
+        expectedType: ExpectedType.number,
+        validator: (value) {
+          if (value.isEmpty) return null;
+          double? val = double.tryParse(value);
+          return val != null && val >= 0 ? null : 'Invalid outpatient limit';
+        },
+      ),
+      'dental_limit': FieldDefinition(
+        expectedType: ExpectedType.number,
+        validator: (value) {
+          if (value.isEmpty) return null;
+          double? val = double.tryParse(value);
+          return val != null && val >= 0 ? null : 'Invalid dental limit';
+        },
+      ),
+      'optical_limit': FieldDefinition(
+        expectedType: ExpectedType.number,
+        validator: (value) {
+          if (value.isEmpty) return null;
+          double? val = double.tryParse(value);
+          return val != null && val >= 0 ? null : 'Invalid optical limit';
+        },
+      ),
+      'maternity_limit': FieldDefinition(
+        expectedType: ExpectedType.number,
+        validator: (value) {
+          if (value.isEmpty) return null;
+          double? val = double.tryParse(value);
+          return val != null && val >= 0 ? null : 'Invalid maternity limit';
+        },
+      ),
+      'medical_services': FieldDefinition(
+        expectedType: ExpectedType.list,
+        listItemType: ExpectedType.text,
+        validator: (value) {
+          if (value.isEmpty) return null;
+          var services = value.split(', ').map((s) => s.trim()).toList();
+          return services.every((s) => medicalServices.contains(s))
+              ? null
+              : 'Invalid medical services';
+        },
+      ),
+      'underwriters': FieldDefinition(
+        expectedType: ExpectedType.list,
+        listItemType: ExpectedType.text,
+        validator: (value) {
+          if (value.isEmpty) return null;
+          var selected = value.split(', ').map((s) => s.trim()).toList();
+          return selected.length <= 3 &&
+                  selected.every((s) => underwriters.contains(s))
+              ? null
+              : 'Select up to 3 valid underwriters';
+        },
+      ),
+    };
+
+    final Map<String, FieldDefinition> motorFields = {
+      'name': FieldDefinition(
+        expectedType: ExpectedType.name,
+        validator: (value) =>
+            value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
+                ? null
+                : 'Invalid name',
+      ),
+      'email': FieldDefinition(
+        expectedType: ExpectedType.email,
+        validator: (value) => value.isEmpty ||
+                RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
+                    .hasMatch(value)
+            ? null
+            : 'Invalid email',
+      ),
+      'phone': FieldDefinition(
+        expectedType: ExpectedType.phone,
+        validator: (value) =>
+            value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
+                ? null
+                : 'Invalid phone number',
+      ),
+      'chassis_number': FieldDefinition(
+        expectedType: ExpectedType.text,
+        validator: (value) =>
+            value.isEmpty || RegExp(r'^[A-Za-z0-9\-]{10,20}$').hasMatch(value)
+                ? null
+                : 'Invalid chassis number (10-20 alphanumeric characters)',
+      ),
+      'kra_pin': FieldDefinition(
+        expectedType: ExpectedType.text,
+        validator: (value) =>
+            value.isEmpty || RegExp(r'^[A-Za-z0-9]{11}$').hasMatch(value)
+                ? null
+                : 'Invalid KRA PIN (11 alphanumeric characters)',
+      ),
+      'regno': FieldDefinition(
+        expectedType: ExpectedType.text,
+        validator: (value) =>
+            value.isEmpty || RegExp(r'^[A-Za-z0-9\s\-]{5,10}$').hasMatch(value)
+                ? null
+                : 'Invalid registration number (5-10 alphanumeric characters)',
+      ),
+      'vehicle_value': FieldDefinition(
+        expectedType: ExpectedType.number,
+        validator: (value) {
+          if (value.isEmpty) return null;
+          double? val = double.tryParse(value);
+          return val != null && val > 0 ? null : 'Invalid vehicle value';
+        },
+      ),
+      'vehicle_type': FieldDefinition(
+        expectedType: ExpectedType.text,
+        validator: (value) => value.isEmpty || vehicleTypes.contains(value)
+            ? null
+            : 'Invalid vehicle type',
+      ),
+    };
+
+    // Fetch fields from PDFTemplate or use fieldMap
+    Map<String, FieldDefinition> fields = {};
+    if (pdfTemplateKey != null) {
+      final pdfTemplate =
+          await InsuranceHomeScreen.getPDFTemplate(pdfTemplateKey);
+      if (pdfTemplate != null) {
+        fields = pdfTemplate.fields;
+      }
     }
 
-    // Pre-select company if provided and valid
-    String companyId = preSelectedCompany != null &&
-            eligibleCompanies.any((c) => c.name == preSelectedCompany)
-        ? eligibleCompanies.firstWhere((c) => c.name == preSelectedCompany).id
-        : eligibleCompanies.first.id;
-    String pdfTemplateKey = eligibleCompanies
-        .firstWhere((c) => c.id == companyId)
-        .pdfTemplateKey
-        .firstWhere((key) => cachedPdfTemplates.containsKey(key), orElse: () => 'default');
+    // Fallback to fieldMap
+    if (fields.isEmpty) {
+      fields = {
+            'motor': motorFields,
+            'medical': medicalFields,
+            'property': propertyFields,
+            'travel': travelFields,
+            'wiba': wibaFields,
+          }[type.name.toLowerCase()] ??
+          {};
+    }
 
     showDialog(
       context: context,
@@ -3994,129 +3942,109 @@ Future<void> _showCompanyDialog(
           builder: (context, setDialogState) {
             return AlertDialog(
               backgroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              title: Text(
-                'Select Insurance Company',
-                style: GoogleFonts.lora(
-                  color: const Color(0xFF1B263B),
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              title: const Text(
+                'Select or Create Insured Item',
               ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  DropdownButtonFormField<String>(
-                    decoration: InputDecoration(
-                      labelText: 'Company',
-                      labelStyle: GoogleFonts.roboto(color: const Color(0xFFD3D3D3)),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Color(0xFFD3D3D3)),
+                  if (!createNew)
+                    DropdownButtonFormField<String>(
+                      decoration: InputDecoration(
+                        labelText: 'Existing Insured Item',
+                        labelStyle: const TextStyle(color: Color(0xFFD3D3D3)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFD3D3D3)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFD3D3D3)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              const BorderSide(color: Color(0xFF8B0000)),
+                        ),
                       ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Color(0xFFD3D3D3)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Color(0xFF8B0000)),
-                      ),
-                    ),
-                    value: companyId,
-                    items: eligibleCompanies
-                        .map((c) => DropdownMenuItem(
-                              value: c.id,
+                      value: insuredItemId,
+                      items: insuredItems
+                          .map(
+                            (item) => DropdownMenuItem(
+                              value: item.id,
                               child: Text(
-                                c.name,
-                                style: GoogleFonts.roboto(color: const Color(0xFF1B263B)),
+                                '${item.details['name'] ?? 'Item'} (${item.type.toUpperCase()})',
+                                style:
+                                    const TextStyle(color: Color(0xFF1B263B)),
                               ),
-                            ))
-                        .toList(),
-                    onChanged: (value) => setDialogState(() {
-                      companyId = value ?? companyId;
-                      final company = eligibleCompanies.firstWhere((c) => c.id == companyId);
-                      pdfTemplateKey = company.pdfTemplateKey.firstWhere(
-                        (key) => cachedPdfTemplates.containsKey(key),
-                        orElse: () => 'default',
-                      );
-                    }),
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    decoration: InputDecoration(
-                      labelText: 'PDF Template',
-                      labelStyle: GoogleFonts.roboto(color: const Color(0xFFD3D3D3)),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Color(0xFFD3D3D3)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Color(0xFFD3D3D3)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Color(0xFF8B0000)),
-                      ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) =>
+                          setDialogState(() => insuredItemId = value),
                     ),
-                    value: pdfTemplateKey,
-                    items: eligibleCompanies
-                        .firstWhere((c) => c.id == companyId)
-                        .pdfTemplateKey
-                        .where((key) => cachedPdfTemplates.containsKey(key))
-                        .map((key) => DropdownMenuItem(
-                              value: key,
-                              child: Text(
-                                key,
-                                style: GoogleFonts.roboto(color: const Color(0xFF1B263B)),
-                              ),
-                            ))
-                        .toList(),
-                    onChanged: (value) => setDialogState(() {
-                      pdfTemplateKey = value ?? pdfTemplateKey;
-                    }),
-                  ),
+                  if (!createNew)
+                    CheckboxListTile(
+                      title: const Text(
+                        'Create New Insured Item',
+                        style: TextStyle(color: Color(0xFF1B263B)),
+                      ),
+                      value: createNew,
+                      onChanged: (value) =>
+                          setDialogState(() => createNew = value ?? false),
+                      activeColor: const Color(0xFF8B0000),
+                    ),
                 ],
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(dialogContext),
-                  child: Text(
+                  child: const Text(
                     'Cancel',
-                    style: GoogleFonts.roboto(color: const Color(0xFFD3D3D3)),
+                    style: TextStyle(color: Color(0xFFD3D3D3)),
                   ),
                 ),
                 ElevatedButton(
-                  onPressed: () async {
+                  onPressed: () {
                     Navigator.pop(dialogContext);
-                    await FirebaseFirestore.instance.collection('form_submissions').add({
-                      'user_id': details['insured_item_id'] ?? 'unknown',
-                      'type': type,
-                      'subtype': subtype,
-                      'coverage_type': coverageType,
-                      'company_id': companyId,
-                      'pdf_template_key': pdfTemplateKey,
-                      'details': details,
-                      'timestamp': FieldValue.serverTimestamp(),
-                    });
-                    handleCoverSubmission(
+                    Navigator.push(
                       context,
-                      type,
-                      subtype,
-                      coverageType,
-                      companyId,
-                      pdfTemplateKey,
-                      details,
+                      MaterialPageRoute(
+                        builder: (context) => CoverDetailScreen(
+                          type: type.name,
+                          subtype: subtype.name,
+                          coverageType: coverageType.name,
+                          insuredItem: insuredItemId != null
+                              ? insuredItems.firstWhere(
+                                  (item) => item.id == insuredItemId,
+                                )
+                              : null,
+                          fields: fields,
+                          onSubmit: (details) {
+                            // CoverDetailScreen handles _showCompanyDialog
+                          },
+                          onAutofillPreviousPolicy: autofillFromPreviousPolicy,
+                          onAutofillLogbook: autofillFromLogbook,
+                          showCompanyDialog:
+                              _showCompanyDialog, // <-- Added required argument
+                        ),
+                      ),
                     );
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF8B0000),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
-                  child: Text(
-                    'Submit',
-                    style: GoogleFonts.roboto(
+                  child: const Text(
+                    'Next',
+                    style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w500,
                     ),
@@ -4128,16 +4056,219 @@ Future<void> _showCompanyDialog(
         );
       },
     );
-  } catch (e, stackTrace) {
-    if (kDebugMode) print('Error in _showCompanyDialog: $e\n$stackTrace');
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Failed to load company options'),
-        backgroundColor: Color(0xFF8B0000),
-      ),
-    );
   }
-}
+
+  Future<void> _showCompanyDialog(
+    BuildContext context,
+    String type,
+    String subtype,
+    String coverageType,
+    Map<String, String> details, {
+    String? preSelectedCompany,
+    required String subtypeId,
+    required String coverageTypeId,
+  }) async {
+    try {
+      final companies = await InsuranceHomeScreen.getCompanies();
+      final cachedPdfTemplates =
+          await InsuranceHomeScreen.getCachedPdfTemplates();
+      final eligibleCompanies = companies.where((c) {
+        final matchesSubtype = c.policySubtype?.id == subtypeId;
+        final matchesCoverage = c.coverageType?.id == coverageTypeId;
+        return matchesSubtype || matchesCoverage;
+      }).toList();
+
+      if (eligibleCompanies.isEmpty) {
+        if (kDebugMode) {
+          print(
+              'No eligible companies for subtypeId: $subtypeId, coverageTypeId: $coverageTypeId');
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No companies available for this policy'),
+            backgroundColor: Color(0xFF8B0000),
+          ),
+        );
+        return;
+      }
+
+      // Pre-select company if provided and valid
+      String companyId = preSelectedCompany != null &&
+              eligibleCompanies.any((c) => c.name == preSelectedCompany)
+          ? eligibleCompanies.firstWhere((c) => c.name == preSelectedCompany).id
+          : eligibleCompanies.first.id;
+      String pdfTemplateKey = eligibleCompanies
+          .firstWhere((c) => c.id == companyId)
+          .pdfTemplateKey
+          .firstWhere((key) => cachedPdfTemplates.containsKey(key),
+              orElse: () => 'default');
+
+      showDialog(
+        context: context,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              return AlertDialog(
+                backgroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                title: Text(
+                  'Select Insurance Company',
+                  style: GoogleFonts.lora(
+                    color: const Color(0xFF1B263B),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      decoration: InputDecoration(
+                        labelText: 'Company',
+                        labelStyle:
+                            GoogleFonts.roboto(color: const Color(0xFFD3D3D3)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFD3D3D3)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFD3D3D3)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              const BorderSide(color: Color(0xFF8B0000)),
+                        ),
+                      ),
+                      value: companyId,
+                      items: eligibleCompanies
+                          .map((c) => DropdownMenuItem(
+                                value: c.id,
+                                child: Text(
+                                  c.name,
+                                  style: GoogleFonts.roboto(
+                                      color: const Color(0xFF1B263B)),
+                                ),
+                              ))
+                          .toList(),
+                      onChanged: (value) => setDialogState(() {
+                        companyId = value ?? companyId;
+                        final company = eligibleCompanies
+                            .firstWhere((c) => c.id == companyId);
+                        pdfTemplateKey = company.pdfTemplateKey.firstWhere(
+                          (key) => cachedPdfTemplates.containsKey(key),
+                          orElse: () => 'default',
+                        );
+                      }),
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      decoration: InputDecoration(
+                        labelText: 'PDF Template',
+                        labelStyle:
+                            GoogleFonts.roboto(color: const Color(0xFFD3D3D3)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFD3D3D3)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFD3D3D3)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              const BorderSide(color: Color(0xFF8B0000)),
+                        ),
+                      ),
+                      value: pdfTemplateKey,
+                      items: eligibleCompanies
+                          .firstWhere((c) => c.id == companyId)
+                          .pdfTemplateKey
+                          .where((key) => cachedPdfTemplates.containsKey(key))
+                          .map((key) => DropdownMenuItem(
+                                value: key,
+                                child: Text(
+                                  key,
+                                  style: GoogleFonts.roboto(
+                                      color: const Color(0xFF1B263B)),
+                                ),
+                              ))
+                          .toList(),
+                      onChanged: (value) => setDialogState(() {
+                        pdfTemplateKey = value ?? pdfTemplateKey;
+                      }),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: Text(
+                      'Cancel',
+                      style: GoogleFonts.roboto(color: const Color(0xFFD3D3D3)),
+                    ),
+                  ),
+                  ElevatedButton(
+                    onPressed: () async {
+                      Navigator.pop(dialogContext);
+                      await FirebaseFirestore.instance
+                          .collection('form_submissions')
+                          .add({
+                        'user_id': details['insured_item_id'] ?? 'unknown',
+                        'type': type,
+                        'subtype': subtype,
+                        'coverage_type': coverageType,
+                        'company_id': companyId,
+                        'pdf_template_key': pdfTemplateKey,
+                        'details': details,
+                        'timestamp': FieldValue.serverTimestamp(),
+                      });
+                      handleCoverSubmission(
+                        context,
+                        type,
+                        subtype,
+                        coverageType,
+                        companyId,
+                        pdfTemplateKey,
+                        details,
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF8B0000),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: Text(
+                      'Submit',
+                      style: GoogleFonts.roboto(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } catch (e, stackTrace) {
+      if (kDebugMode) print('Error in _showCompanyDialog: $e\n$stackTrace');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to load company options'),
+          backgroundColor: Color(0xFF8B0000),
+        ),
+      );
+    }
+  }
 
 // New helper method for fallback PDF generation
   Future<File?> _generateFallbackPdf(
@@ -4282,145 +4413,152 @@ Future<void> _showCompanyDialog(
     }
   }
 
-
-
-
-
-Future<void> _loadUserDetails() async {
-  try {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) {
-      if (kDebugMode) print('No user authenticated.');
-      setState(() {
-        userDetails = {};
-      });
-      return;
-    }
-
-    // Try cached data
-    final cachedDetails = await _getCachedUserDetails(userId);
-    if (cachedDetails.isNotEmpty) {
-      if (kDebugMode) print('Loaded cached user details for $userId');
-      setState(() {
-        userDetails = cachedDetails;
-      });
-      if (await _hasNetwork()) _fetchUserDetails(userId);
-      return;
-    }
-
-    await _fetchUserDetails(userId);
-  } catch (e) {
-    if (kDebugMode) print('Error loading user details: $e');
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    final cachedDetails = userId != null ? await _getCachedUserDetails(userId) : {};
-    setState(() {
-      userDetails = cachedDetails.isNotEmpty ? Map<String, String>.from(cachedDetails) : {};
-    });
-    if (userDetails.isEmpty && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to load user details.')),
-      );
-    }
-  }
-}
-
-Future<void> _fetchUserDetails(String userId) async {
-  if (!await _hasNetwork()) {
-    if (kDebugMode) print('No network, skipping Firestore fetch.');
-    return;
-  }
-
-  final docRef = FirebaseFirestore.instance.collection('users').doc(userId);
-  final doc = await retryOperation(
-    () => docRef.get(const GetOptions(source: Source.server)), // Force server fetch
-    3,
-    delay: const Duration(seconds: 1),
-  ).timeout(const Duration(seconds: 15), onTimeout: () {
-    if (kDebugMode) print('Firestore timeout for $userId');
-    throw Exception('Firestore timeout');
-  });
-
-  if (doc.exists && doc['details'] != null) {
+  Future<void> _loadUserDetails() async {
     try {
-      final detailsData = doc['details'];
-      // Check for legacy string data
-      if (detailsData is String) {
-        if (kDebugMode) print('Legacy string data detected for user $userId: $detailsData. Reinitializing.');
-        await _initializeUserDetails(userId);
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId == null) {
+        if (kDebugMode) print('No user authenticated.');
         setState(() {
           userDetails = {};
         });
         return;
       }
-      // Expect a Map
-      final details = Map<String, String>.from(detailsData as Map<dynamic, dynamic>);
-      await _cacheUserDetails(userId, details);
-      setState(() {
-        userDetails = details;
-      });
+
+      // Try cached data
+      final cachedDetails = await _getCachedUserDetails(userId);
+      if (cachedDetails.isNotEmpty) {
+        if (kDebugMode) print('Loaded cached user details for $userId');
+        setState(() {
+          userDetails = cachedDetails;
+        });
+        if (await _hasNetwork()) _fetchUserDetails(userId);
+        return;
+      }
+
+      await _fetchUserDetails(userId);
     } catch (e) {
-      if (kDebugMode) print('Error parsing details: $e');
+      if (kDebugMode) print('Error loading user details: $e');
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      final cachedDetails =
+          userId != null ? await _getCachedUserDetails(userId) : {};
+      setState(() {
+        userDetails = cachedDetails.isNotEmpty
+            ? Map<String, String>.from(cachedDetails)
+            : {};
+      });
+      if (userDetails.isEmpty && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to load user details.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _fetchUserDetails(String userId) async {
+    if (!await _hasNetwork()) {
+      if (kDebugMode) print('No network, skipping Firestore fetch.');
+      return;
+    }
+
+    final docRef = FirebaseFirestore.instance.collection('users').doc(userId);
+    final doc = await retryOperation(
+      () => docRef
+          .get(const GetOptions(source: Source.server)), // Force server fetch
+      3,
+      delay: const Duration(seconds: 1),
+    ).timeout(const Duration(seconds: 15), onTimeout: () {
+      if (kDebugMode) print('Firestore timeout for $userId');
+      throw Exception('Firestore timeout');
+    });
+
+    if (doc.exists && doc['details'] != null) {
+      try {
+        final detailsData = doc['details'];
+        // Check for legacy string data
+        if (detailsData is String) {
+          if (kDebugMode) {
+            print(
+                'Legacy string data detected for user $userId: $detailsData. Reinitializing.');
+          }
+          await _initializeUserDetails(userId);
+          setState(() {
+            userDetails = {};
+          });
+          return;
+        }
+        // Expect a Map
+        final details =
+            Map<String, String>.from(detailsData as Map<dynamic, dynamic>);
+        await _cacheUserDetails(userId, details);
+        setState(() {
+          userDetails = details;
+        });
+      } catch (e) {
+        if (kDebugMode) print('Error parsing details: $e');
+        await _initializeUserDetails(userId);
+        setState(() {
+          userDetails = {};
+        });
+      }
+    } else {
+      if (kDebugMode) print('No user details for $userId.');
       await _initializeUserDetails(userId);
       setState(() {
         userDetails = {};
       });
     }
-  } else {
-    if (kDebugMode) print('No user details for $userId.');
-    await _initializeUserDetails(userId);
-    setState(() {
-      userDetails = {};
-    });
   }
-}
 
-Future<void> _initializeUserDetails(String userId) async {
-  final docRef = FirebaseFirestore.instance.collection('users').doc(userId);
-  try {
-    final defaultDetails = {'name': 'Anonymous', 'email': ''};
-    await docRef.set({'details': defaultDetails}, SetOptions(merge: true));
-    if (kDebugMode) print('Initialized default user details for $userId');
-    // Clear local cache to prevent stale data
-    await FirebaseFirestore.instance.clearPersistence();
-  } catch (e) {
-    if (kDebugMode) print('Error initializing user details: $e');
-    throw Exception('Failed to initialize user details');
-  }
-}
-
-Future<bool> _hasNetwork() async {
-  if (kIsWeb) {
-    return web.window.navigator.onLine ?? true;
-  }
-  try {
-    final result = await InternetAddress.lookup('google.com').timeout(Duration(seconds: 2));
-    return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
-  } catch (e) {
-    return false;
-  }
-}
-
-Future<void> _cacheUserDetails(String userId, Map<String, String> details) async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('user_details_$userId', jsonEncode(details));
-  } catch (e) {
-    if (kDebugMode) print('Error caching user details: $e');
-  }
-}
-
-Future<Map<String, String>> _getCachedUserDetails(String userId) async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonString = prefs.getString('user_details_$userId');
-    if (jsonString != null) {
-      return Map<String, String>.from(jsonDecode(jsonString));
+  Future<void> _initializeUserDetails(String userId) async {
+    final docRef = FirebaseFirestore.instance.collection('users').doc(userId);
+    try {
+      final defaultDetails = {'name': 'Anonymous', 'email': ''};
+      await docRef.set({'details': defaultDetails}, SetOptions(merge: true));
+      if (kDebugMode) print('Initialized default user details for $userId');
+      // Clear local cache to prevent stale data
+      await FirebaseFirestore.instance.clearPersistence();
+    } catch (e) {
+      if (kDebugMode) print('Error initializing user details: $e');
+      throw Exception('Failed to initialize user details');
     }
-  } catch (e) {
-    if (kDebugMode) print('Error retrieving cached details: $e');
   }
-  return {};
-}}
+
+  Future<bool> _hasNetwork() async {
+    if (kIsWeb) {
+      return web.window.navigator.onLine ?? true;
+    }
+    try {
+      final result = await InternetAddress.lookup('google.com')
+          .timeout(Duration(seconds: 2));
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<void> _cacheUserDetails(
+      String userId, Map<String, String> details) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_details_$userId', jsonEncode(details));
+    } catch (e) {
+      if (kDebugMode) print('Error caching user details: $e');
+    }
+  }
+
+  Future<Map<String, String>> _getCachedUserDetails(String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonString = prefs.getString('user_details_$userId');
+      if (jsonString != null) {
+        return Map<String, String>.from(jsonDecode(jsonString));
+      }
+    } catch (e) {
+      if (kDebugMode) print('Error retrieving cached details: $e');
+    }
+    return {};
+  }
+}
 
 // Color provider
 class ColorProvider with ChangeNotifier {
@@ -4451,16 +4589,19 @@ class DialogState extends ChangeNotifier {
 
   void updateResponse(String key, String value) {
     _responses[key] = value;
+    if (kDebugMode) print('Updated response: $key = $value');
     notifyListeners();
   }
 
   void setCurrentType(String type) {
     _currentType = type.toLowerCase();
+    if (kDebugMode) print('Set current type: $_currentType');
     notifyListeners();
   }
 
   void setCurrentStep(int step) {
     _currentStep = step;
+    if (kDebugMode) print('Set current step: $_currentStep');
     notifyListeners();
   }
 
@@ -4474,34 +4615,38 @@ class DialogState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void resetForNewCycle() {
-    _responses.clear();
+  void resetForNewCycle({bool clearResponses = true}) {
+    if (clearResponses) {
+      _responses.clear();
+      if (kDebugMode) print('Cleared responses');
+    }
     _currentStep = 0;
     _insuredItemId = null;
     _companyId = null;
+    if (kDebugMode) print('Reset dialog state: step=$_currentStep, insuredItemId=$_insuredItemId, companyId=$_companyId');
     notifyListeners();
   }
 
   void saveProgress(String type, int step) async {
-    if (kDebugMode) {
-      print('Saving progress: type=$type, step=$step, responses=$_responses');
-    }
+    if (kDebugMode) print('Saving progress: type=$type, step=$step, responses=$_responses');
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
-          'dialog_progress_$type',
-          jsonEncode({
-            'step': step,
-            'responses': _responses,
-            'insuredItemId': _insuredItemId,
-            'companyId': _companyId,
-          }));
+        'dialog_progress_$type',
+        jsonEncode({
+          'step': step,
+          'responses': _responses,
+          'insuredItemId': _insuredItemId,
+          'companyId': _companyId,
+        }),
+      );
     } catch (e) {
       if (kDebugMode) print('Error saving progress: $e');
     }
   }
 
   Future<void> loadProgress(String type) async {
+    if (kDebugMode) print('Loading progress for type: $type');
     try {
       final prefs = await SharedPreferences.getInstance();
       final jsonString = prefs.getString('dialog_progress_$type');
@@ -4512,11 +4657,27 @@ class DialogState extends ChangeNotifier {
         _responses.addAll(Map<String, String>.from(data['responses'] ?? {}));
         _insuredItemId = data['insuredItemId'];
         _companyId = data['companyId'];
+        if (kDebugMode) print('Loaded progress for $type: step=$_currentStep, responses=$_responses');
         notifyListeners();
-        if (kDebugMode) print('Loaded progress for $type: step=$_currentStep');
+      } else {
+        if (kDebugMode) print('No saved progress found for $type');
+        _currentStep = 0;
+        _responses.clear();
       }
     } catch (e) {
       if (kDebugMode) print('Error loading progress: $e');
+      _currentStep = 0;
+      _responses.clear();
+    }
+  }
+
+  Future<void> clearProgress(String type) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('dialog_progress_$type');
+      if (kDebugMode) print('Cleared progress for type: $type');
+    } catch (e) {
+      if (kDebugMode) print('Error clearing progress: $e');
     }
   }
 }
@@ -4538,50 +4699,89 @@ Future<T> retryOperation<T>(
   throw Exception('Operation failed after $maxAttempts attempts');
 }
 
-Future<bool> hasNetwork() async {
-  if (kIsWeb) {
-    return web.window.navigator.onLine ?? true;
+
+extension StringExtension on String {
+  String capitalize() {
+    return isNotEmpty ? '${this[0].toUpperCase()}${substring(1)}' : this;
   }
+}
+
+class ConfigCache {
+  static final ConfigCache _instance = ConfigCache._();
+  factory ConfigCache() => _instance;
+  ConfigCache._();
+
+  final Map<String, Future<Map<String, List<DialogStepConfig>>>> _fetching = {};
+  final Map<String, Map<String, List<DialogStepConfig>>> _cache = {};
+
+  Future<T> retryOperation<T>(
+    Future<T> Function() operation,
+    int maxAttempts, {
+    Duration delay = const Duration(seconds: 1),
+  }) async {
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await operation();
+      } catch (e) {
+        if (attempt == maxAttempts) rethrow;
+        if (kDebugMode) print('Attempt $attempt failed: $e');
+        await Future.delayed(delay);
+      }
+    }
+    throw Exception('Operation failed after $maxAttempts attempts');
+  }
+
+  Future<bool> hasNetwork() async {
+    if (kIsWeb) {
+      return true; // Simplified for web; adjust if navigator.onLine is available
+    }
+    try {
+      final result = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 2));
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } catch (e) {
+      return false;
+    }
+  }
+
+Future<bool> _isCacheValid(String typeName) async {
   try {
-    final result = await InternetAddress.lookup('google.com')
-        .timeout(Duration(seconds: 2));
-    return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    final prefs = await SharedPreferences.getInstance();
+    final timestamp = prefs.getInt('cache_timestamp_$typeName') ?? 0;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return now - timestamp < Duration(hours: 1).inMilliseconds;
   } catch (e) {
+    logger.e('Error checking cache validity: $e');
     return false;
   }
 }
 
-
-
 Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(String type) async {
-  if (kDebugMode) print('Fetching configs for type: $type');
+  logger.i('Fetching configs for type: $type');
   final normalizedType = type.toLowerCase();
   final configs = <String, List<DialogStepConfig>>{};
 
-  // Clear cache to ensure fresh data (temporary for debugging)
-  await clearCachedConfigs(normalizedType);
-
-  // Try cached configs
-  final cachedConfigs = await _getCachedConfigs(normalizedType);
-  if (cachedConfigs.isNotEmpty && _isValidConfigs(cachedConfigs)) {
-    if (kDebugMode) print('Using cached configs for $normalizedType');
-    configs[normalizedType] = cachedConfigs;
-    // Fetch fresh configs in background if network available
-    if (await hasNetwork()) {
-      unawaited(_fetchAndCacheConfigs(normalizedType).then((freshConfigs) {
-        if (freshConfigs.containsKey(normalizedType)) {
-          configs[normalizedType] = freshConfigs[normalizedType]!;
-          if (kDebugMode) print('Updated configs with fresh data for $normalizedType');
-        }
-      }).catchError((e) {
-        if (kDebugMode) print('Background fetch failed: $e');
-      }));
+  // Check cache validity
+  if (await _isCacheValid(normalizedType)) {
+    final cachedConfigs = await _getCachedConfigs(normalizedType);
+    if (cachedConfigs.isNotEmpty && _isValidConfigs(cachedConfigs)) {
+      logger.i('Using valid cached configs for $normalizedType');
+      configs[normalizedType] = cachedConfigs;
+      if (await hasNetwork()) {
+        unawaited(_fetchAndCacheConfigs(normalizedType).then((freshConfigs) {
+          if (freshConfigs.containsKey(normalizedType)) {
+            configs[normalizedType] = freshConfigs[normalizedType]!;
+            logger.i('Updated configs with fresh data for $normalizedType');
+          }
+        }).catchError((e) {
+          logger.e('Background fetch failed: $e');
+        }));
+      }
+      return configs;
     }
-    return configs;
   }
 
   if (!await hasNetwork()) {
-    if (kDebugMode) print('No network, using default configs');
+    logger.i('No network, using default configs');
     return _defaultConfigs(normalizedType);
   }
 
@@ -4591,13 +4791,15 @@ Future<Map<String, List<DialogStepConfig>>> getInsuranceConfigs(String type) asy
 
 Future<Map<String, List<DialogStepConfig>>> _fetchAndCacheConfigs(String normalizedType) async {
   final configs = <String, List<DialogStepConfig>>{};
+  final dialogState = DialogState();
+  dialogState.setCurrentType(normalizedType);
   try {
     List<PolicyType> policyTypes = await retryOperation(
       InsuranceHomeScreen.getPolicyTypes,
       3,
       delay: const Duration(seconds: 1),
     ).timeout(const Duration(seconds: 8), onTimeout: () {
-      if (kDebugMode) print('Policy types timeout for $normalizedType');
+      logger.i('Policy types timeout for $normalizedType');
       return [PolicyType(id: '1', name: normalizedType, description: '')];
     });
 
@@ -4612,10 +4814,24 @@ Future<Map<String, List<DialogStepConfig>>> _fetchAndCacheConfigs(String normali
         3,
         delay: const Duration(seconds: 1),
       ).timeout(const Duration(seconds: 5), onTimeout: () {
-        if (kDebugMode) print('Subtypes timeout for $normalizedType');
-        return [PolicySubtype(id: '1', name: 'Standard', policyTypeId: policyType.id, description: '')];
+        logger.i('Subtypes timeout for $normalizedType');
+        return [
+          PolicySubtype(
+            id: '1',
+            name: 'Standard',
+            policyTypeId: policyType.id,
+            description: '',
+          ),
+          PolicySubtype(
+            id: '2',
+            name: 'Premium',
+            policyTypeId: policyType.id,
+            description: '',
+          ),
+        ];
       });
 
+      // Deduplicate coverage types by name
       List<CoverageType> coverageTypes = [];
       for (final subtype in subtypes) {
         final types = await retryOperation(
@@ -4623,59 +4839,81 @@ Future<Map<String, List<DialogStepConfig>>> _fetchAndCacheConfigs(String normali
           3,
           delay: const Duration(seconds: 1),
         ).timeout(const Duration(seconds: 5), onTimeout: () {
-          if (kDebugMode) print('Coverage types timeout for $normalizedType');
-          return [CoverageType(id: '1', name: 'Basic', description: '')];
+          logger.i('Coverage types timeout for $normalizedType');
+          return [
+            CoverageType(id: '1', name: 'Basic', description: ''),
+            CoverageType(id: '2', name: 'Comprehensive', description: ''),
+          ];
         });
-        coverageTypes.addAll(types);
+        coverageTypes.addAll(types.where((newType) =>
+            !coverageTypes.any((existing) => existing.name == newType.name)));
       }
 
-      final subtypeOptions = subtypes.isNotEmpty ? subtypes.map((s) => s.name).toList() : ['Standard'];
-      final coverageOptions = coverageTypes.isNotEmpty ? coverageTypes.map((c) => c.name).toList() : ['Basic'];
-      if (kDebugMode) {
-        print('Subtypes for $normalizedType: $subtypeOptions');
-        print('Coverage types for $normalizedType: $coverageOptions');
-      }
+      final subtypeOptions = subtypes.isNotEmpty
+          ? subtypes.map((s) => s.name).toSet().toList()
+          : ['Standard', 'Premium'];
+      final coverageOptions = coverageTypes.isNotEmpty
+          ? coverageTypes.map((c) => c.name).toSet().toList()
+          : ['Basic', 'Comprehensive'];
+      logger.i('Subtypes for $normalizedType: $subtypeOptions');
+      logger.i('Coverage types for $normalizedType: $coverageOptions');
 
       configs[typeName] = [
         DialogStepConfig(
-          title: 'Select ${policyType.name} Subtype',
+          title: 'Select ${policyType.name} Options',
           fields: [
             FieldConfig(
               key: 'subtype',
               label: '${policyType.name} Subtype',
               type: 'dropdown',
               options: subtypeOptions,
+              isRequired: true,
               validator: (value) => value?.isNotEmpty == true ? null : 'Please select a subtype',
             ),
-          ],
-          nextStep: 'coverage',
-          customCallback: null,
-        ),
-        DialogStepConfig(
-          title: 'Select Coverage Type',
-          fields: [
             FieldConfig(
               key: 'coverage_type',
               label: 'Coverage Type',
               type: 'dropdown',
               options: coverageOptions,
+              isRequired: true,
               validator: (value) => value?.isNotEmpty == true ? null : 'Please select a coverage type',
             ),
           ],
-          nextStep: 'summary',
+          nextStep: 'personal_details',
           customCallback: null,
         ),
+
         DialogStepConfig(
           title: 'Summary',
-          fields: [],
+          fields: [
+            FieldConfig(
+              key: 'subtype_summary',
+              label: 'Selected Subtype',
+              type: 'text',
+              isRequired: false,
+              initialValue: dialogState?.responses['subtype'] ?? 'Not selected',
+              validator: null,
+            ),
+            FieldConfig(
+              key: 'coverage_summary',
+              label: 'Selected Coverage Type',
+              type: 'text',
+              isRequired: false,
+              initialValue: dialogState?.responses['coverage_type'] ?? 'Not selected',
+              validator: null,
+            ),
+
+          ],
           customCallback: (context, dialogState) async {
-            if (kDebugMode) print('Final submission for $normalizedType: ${dialogState.responses}');
+            logger.i('Summary callback for $normalizedType: ${dialogState.responses}');
+            final subtype = dialogState.responses['subtype'] ?? '';
+            final coverage = dialogState.responses['coverage_type'] ?? '';
             final name = dialogState.responses['name'] ?? '';
             final email = dialogState.responses['email'] ?? '';
-            if (name.isEmpty || email.isEmpty) {
+            if (subtype.isEmpty || coverage.isEmpty || name.isEmpty || email.isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Name and Email are required'),
+                  content: Text('Please complete all required fields'),
                   backgroundColor: Colors.red,
                 ),
               );
@@ -4684,64 +4922,145 @@ Future<Map<String, List<DialogStepConfig>>> _fetchAndCacheConfigs(String normali
         ),
       ];
 
+      configs[typeName]!.forEach((config) {
+        logger.i('Step: ${config.title}, Fields: ${config.fields.map((f) => f.key).toList()}');
+      });
+
       if (_isValidConfigs(configs[typeName]!)) {
         await _cacheConfigs(normalizedType, configs[typeName]!);
       } else {
-        if (kDebugMode) print('Invalid configs for $normalizedType, not caching');
+        logger.w('Invalid configs for $normalizedType, not caching');
       }
     }
 
     if (!typeFound) {
-      if (kDebugMode) print('No policy type found for $normalizedType, using default');
+      logger.i('No policy type found for $normalizedType, using default');
       configs[normalizedType] = _defaultConfigs(normalizedType)[normalizedType]!;
       await _cacheConfigs(normalizedType, configs[normalizedType]!);
     }
   } catch (e, stackTrace) {
-    if (kDebugMode) print('Error fetching configs for $normalizedType: $e\n$stackTrace');
+    logger.e('Error fetching configs for $normalizedType: $e', error: e, stackTrace: stackTrace);
     configs[normalizedType] = _defaultConfigs(normalizedType)[normalizedType]!;
     await _cacheConfigs(normalizedType, configs[normalizedType]!);
   }
+  logger.i('Generated ${configs[normalizedType]!.length} steps for $normalizedType');
   return configs;
 }
-Future<void> clearCachedConfigs(String typeName) async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('configs_$typeName');
-    if (kDebugMode) print('Cleared cached configs for $typeName');
-  } catch (e) {
-    if (kDebugMode) print('Error clearing cached configs: $e');
-  }
-}
 
-Future<List<DialogStepConfig>> _getCachedConfigs(String typeName) async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonList = prefs.getStringList('configs_$typeName') ?? [];
-    final configs = jsonList.map((json) => DialogStepConfig.fromJson(jsonDecode(json))).toList();
-    if (kDebugMode) print('Retrieved ${configs.length} cached configs for $typeName');
-    return configs;
-  } catch (e) {
-    if (kDebugMode) print('Error retrieving cached configs: $e');
-    return [];
-  }
+
+Map<String, List<DialogStepConfig>> _defaultConfigs(String normalizedType) {
+  logger.i('Using default configs for $normalizedType');
+  return {
+    normalizedType: [
+      DialogStepConfig(
+        title: 'Select ${normalizedType.capitalize()} Options',
+        fields: [
+          FieldConfig(
+            key: 'subtype',
+            label: '${normalizedType.capitalize()} Subtype',
+            type: 'dropdown',
+            options: ['Standard', 'Premium'],
+            isRequired: true,
+            validator: (value) => value?.isNotEmpty == true ? null : 'Please select a subtype',
+          ),
+          FieldConfig(
+            key: 'coverage_type',
+            label: 'Coverage Type',
+            type: 'dropdown',
+            options: ['Basic', 'Comprehensive'],
+            isRequired: true,
+            validator: (value) => value?.isNotEmpty == true ? null : 'Please select a coverage type',
+          ),
+        ],
+
+        nextStep: 'summary',
+        customCallback: null,
+      ),
+      DialogStepConfig(
+        title: 'Summary',
+        fields: [
+          FieldConfig(
+            key: 'subtype_summary',
+            label: 'Selected Subtype',
+            type: 'text',
+            isRequired: false,
+            initialValue: 'Not selected',
+            validator: null,
+          ),
+          FieldConfig(
+            key: 'coverage_summary',
+            label: 'Selected Coverage Type',
+            type: 'text',
+            isRequired: false,
+            initialValue: 'Not selected',
+            validator: null,
+          ),
+
+        ],
+        customCallback: (context, dialogState) async {
+          logger.i('Summary callback for $normalizedType: ${dialogState.responses}');
+          final subtype = dialogState.responses['subtype'] ?? '';
+          final coverage = dialogState.responses['coverage_type'] ?? '';
+          final name = dialogState.responses['name'] ?? '';
+          final email = dialogState.responses['email'] ?? '';
+          if (subtype.isEmpty || coverage.isEmpty || name.isEmpty || email.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Please complete all required fields'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        },
+      ),
+    ],
+  };
 }
+  Future<void> clearCachedConfigs(String typeName) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('configs_$typeName');
+      _cache.remove(typeName);
+      _fetching.remove(typeName);
+      if (kDebugMode) print('Cleared cached configs for $typeName');
+    } catch (e) {
+      if (kDebugMode) print('Error clearing cached configs: $e');
+    }
+  }
+
+  Future<List<DialogStepConfig>> _getCachedConfigs(String typeName) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonList = prefs.getStringList('configs_$typeName') ?? [];
+      final configs = jsonList.map((json) => DialogStepConfig.fromJson(jsonDecode(json))).toList();
+      if (kDebugMode) print('Retrieved ${configs.length} cached configs for $typeName');
+      return configs;
+    } catch (e) {
+      if (kDebugMode) print('Error retrieving cached configs: $e');
+      return [];
+    }
+  }
 
 Future<void> _cacheConfigs(String typeName, List<DialogStepConfig> configs) async {
   try {
     final prefs = await SharedPreferences.getInstance();
     final configsJson = configs.map((c) => jsonEncode(c.toJson())).toList();
     await prefs.setStringList('configs_$typeName', configsJson);
-    if (kDebugMode) print('Cached ${configs.length} configs for $typeName');
+    await prefs.setInt('cache_timestamp_$typeName', DateTime.now().millisecondsSinceEpoch);
+    _cache[typeName] = {typeName: configs};
+    logger.i('Cached ${configs.length} configs for $typeName with timestamp');
   } catch (e) {
-    if (kDebugMode) print('Error caching configs: $e');
+    logger.e('Error caching configs: $e');
   }
 }
 
-bool _isValidConfigs(List<DialogStepConfig> configs) {
-  return configs.isNotEmpty &&
-      configs.every((c) => c.title.isNotEmpty && (c.fields.isEmpty || c.fields.every((f) => f.key.isNotEmpty)));
+  bool _isValidConfigs(List<DialogStepConfig> configs) {
+    return configs.isNotEmpty &&
+        configs.every((c) =>
+            c.title.isNotEmpty &&
+            (c.fields.isEmpty || c.fields.every((f) => f.key.isNotEmpty)));
+  }
 }
-
 class FieldConfig {
   final String key;
   final String label;
@@ -4753,6 +5072,7 @@ class FieldConfig {
   final String? initialValue;
   final String? dependsOnKey;
   final String? dependsOnValue;
+  final bool? isMultiSelect;
 
   FieldConfig({
     required this.key,
@@ -4777,14 +5097,16 @@ class FieldConfig {
     'text': ['Option 1', 'Option 2', 'Option 3'],
     'date': ['2025-01-01', '2025-06-01', '2025-12-01'],
     'custom': ['Custom 1', 'Custom 2', 'Custom 3'],
-    // Add more mappings as needed
+    'coverage_type': [
+      'Basic',
+      'Standard',
+      'Premium'
+    ], // Added for coverage_type
   };
 
-  bool? isMultiSelect;
-
-  factory FieldConfig.fromFieldDefinition(
+  static Future<FieldConfig> fromFieldDefinition(
       FieldDefinition fieldDef, String label,
-      {String? fieldKey}) {
+      {String? fieldKey}) async {
     String type;
     TextInputType? keyboardType;
     String? Function(String?)? validator;
@@ -4838,10 +5160,26 @@ class FieldConfig {
 
       case ExpectedType.list:
         type = 'dropdown';
-        keyboardType = null; // Dropdown doesn't use keyboard
-        options = _dropdownOptions[
-                fieldDef.listItemType?.toString().split('.').last ?? 'text'] ??
-            ['Option 1', 'Option 2'];
+        keyboardType = null;
+        // Handle coverage_type specifically
+        if (key == 'coverage_type') {
+          // Fetch dynamic coverage types if available
+          try {
+            final coverageTypes = await InsuranceHomeScreen.getCoverageTypes(
+                'subtype_id_placeholder'); // Replace with actual subtype ID
+            options = coverageTypes.map((c) => c.name).toSet().toList();
+            if (kDebugMode) print('Dynamic coverage_type options: $options');
+          } catch (e) {
+            if (kDebugMode) print('Error fetching coverage types: $e');
+            options = _dropdownOptions['coverage_type'] ??
+                ['Basic', 'Standard', 'Premium'];
+          }
+        } else {
+          options = _dropdownOptions[
+                  fieldDef.listItemType?.toString().split('.').last ??
+                      'text'] ??
+              ['Option 1', 'Option 2'];
+        }
         validator = (value) {
           if (value == null || value.isEmpty) {
             return fieldDef.isSuggested ? null : 'Selection required';
@@ -4865,11 +5203,13 @@ class FieldConfig {
       isRequired: fieldDef.isSuggested ? false : true,
       validator: validator,
       options: options,
-      initialValue: null,
+      initialValue:
+          options?.contains('Basic') == true ? 'Basic' : options?.first,
       dependsOnKey: null,
       dependsOnValue: null,
     );
   }
+
   Map<String, dynamic> toJson() => {
         'key': key,
         'label': label,
@@ -4916,8 +5256,41 @@ class FormFieldWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!config.isRequired && config.validator == null) {
+      // Render read-only fields for summary
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              config.label,
+              style: GoogleFonts.roboto(
+                color: const Color(0xFFD3D3D3),
+                fontSize: 12,
+              ),
+            ),
+            Text(
+              value ?? 'Not provided',
+              style: GoogleFonts.roboto(
+                color: const Color(0xFF1B263B),
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     switch (config.type) {
       case 'dropdown':
+        final options = config.options?.toSet().toList() ?? ['Basic', 'Comprehensive'];
+        String? selectedValue = value;
+        if (selectedValue == null || !options.contains(selectedValue)) {
+          selectedValue = options.contains(config.initialValue) ? config.initialValue : options.firstOrNull;
+        }
+        logger.i('Dropdown options for ${config.key}: $options, value: $selectedValue');
+
         return DropdownButtonFormField<String>(
           decoration: InputDecoration(
             labelText: config.label,
@@ -4935,9 +5308,9 @@ class FormFieldWidget extends StatelessWidget {
               borderSide: BorderSide(color: colorProvider.color),
             ),
           ),
-          value: value ?? config.options?.first,
-          items: config.options
-              ?.map((option) => DropdownMenuItem(
+          value: selectedValue,
+          items: options
+              .map((option) => DropdownMenuItem(
                     value: option,
                     child: Text(
                       option.replaceAll('_', ' ').toUpperCase(),
@@ -4945,8 +5318,19 @@ class FormFieldWidget extends StatelessWidget {
                     ),
                   ))
               .toList(),
-          onChanged: (newValue) => onChanged(newValue ?? ''),
-          validator: config.validator,
+          onChanged: (newValue) {
+            if (newValue != null) {
+              onChanged(newValue);
+              logger.i('Dropdown ${config.key} changed to: $newValue');
+            }
+          },
+          validator: config.validator ??
+              (value) {
+                if (config.isRequired && (value == null || value.isEmpty)) {
+                  return '${config.label} is required';
+                }
+                return null;
+              },
         );
       case 'checkbox':
         return CheckboxListTile(
@@ -5016,8 +5400,7 @@ class DialogStepConfig {
   final String? nextStep;
   final bool Function(Map<String, String>)? customValidator;
   final String? pdfTemplateKeySource;
-
-  dynamic customCallback; // 'policy', 'type', 'subtype', 'coverage'
+  final dynamic customCallback; // 'policy', 'type', 'subtype', 'coverage'
 
   DialogStepConfig({
     required this.title,
@@ -5025,11 +5408,11 @@ class DialogStepConfig {
     this.nextStep,
     this.customValidator,
     this.pdfTemplateKeySource,
-    required customCallback,
+    this.customCallback,
   });
 
-  // Add this fromJson factory constructor
-  static DialogStepConfig fromJson(Map<String, dynamic> json) {
+  // Add this fromJson factory constructor inside the class
+  factory DialogStepConfig.fromJson(Map<String, dynamic> json) {
     return DialogStepConfig(
       title: json['title'] as String,
       fields: (json['fields'] as List<dynamic>? ?? [])
@@ -5077,9 +5460,6 @@ class DialogStepConfig {
     };
   }
 }
-
-// Generic dialog widget with progress indicatorimport 'package:flutter/material.dart';
-
 
 
 class GenericInsuranceDialog extends StatefulWidget {
@@ -5133,7 +5513,32 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
 
   Future<List<FieldConfig>> _getFields() async {
     if (kDebugMode) print('Fetching fields for ${widget.config.title}');
-    return widget.config.fields;
+    final fields = widget.config.fields.map((field) {
+      if (field.type == 'dropdown') {
+        return FieldConfig(
+          key: field.key,
+          label: field.label,
+          options: field.options?.toSet().toList(),
+          initialValue: field.initialValue,
+          dependsOnKey: field.dependsOnKey,
+          dependsOnValue: field.dependsOnValue,
+          type: field.type,
+          isRequired: field.isRequired,
+          validator: field.validator,
+        );
+      }
+      return field;
+    }).toList();
+    if (fields.isEmpty) {
+      if (kDebugMode) print('Warning: No fields returned for ${widget.config.title}');
+    } else {
+      if (kDebugMode) print('Fields fetched: ${fields.map((f) => f.key).toList()}');
+      if (fields.any((f) => f.key == 'coverage_type')) {
+        final coverageField = fields.firstWhere((f) => f.key == 'coverage_type');
+        if (kDebugMode) print('Coverage type options: ${coverageField.options}, initialValue: ${coverageField.initialValue}');
+      }
+    }
+    return fields;
   }
 
   @override
@@ -5145,10 +5550,23 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
       future: _fieldsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(semanticsLabel: 'Loading fields'));
+          if (kDebugMode) print('Policy FutureBuilder: state=ConnectionState.waiting, data=${snapshot.data}, error=${snapshot.error}');
+          return AlertDialog(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(semanticsLabel: 'Loading fields'),
+                const SizedBox(height: 16),
+                Text(
+                  'Loading ${widget.insuranceType} options...',
+                  style: GoogleFonts.roboto(),
+                ),
+              ],
+            ),
+          );
         }
         if (snapshot.hasError) {
-          if (kDebugMode) print('FutureBuilder error: ${snapshot.error}');
+          if (kDebugMode) print('Policy FutureBuilder: state=ConnectionState.done, data=${snapshot.data}, error=${snapshot.error}');
           return AlertDialog(
             title: const Text('Error'),
             content: Text('Failed to load options: ${snapshot.error}'),
@@ -5163,7 +5581,7 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
 
         final fields = snapshot.data ?? widget.config.fields;
         if (fields.isEmpty && widget.config.customCallback == null) {
-          if (kDebugMode) print('No fields available for ${widget.config.title}');
+          if (kDebugMode) print('Policy FutureBuilder: state=ConnectionState.done, data=$fields, error=${snapshot.error}');
           return AlertDialog(
             content: const Text('No options available for this step.'),
             actions: [
@@ -5196,8 +5614,7 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
                 mainAxisSize: MainAxisSize.min,
                 children: fields.map((field) {
                   if (field.dependsOnKey != null &&
-                      widget.dialogState.responses[field.dependsOnKey!] !=
-                          field.dependsOnValue) {
+                      widget.dialogState.responses[field.dependsOnKey!] != field.dependsOnValue) {
                     return const SizedBox.shrink();
                   }
                   return Padding(
@@ -5207,15 +5624,14 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
                       value: widget.dialogState.responses[field.key] ?? field.initialValue,
                       onChanged: (value) {
                         widget.dialogState.updateResponse(field.key, value);
-                        if (field.key == 'subtype' && value != 'corporate') {
-                          widget.dialogState.updateResponse('beneficiaries', '');
-                        }
+                        if (kDebugMode) print('Field ${field.key} updated: $value');
                         if (field.key == 'has_spouse' && value == 'No') {
                           widget.dialogState.updateResponse('spouse_age', '');
                         }
                         if (field.key == 'has_children' && value == 'No') {
                           widget.dialogState.updateResponse('children_count', '');
                         }
+                        setState(() {});
                       },
                       colorProvider: colorProvider,
                     ),
@@ -5234,7 +5650,31 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
                 ),
               ),
             TextButton(
-              onPressed: widget.onCancel,
+              onPressed: () {
+                if (kDebugMode) print('Cancel pressed for ${widget.config.title}');
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Discard Progress?'),
+                    content: const Text('Are you sure you want to discard your progress?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Stay'),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          widget.dialogState.clearProgress(widget.insuranceType);
+                          widget.dialogState.resetForNewCycle();
+                          Navigator.pop(ctx);
+                          Navigator.pop(context);
+                        },
+                        child: const Text('Discard'),
+                      ),
+                    ],
+                  ),
+                );
+              },
               child: Text(
                 'Cancel',
                 style: GoogleFonts.roboto(color: const Color(0xFFD3D3D3)),
@@ -5242,70 +5682,98 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
             ),
             ElevatedButton(
               onPressed: () async {
-                if (formKey.currentState!.validate() &&
-                    (widget.config.customValidator == null ||
-                        widget.config.customValidator!(widget.dialogState.responses))) {
-                  widget.dialogState.saveProgress(widget.insuranceType, widget.step);
-                  if (kDebugMode) print('Form validated, nextStep: ${widget.config.nextStep}');
-                  if (widget.config.nextStep == 'summary') {
-                    final typeName = widget.insuranceType;
-                    final subtypeName = widget.dialogState.responses['subtype'] ?? '';
-                    final coverageName = widget.dialogState.responses['coverage_type'] ?? '';
-                    if (subtypeName.isEmpty || coverageName.isEmpty) {
-                      if (kDebugMode) print('Missing subtype or coverage: $subtypeName, $coverageName');
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Please select a subtype and coverage type')),
-                        );
+                if (formKey.currentState!.validate()) {
+                  bool allRequiredFieldsFilled = widget.dialogState.responses['subtype']?.isNotEmpty == true &&
+                      widget.dialogState.responses['coverage_type']?.isNotEmpty == true;
+                  if (allRequiredFieldsFilled &&
+                      (widget.config.customValidator == null ||
+                          widget.config.customValidator!(widget.dialogState.responses))) {
+                    formKey.currentState!.save();
+                    widget.dialogState.saveProgress(widget.insuranceType, widget.step + 1);
+                    if (kDebugMode) {
+                      print('Form validated, nextStep: ${widget.config.nextStep}, responses: ${widget.dialogState.responses}');
+                      for (var field in fields) {
+                        print('Field ${field.key}: ${widget.dialogState.responses[field.key]}');
                       }
-                      return;
                     }
-                    try {
-                      if (kDebugMode) print('Processing summary for $typeName, $subtypeName, $coverageName');
-                      final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
-                      final policyType = policyTypes.firstWhere(
-                        (t) => t.name.toLowerCase() == typeName.toLowerCase(),
-                        orElse: () => PolicyType(id: '1', name: typeName, description: ''),
-                      );
-                      final subtypes = await InsuranceHomeScreen.getPolicySubtypes(policyType.id);
-                      final subtype = subtypes.firstWhere(
-                        (s) => s.name == subtypeName,
-                        orElse: () => PolicySubtype(
-                          id: '1',
-                          name: subtypeName,
-                          policyTypeId: policyType.id,
-                          description: '',
-                        ),
-                      );
-                      final coverageTypes = await InsuranceHomeScreen.getCoverageTypes(subtype.id);
-                      final coverageType = coverageTypes.firstWhere(
-                        (c) => c.name == coverageName,
-                        orElse: () => CoverageType(id: '1', name: coverageName, description: ''),
-                      );
+                    if (widget.config.nextStep == 'summary') {
+                      final typeName = widget.insuranceType;
+                      final subtypeName = widget.dialogState.responses['subtype']?.toString() ?? '';
+                      final coverageName = widget.dialogState.responses['coverage_type']?.toString() ?? '';
+                      if (subtypeName.isEmpty || coverageName.isEmpty) {
+                        if (kDebugMode) print('Missing required fields: subtype=$subtypeName, coverage=$coverageName');
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Please complete all required fields'),
+                            ),
+                          );
+                        }
+                        return;
+                      }
+                      try {
+                        if (kDebugMode) print('Processing summary for $typeName, $subtypeName, $coverageName');
+                        final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
+                        final policyType = policyTypes.firstWhere(
+                          (t) => t.name.toLowerCase() == typeName.toLowerCase(),
+                          orElse: () => PolicyType(id: '1', name: typeName, description: ''),
+                        );
+                        final subtypes = await InsuranceHomeScreen.getPolicySubtypes(policyType.id);
+                        final subtype = subtypes.firstWhere(
+                          (s) => s.name == subtypeName,
+                          orElse: () => PolicySubtype(
+                            id: '1',
+                            name: subtypeName,
+                            policyTypeId: policyType.id,
+                            description: '',
+                          ),
+                        );
+                        final coverageTypes = await InsuranceHomeScreen.getCoverageTypes(subtype.id);
+                        final coverageType = coverageTypes.firstWhere(
+                          (c) => c.name == coverageName,
+                          orElse: () => CoverageType(id: '1', name: coverageName, description: ''),
+                        );
 
-                      if (mounted) {
-                        if (kDebugMode) print('Calling showInsuredItemDialog');
-                        await widget.showInsuredItemDialog(
-                          context,
-                          policyType,
-                          subtype,
-                          coverageType,
-                        );
-                        widget.dialogState.resetForNewCycle();
+                        if (mounted) {
+                          if (kDebugMode) print('Calling showInsuredItemDialog');
+                          await widget.showInsuredItemDialog(context, policyType, subtype, coverageType);
+                          widget.dialogState.clearProgress(widget.insuranceType);
+                          widget.dialogState.resetForNewCycle();
+                        }
+                      } catch (e, stackTrace) {
+                        if (kDebugMode) print('Error triggering insured item dialog: $e\n$stackTrace');
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Failed to proceed. Please try again.'),
+                            ),
+                          );
+                        }
                       }
-                    } catch (e, stackTrace) {
-                      if (kDebugMode) print('Error triggering insured item dialog: $e\n$stackTrace');
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Failed to proceed. Please try again.')),
-                        );
-                      }
+                    } else {
+                      widget.onSubmit();
                     }
                   } else {
-                    widget.onSubmit();
+                    if (kDebugMode) print('Required fields missing for ${widget.config.title}');
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Please complete all required fields',
+                            style: GoogleFonts.roboto(color: Colors.white),
+                          ),
+                          backgroundColor: colorProvider.color,
+                        ),
+                      );
+                    }
                   }
                 } else {
-                  if (kDebugMode) print('Form validation failed');
+                  if (kDebugMode) print('Form validation failed for ${widget.config.title}');
+                  for (var field in fields) {
+                    if (field.isRequired && widget.dialogState.responses[field.key]?.isEmpty != false) {
+                      if (kDebugMode) print('Validation failed for required field: ${field.key}');
+                    }
+                  }
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -5406,25 +5874,9 @@ class DynamicForm extends StatelessWidget {
   }
 }
 
+final logger = Logger();
 
-Future<void> showInsuranceDialog(
-  BuildContext context,
-  String insuranceType, {
-  int step = 0,
-  void Function(BuildContext, String, String, String)? onFinalSubmit,
-  required GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey,
-}) async {
-  if (kDebugMode) print('showInsuranceDialog: starting for type=$insuranceType, step=$step');
-
-  if (!context.mounted) {
-    if (kDebugMode) print('showInsuranceDialog: context not mounted at start');
-    return;
-  }
-
-  final normalizedType = insuranceType.toLowerCase();
-  if (kDebugMode) print('showInsuranceDialog: normalized type=$normalizedType');
-
-  // Authenticate user
+Future<void> authenticateUser() async {
   try {
     final auth = FirebaseAuth.instance;
     if (auth.currentUser == null) {
@@ -5434,148 +5886,173 @@ Future<void> showInsuranceDialog(
       if (kDebugMode) print('User already authenticated: ${auth.currentUser?.uid}');
     }
   } catch (e, stackTrace) {
-    if (kDebugMode) print('Failed to sign in anonymously: $e\n$stackTrace');
-    scaffoldMessengerKey.currentState?.showSnackBar(
-      const SnackBar(content: Text('Authentication failed. Please try again.')),
-    );
-    return;
+    if (kDebugMode) print('Authentication failed: $e\n$stackTrace');
+    throw Exception('Authentication failed');
   }
+}
 
-  // Set dialog state
-  final dialogState = context.read<DialogState>();
-  try {
-    dialogState.setCurrentType(normalizedType);
-    await dialogState.loadProgress(normalizedType);
-    dialogState.setCurrentStep(step);
-    if (kDebugMode) print('showInsuranceDialog: dialog state set successfully');
-  } catch (e, stackTrace) {
-    if (kDebugMode) print('Error setting dialog state: $e\n$stackTrace');
-    scaffoldMessengerKey.currentState?.showSnackBar(
-      const SnackBar(content: Text('Error initializing dialog. Cannot proceed.')),
-    );
-    return;
-  }
-
-  // Show loading dialog and fetch configs
-  BuildContext? loadingContext;
-  Map<String, List<DialogStepConfig>> configs;
-  try {
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        loadingContext = dialogContext;
-        return const Center(
-          child: CircularProgressIndicator(semanticsLabel: 'Loading insurance options'),
-        );
-      },
-    );
-    if (kDebugMode) print('showInsuranceDialog: loading dialog shown');
-
-    configs = await getInsuranceConfigs(normalizedType).timeout(
+Future<Map<String, List<DialogStepConfig>>> fetchConfigs(String normalizedType) async {
+  final cancelableOperation = CancelableOperation.fromFuture(
+    ConfigCache().getInsuranceConfigs(normalizedType).timeout(
       const Duration(seconds: 8),
-      onTimeout: () {
-        if (kDebugMode) print('getInsuranceConfigs timed out for type: $normalizedType');
-        scaffoldMessengerKey.currentState?.showSnackBar(
-          const SnackBar(content: Text('Loading options timed out. Using default options.')),
-        );
-        return _defaultConfigs(normalizedType);
-      },
-    );
-    if (kDebugMode) print('Fetched configs for $normalizedType: ${configs.keys.toList()}');
-  } catch (e, stackTrace) {
-    if (kDebugMode) print('Error in getInsuranceConfigs: $e\n$stackTrace');
-    configs = _defaultConfigs(normalizedType);
-    scaffoldMessengerKey.currentState?.showSnackBar(
-      const SnackBar(content: Text('Failed to load options. Using default options.')),
-    );
-  } finally {
-    if (loadingContext != null && loadingContext!.mounted) {
-      Navigator.of(loadingContext!).pop();
-      if (kDebugMode) print('showInsuranceDialog: loading dialog closed');
-    }
-  }
+      onTimeout: () => _defaultConfigs(normalizedType),
+    ),
+  );
+  return await cancelableOperation.valueOrCancellation(_defaultConfigs(normalizedType)) ?? _defaultConfigs(normalizedType);
+}
 
+Future<void> showInsuranceDialog(
+  BuildContext context,
+  String insuranceType, {
+  int step = 0,
+  void Function(BuildContext, String, String, String)? onFinalSubmit,
+  required GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey,
+}) async {
+  if (kDebugMode) print('showInsuranceDialog: starting for type=$insuranceType, step=$step, context=${context.widget.runtimeType}');
   if (!context.mounted) {
-    if (kDebugMode) print('showInsuranceDialog: context not mounted after configs');
+    if (kDebugMode) print('showInsuranceDialog: initial context not mounted');
     return;
   }
 
-  // Validate configs
-  if (!configs.containsKey(normalizedType) || configs[normalizedType]!.isEmpty) {
-    if (kDebugMode) print('Invalid insurance type or no configs: $normalizedType');
-    scaffoldMessengerKey.currentState?.showSnackBar(
-      SnackBar(content: Text('Invalid insurance type: $normalizedType')),
-    );
-    return;
-  }
+  final normalizedType = insuranceType.toLowerCase();
+  final dialogState = Provider.of<DialogState>(context, listen: false);
 
-  final configList = configs[normalizedType]!;
-  if (step >= configList.length) {
-    if (kDebugMode) print('Invalid step: $step for type: $normalizedType');
-    scaffoldMessengerKey.currentState?.showSnackBar(
-      const SnackBar(content: Text('Invalid step in insurance process')),
-    );
-    return;
-  }
-
-  final config = configList[step];
-
-  // Show insurance dialog
   try {
+    await authenticateUser();
+    dialogState.setCurrentType(normalizedType);
+    // Clear progress to start fresh unless resuming a specific step
+    if (step == 0) {
+      await dialogState.clearProgress(normalizedType);
+      dialogState.resetForNewCycle();
+    } else {
+      await dialogState.loadProgress(normalizedType);
+    }
+    int currentStep = step == 0 ? 0 : dialogState.currentStep;
+    if (kDebugMode) print('Initialized step for $normalizedType: step=$currentStep');
+    dialogState.setCurrentStep(currentStep);
+
+    final configs = await fetchConfigs(normalizedType);
+    if (kDebugMode) print('Fetched configs for $normalizedType: ${configs.keys.toList()}');
+
+    if (!context.mounted) {
+      if (kDebugMode) print('showInsuranceDialog: context not mounted after configs');
+      return;
+    }
+
+    if (!configs.containsKey(normalizedType) || configs[normalizedType]!.isEmpty) {
+      if (kDebugMode) print('Invalid insurance type or no configs: $normalizedType');
+      scaffoldMessengerKey.currentState?.showSnackBar(
+        SnackBar(content: Text('Invalid insurance type: $normalizedType')),
+      );
+      return;
+    }
+
+    final configList = configs[normalizedType]!;
+    if (currentStep >= configList.length) {
+      if (kDebugMode) print('Invalid step: $currentStep for type: $normalizedType');
+      dialogState.setCurrentStep(0);
+      currentStep = 0;
+      await dialogState.clearProgress(normalizedType);
+      if (kDebugMode) print('Reset invalid step to 0 and cleared progress for $normalizedType');
+    }
+
+    final config = configList[currentStep];
+    if (kDebugMode) print('Config for step $currentStep: ${config.title}');
+
+    if (kDebugMode) print('showInsuranceDialog: showing GenericInsuranceDialog for step $currentStep');
     await showDialog<void>(
       context: context,
       barrierDismissible: true,
+      useRootNavigator: true,
       builder: (dialogContext) => WillPopScope(
         onWillPop: () async {
           if (kDebugMode) print('Dialog dismissed for ${config.title}');
-          dialogState.saveProgress(normalizedType, step);
+          dialogState.saveProgress(normalizedType, currentStep);
           return true;
         },
         child: GenericInsuranceDialog(
           insuranceType: normalizedType,
-          step: step,
+          step: currentStep,
           config: config,
           dialogState: dialogState,
           onCancel: () {
             if (kDebugMode) print('Cancel pressed for ${config.title}');
-            dialogState.saveProgress(normalizedType, step);
-            Navigator.of(dialogContext).pop();
+            showDialog(
+              context: dialogContext,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Discard Progress?'),
+                content: const Text('Are you sure you want to discard your progress?'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Stay'),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      dialogState.clearProgress(normalizedType);
+                      dialogState.resetForNewCycle();
+                      Navigator.pop(ctx);
+                      Navigator.pop(dialogContext);
+                    },
+                    child: const Text('Discard'),
+                  ),
+                ],
+              ),
+            );
           },
-          onBack: step > 0
+          onBack: currentStep > 0
               ? () {
                   if (kDebugMode) print('Back pressed for ${config.title}');
-                  dialogState.saveProgress(normalizedType, step);
+                  dialogState.saveProgress(normalizedType, currentStep);
                   Navigator.of(dialogContext).pop();
-                  showInsuranceDialog(
-                    context,
-                    normalizedType,
-                    step: step - 1,
-                    onFinalSubmit: onFinalSubmit,
-                    scaffoldMessengerKey: scaffoldMessengerKey,
-                  );
+                  if (context.mounted) {
+                    showInsuranceDialog(
+                      context,
+                      normalizedType,
+                      step: currentStep - 1,
+                      onFinalSubmit: onFinalSubmit,
+                      scaffoldMessengerKey: scaffoldMessengerKey,
+                    );
+                  }
                 }
               : null,
-          onSubmit: () async {
+          onSubmit: () {
             if (kDebugMode) print('Submit pressed for ${config.title}, responses: ${dialogState.responses}');
-            dialogState.saveProgress(normalizedType, step + 1);
             Navigator.of(dialogContext).pop();
-            if (step + 1 < configList.length) {
-              if (kDebugMode) print('Navigating to next step: ${step + 1}');
-              await showInsuranceDialog(
-                context,
-                normalizedType,
-                step: step + 1,
-                onFinalSubmit: onFinalSubmit,
-                scaffoldMessengerKey: scaffoldMessengerKey,
-              );
+            if (currentStep + 1 < configList.length) {
+              if (kDebugMode) print('Navigating to next step: ${currentStep + 1}');
+              if (context.mounted) {
+                showInsuranceDialog(
+                  context,
+                  normalizedType,
+                  step: currentStep + 1,
+                  onFinalSubmit: onFinalSubmit,
+                  scaffoldMessengerKey: scaffoldMessengerKey,
+                );
+              }
+            } else {
+              final subtype = dialogState.responses['subtype']?.toString();
+              final coverage = dialogState.responses['coverage_type']?.toString();
+              if (subtype != null && coverage != null) {
+                if (kDebugMode) print('Final submission: subtype=$subtype, coverage=$coverage');
+                onFinalSubmit?.call(dialogContext, normalizedType, subtype, coverage);
+                dialogState.clearProgress(normalizedType);
+                dialogState.resetForNewCycle();
+              } else {
+                if (kDebugMode) print('Missing required fields: subtype=$subtype, coverage=$coverage');
+                scaffoldMessengerKey.currentState?.showSnackBar(
+                  const SnackBar(content: Text('Please complete all required fields')),
+                );
+              }
             }
           },
           onFinalSubmit: onFinalSubmit,
           showInsuredItemDialog: (BuildContext context, PolicyType policyType, PolicySubtype subtype, CoverageType coverageType) async {
             final state = context.findAncestorStateOfType<_InsuranceHomeScreenState>();
-            if (state != null) {
+            if (state != null && context.mounted) {
               await state._showInsuredItemDialog(context, policyType, subtype, coverageType);
+            } else {
+              if (kDebugMode) print('showInsuranceDialog: _InsuranceHomeScreenState not found or context not mounted');
             }
           },
         ),
@@ -5583,138 +6060,58 @@ Future<void> showInsuranceDialog(
     );
     if (kDebugMode) print('GenericInsuranceDialog closed');
   } catch (e, stackTrace) {
-    if (kDebugMode) print('Error showing GenericInsuranceDialog: $e\n$stackTrace');
+    if (kDebugMode) print('Error in showInsuranceDialog: $e\n$stackTrace');
     scaffoldMessengerKey.currentState?.showSnackBar(
       const SnackBar(content: Text('Failed to display insurance options')),
     );
   }
 }
-
-
-Future<void> _handleFinalSubmit(
-  BuildContext context,
-  String normalizedType,
-  DialogState dialogState,
-  void Function(BuildContext, String, String, String)? onFinalSubmit,
-  GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey,
-) async {
-  try {
-    final policyTypes = await retryOperation(
-      InsuranceHomeScreen.getPolicyTypes,
-      3,
-      delay: const Duration(seconds: 1),
-    ).timeout(const Duration(seconds: 5), onTimeout: () {
-      if (kDebugMode) print('Policy types timeout; using default');
-      scaffoldMessengerKey.currentState?.showSnackBar(
-        const SnackBar(content: Text('Failed to load policy types. Using default')),
-      );
-      return [PolicyType(id: '1', name: normalizedType, description: '')];
-    });
-
-    final policyType = policyTypes.firstWhere(
-      (t) => t.name.toLowerCase() == normalizedType,
-      orElse: () => PolicyType(id: normalizedType, name: normalizedType, description: ''),
-    );
-
-    final subtypeName = dialogState.responses['subtype'] ?? '';
-    final subtypes = await retryOperation(
-      () => InsuranceHomeScreen.getPolicySubtypes(policyType.id),
-      3,
-      delay: const Duration(seconds: 1),
-    ).timeout(const Duration(seconds: 5), onTimeout: () {
-      if (kDebugMode) print('Subtypes timeout; using default');
-      scaffoldMessengerKey.currentState?.showSnackBar(
-        const SnackBar(content: Text('Failed to load subtypes. Using default')),
-      );
-      return [PolicySubtype(id: '1', name: 'Standard', policyTypeId: policyType.id, description: '')];
-    });
-
-    final subtype = subtypes.firstWhere(
-      (s) => s.name == subtypeName,
-      orElse: () => PolicySubtype(
-        id: subtypeName,
-        name: subtypeName,
-        policyTypeId: policyType.id,
-        description: '',
-      ),
-    );
-
-    final coverageName = dialogState.responses['coverage_type'] ?? '';
-    final coverageTypes = await retryOperation(
-      () => InsuranceHomeScreen.getCoverageTypes(subtype.id),
-      3,
-      delay: const Duration(seconds: 1),
-    ).timeout(const Duration(seconds: 5), onTimeout: () {
-      if (kDebugMode) print('Coverage types timeout; using default');
-      scaffoldMessengerKey.currentState?.showSnackBar(
-        const SnackBar(content: Text('Failed to load coverage types. Using default')),
-      );
-      return [CoverageType(id: '1', name: 'Basic', description: '')];
-    });
-
-    final coverageType = coverageTypes.firstWhere(
-      (c) => c.name == coverageName,
-      orElse: () => CoverageType(id: coverageName, name: coverageName, description: ''),
-    );
-
-    if (context.mounted) {
-      final state = context.findAncestorStateOfType<_InsuranceHomeScreenState>();
-      if (state != null) {
-        if (kDebugMode) print('Showing insured item dialog');
-        await state._showInsuredItemDialog(context, policyType, subtype, coverageType);
-        dialogState.resetForNewCycle();
-      } else {
-        if (kDebugMode) print('Could not find _InsuranceHomeScreenState');
-        scaffoldMessengerKey.currentState?.showSnackBar(
-          const SnackBar(content: Text('Unable to proceed with insured item')),
-        );
-      }
-    }
-  } catch (e, stackTrace) {
-    if (kDebugMode) {
-      print('Error in final submit: $e\n$stackTrace');
-      scaffoldMessengerKey.currentState?.showSnackBar(
-        const SnackBar(content: Text('Error completing submission. Please try again')),
-      );
-    }
-  }
-}
-
-// Default configurations
 Map<String, List<DialogStepConfig>> _defaultConfigs(String normalizedType) {
-  if (kDebugMode) print('Using default configs for $normalizedType');
+  logger.i('Using default configs for $normalizedType');
   return {
     normalizedType: [
       DialogStepConfig(
-        title: 'Select ${normalizedType.replaceAll('_', ' ').toUpperCase()} Options',
+        title:
+            'Select ${normalizedType.replaceAll('_', ' ').toUpperCase()} Options',
         fields: [
           FieldConfig(
             key: 'company',
             label: 'Insurance Company',
             type: 'dropdown',
             options: ['AIG', 'Cigna', 'UnitedHealth'],
-            validator: (value) => value?.isNotEmpty == true ? null : 'Please select a company',
+            validator: (value) =>
+                value?.isNotEmpty == true ? null : 'Please select a company',
           ),
           FieldConfig(
             key: 'subtype',
             label: 'Policy Subtype',
             type: 'dropdown',
             options: ['Standard', 'Premium'],
-            validator: (value) => value?.isNotEmpty == true ? null : 'Please select a subtype',
+            validator: (value) =>
+                value?.isNotEmpty == true ? null : 'Please select a subtype',
           ),
+        ],
+        nextStep: 'coverage',
+        pdfTemplateKeySource: 'type',
+        customCallback: (context, dialogState) async {
+          logger.i('Default config callback for $normalizedType');
+        },
+      ),
+      DialogStepConfig(
+        title: 'Select Coverage Type',
+        fields: [
           FieldConfig(
-            key: 'coverage_type',
+            key: 'coverage', // Align with validation
             label: 'Coverage Type',
             type: 'dropdown',
             options: ['Basic', 'Comprehensive'],
-            validator: (value) => value?.isNotEmpty == true ? null : 'Please select a coverage type',
+            validator: (value) => value?.isNotEmpty == true
+                ? null
+                : 'Please select a coverage type',
           ),
         ],
         nextStep: 'details',
-        pdfTemplateKeySource: 'type',
-        customCallback: (context, dialogState) async {
-          if (kDebugMode) print('Default config callback for $normalizedType');
-        },
+        customCallback: null,
       ),
       DialogStepConfig(
         title: 'Personal Details',
@@ -5722,14 +6119,16 @@ Map<String, List<DialogStepConfig>> _defaultConfigs(String normalizedType) {
           FieldConfig(
             key: 'name',
             label: 'Full Name',
-            validator: (value) => value?.isNotEmpty == true ? null : 'Name is required',
+            validator: (value) =>
+                value?.isNotEmpty == true ? null : 'Name is required',
           ),
           FieldConfig(
             key: 'email',
             label: 'Email Address',
             keyboardType: TextInputType.emailAddress,
             validator: (value) => value?.isNotEmpty == true &&
-                    RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$').hasMatch(value!)
+                    RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
+                        .hasMatch(value!)
                 ? null
                 : 'Valid email is required',
           ),
@@ -5741,13 +6140,20 @@ Map<String, List<DialogStepConfig>> _defaultConfigs(String normalizedType) {
         title: 'Summary',
         fields: [],
         customCallback: (context, dialogState) async {
-          if (kDebugMode) print('Summary callback: ${dialogState.responses}');
+          logger.i('Summary callback: ${dialogState.responses}');
+          final company = dialogState.responses['company'] ?? '';
+          final subtype = dialogState.responses['subtype'] ?? '';
+          final coverage = dialogState.responses['coverage'] ?? '';
           final name = dialogState.responses['name'] ?? '';
           final email = dialogState.responses['email'] ?? '';
-          if (name.isEmpty || email.isEmpty) {
+          if (company.isEmpty ||
+              subtype.isEmpty ||
+              coverage.isEmpty ||
+              name.isEmpty ||
+              email.isEmpty) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Name and Email are required'),
+                content: Text('Please complete all required fields'),
                 backgroundColor: Colors.red,
               ),
             );
@@ -5852,7 +6258,7 @@ class DialogController {
   });
 
   Future<void> showNextStep(BuildContext context) async {
-    final configs = await getInsuranceConfigs(insuranceType);
+    final configs = await ConfigCache().getInsuranceConfigs(insuranceType);
     if (currentStep < configs[insuranceType]!.length) {
       await showInsuranceDialog(
         context,
