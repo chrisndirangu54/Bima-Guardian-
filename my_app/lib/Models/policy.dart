@@ -133,8 +133,8 @@ class Policy {
   final String insuredItemId;
   final String companyId;
   final PolicyType type;
-  final PolicySubtype subtype;
-  final CoverageType coverageType;
+  final PolicySubtype? subtype;
+  final CoverageType? coverageType;
   final CoverStatus status;
   final DateTime? endDate;
 
@@ -156,8 +156,8 @@ class Policy {
         'insuredItemId': insuredItemId,
         'companyId': companyId,
         'type': type.toJson(),
-        'subtype': subtype.toJson(),
-        'coverageType': coverageType.toJson(),
+        'subtype': subtype!.toJson(),
+        'coverageType': coverageType!.toJson(),
         'status': status.name,
         'expirationDate': endDate?.toIso8601String(),
       };
@@ -199,7 +199,7 @@ class Policy {
 
   @override
   String toString() {
-    return 'Policy(id: $id, name: $name, insuredItemId: $insuredItemId, companyId: $companyId, type: ${type.name}, subtype: ${subtype.name}, coverageType: ${coverageType.name}, status: ${status.name}, endDate: $endDate, )';
+    return 'Policy(id: $id, name: $name, insuredItemId: $insuredItemId, companyId: $companyId, type: ${type.name}, subtype: ${subtype!.name}, coverageType: ${coverageType!.name}, status: ${status.name}, endDate: $endDate, )';
   }
 
   static Future<Policy> fromCover(Cover updatedCover) async {

@@ -206,7 +206,8 @@ class CoverDetailScreen extends StatefulWidget {
     String? preSelectedCompany,
     required String subtypeId,
     required String coverageTypeId,
-  }) showCompanyDialog; // New callback
+  }) showCompanyDialog; // Kept for compatibility
+  final String? preSelectedCompany; // Added
 
   const CoverDetailScreen({
     super.key,
@@ -218,7 +219,8 @@ class CoverDetailScreen extends StatefulWidget {
     required this.onAutofillPreviousPolicy,
     required this.onAutofillLogbook,
     required this.fields,
-    required this.showCompanyDialog, // Add to constructor
+    required this.showCompanyDialog,
+    this.preSelectedCompany, // Added
   });
 
   @override
@@ -261,16 +263,13 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
       _healthConditionController.text = widget.insuredItem!.details['health_condition'] ?? '';
       _travelDestinationController.text = widget.insuredItem!.details['travel_destination'] ?? '';
       _employeeCountController.text = widget.insuredItem!.details['employee_count'] ?? '';
-      _logbookFile = widget.insuredItem!.logbookPath != null
-          ? File(widget.insuredItem!.logbookPath!)
-          : null;
-      _previousPolicyFile = widget.insuredItem!.previousPolicyPath != null
-          ? File(widget.insuredItem!.previousPolicyPath!)
-          : null;
-      _selectedCompany = widget.insuredItem!.details['insurer'];
+      _logbookFile = widget.insuredItem!.logbookPath != null ? File(widget.insuredItem!.logbookPath!) : null;
+      _previousPolicyFile = widget.insuredItem!.previousPolicyPath != null ? File(widget.insuredItem!.previousPolicyPath!) : null;
+      _selectedCompany = widget.insuredItem!.details['insurer'] ?? widget.preSelectedCompany;
+    } else {
+      _selectedCompany = widget.preSelectedCompany;
     }
 
-    // Fetch subtypeId and coverageTypeId
     _initializeIds();
   }
 
@@ -447,7 +446,7 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                     subtypeId: _subtypeId!,
                     coverageTypeId: _coverageTypeId!,
                     onConfirm: (selectedCompany) {
-                      setState(() => _selectedCompany = selectedCompany);
+                      setState(() => _selectedCompany = selectedCompany ?? _selectedCompany);
                       widget.onAutofillPreviousPolicy(_previousPolicyFile!, selectedData, selectedCompany);
                       FirebaseFirestore.instance.collection('autofilled_forms').add({
                         'user_id': widget.insuredItem?.id ?? 'unknown',
@@ -477,6 +476,35 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final InsuranceHomeScreen insuranceHomeScreen;
+    // Ensure insuredItem is not null before proceeding
+    final String? insuredItemId = widget.insuredItem?.id;
+    if (insuredItemId == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text('${widget.type.toUpperCase()} Cover Details'),
+        ),
+        body: const Center(child: Text('No insured item selected')),
+      );
+    }
+
+    final String? preSelectedCompany = widget.preSelectedCompany;
+      if (preSelectedCompany != null && _selectedCompany == null) {
+        _selectedCompany = preSelectedCompany;
+      }
+      // Ensure subtypeId and coverageTypeId are initialized before building the form
+      if (_subtypeId == null && _coverageTypeId == null) {
+        _initializeIds();
+      }
+
+      if (_subtypeId == null || _coverageTypeId == null) {
+        return Scaffold(
+          appBar: AppBar(
+            title: Text('${widget.type.toUpperCase()} Cover Details'),
+          ),
+          body: const Center(child: CircularProgressIndicator()),
+        );
+      }
     return Scaffold(
       appBar: AppBar(
         title: Text('${widget.type.toUpperCase()} Cover Details'),
@@ -497,20 +525,17 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                   controller: _nameController,
                   decoration: const InputDecoration(labelText: 'Name'),
                   validator: widget.fields['name']?.validator != null
-                      ? (String? value) =>
-                          value != null ? widget.fields['name']!.validator!(value) : 'Required'
+                      ? (String? value) => value != null ? widget.fields['name']!.validator!(value) : 'Required'
                       : (String? value) => value == null || value.isEmpty ? 'Required' : null,
                 ),
                 TextFormField(
                   controller: _emailController,
                   decoration: const InputDecoration(labelText: 'Email'),
                   validator: widget.fields['email']?.validator != null
-                      ? (String? value) =>
-                          value != null ? widget.fields['email']!.validator!(value) : 'Required'
+                      ? (String? value) => value != null ? widget.fields['email']!.validator!(value) : 'Required'
                       : (String? value) {
                           if (value == null || value.isEmpty) return 'Required';
-                          if (!RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
-                              .hasMatch(value)) return 'Invalid email';
+                          if (!RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$').hasMatch(value)) return 'Invalid email';
                           return null;
                         },
                 ),
@@ -518,8 +543,7 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                   controller: _phoneController,
                   decoration: const InputDecoration(labelText: 'Phone'),
                   validator: widget.fields['phone']?.validator != null
-                      ? (String? value) =>
-                          value != null ? widget.fields['phone']!.validator!(value) : 'Required'
+                      ? (String? value) => value != null ? widget.fields['phone']!.validator!(value) : 'Required'
                       : (String? value) {
                           if (value == null || value.isEmpty) return 'Required';
                           if (!RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)) return 'Invalid phone number';
@@ -530,8 +554,7 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                   controller: _idNumberController,
                   decoration: const InputDecoration(labelText: 'ID Number'),
                   validator: widget.fields['id_number']?.validator != null
-                      ? (String? value) =>
-                          value != null ? widget.fields['id_number']!.validator!(value) : 'Required'
+                      ? (String? value) => value != null ? widget.fields['id_number']!.validator!(value) : 'Required'
                       : (String? value) {
                           if (value == null || value.isEmpty) return 'Required';
                           if (!RegExp(r'^\d{8,}$').hasMatch(value)) return 'Invalid ID number';
@@ -542,8 +565,7 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                   controller: _kraPinController,
                   decoration: const InputDecoration(labelText: 'KRA PIN'),
                   validator: widget.fields['kra_pin']?.validator != null
-                      ? (String? value) =>
-                          value != null ? widget.fields['kra_pin']!.validator!(value) : 'Required'
+                      ? (String? value) => value != null ? widget.fields['kra_pin']!.validator!(value) : 'Required'
                       : (String? value) {
                           if (value == null || value.isEmpty) return 'Required';
                           if (!RegExp(r'^[A-Z]\d{9}[A-Z]$').hasMatch(value)) return 'Invalid KRA PIN';
@@ -560,8 +582,7 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                     controller: _vehicleValueController,
                     decoration: const InputDecoration(labelText: 'Vehicle Value'),
                     validator: widget.fields['vehicle_value']?.validator != null
-                        ? (String? value) =>
-                            value != null ? widget.fields['vehicle_value']!.validator!(value) : 'Required'
+                        ? (String? value) => value != null ? widget.fields['vehicle_value']!.validator!(value) : 'Required'
                         : (String? value) {
                             if (value == null || value.isEmpty) return 'Required';
                             if (double.tryParse(value) == null) return 'Invalid value';
@@ -572,16 +593,14 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                     controller: _regnoController,
                     decoration: const InputDecoration(labelText: 'Registration Number'),
                     validator: widget.fields['regno']?.validator != null
-                        ? (String? value) =>
-                            value != null ? widget.fields['regno']!.validator!(value) : 'Required'
+                        ? (String? value) => value != null ? widget.fields['regno']!.validator!(value) : 'Required'
                         : (String? value) => value == null || value.isEmpty ? 'Required' : null,
                   ),
                   TextFormField(
                     controller: _chassisNumberController,
                     decoration: const InputDecoration(labelText: 'Chassis Number'),
                     validator: widget.fields['chassis_number']?.validator != null
-                        ? (String? value) =>
-                            value != null ? widget.fields['chassis_number']!.validator!(value) : 'Required'
+                        ? (String? value) => value != null ? widget.fields['chassis_number']!.validator!(value) : 'Required'
                         : (String? value) => value == null || value.isEmpty ? 'Required' : null,
                   ),
                   ElevatedButton(
@@ -611,8 +630,7 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                     controller: _healthConditionController,
                     decoration: const InputDecoration(labelText: 'Health Conditions (if any)'),
                     validator: widget.fields['health_condition']?.validator != null
-                        ? (String? value) =>
-                            value != null ? widget.fields['health_condition']!.validator!(value) : null
+                        ? (String? value) => value != null ? widget.fields['health_condition']!.validator!(value) : null
                         : null,
                   ),
                 ],
@@ -626,8 +644,7 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                     controller: _travelDestinationController,
                     decoration: const InputDecoration(labelText: 'Travel Destination'),
                     validator: widget.fields['travel_destination']?.validator != null
-                        ? (String? value) =>
-                            value != null ? widget.fields['travel_destination']!.validator!(value) : 'Required'
+                        ? (String? value) => value != null ? widget.fields['travel_destination']!.validator!(value) : 'Required'
                         : (String? value) => value == null || value.isEmpty ? 'Required' : null,
                   ),
                 ],
@@ -641,8 +658,7 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                     controller: _propertyValueController,
                     decoration: const InputDecoration(labelText: 'Property Value'),
                     validator: widget.fields['property_value']?.validator != null
-                        ? (String? value) =>
-                            value != null ? widget.fields['property_value']!.validator!(value) : 'Required'
+                        ? (String? value) => value != null ? widget.fields['property_value']!.validator!(value) : 'Required'
                         : (String? value) {
                             if (value == null || value.isEmpty) return 'Required';
                             if (double.tryParse(value) == null) return 'Invalid value';
@@ -660,8 +676,7 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                     controller: _employeeCountController,
                     decoration: const InputDecoration(labelText: 'Number of Employees'),
                     validator: widget.fields['employee_count']?.validator != null
-                        ? (String? value) =>
-                            value != null ? widget.fields['employee_count']!.validator!(value) : 'Required'
+                        ? (String? value) => value != null ? widget.fields['employee_count']!.validator!(value) : 'Required'
                         : (String? value) {
                             if (value == null || value.isEmpty) return 'Required';
                             if (int.tryParse(value) == null) return 'Invalid number';
@@ -672,6 +687,7 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () async {
+                    if (kDebugMode) print('CoverDetailScreen submit pressed');
                     if (_formKey.currentState!.validate()) {
                       final details = {
                         if (widget.insuredItem != null) 'insured_item_id': widget.insuredItem!.id,
@@ -693,23 +709,77 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                         if (widget.type == 'wiba') 'employee_count': _employeeCountController.text,
                       };
 
-                      if (_subtypeId != null && _coverageTypeId != null) {
-                        await widget.showCompanyDialog(
-                          context,
-                          widget.type,
-                          widget.subtype,
-                          widget.coverageType,
-                          details,
-                          subtypeId: _subtypeId!,
-                          coverageTypeId: _coverageTypeId!,
-                          preSelectedCompany: _selectedCompany,
+                      if (_selectedCompany == null) {
+                        if (kDebugMode) print('No company selected');
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please select an insurance company')),
                         );
-                        Navigator.pop(context);
+                        return;
+                      }
+
+                      if (_subtypeId != null && _coverageTypeId != null) {
+                        try {
+                          // Fetch company ID and PDF template
+                          final companies = await InsuranceHomeScreen.getCompanies();
+                          final company = companies.firstWhere(
+                            (c) => c.name == _selectedCompany,
+                            orElse: () => throw Exception('Company not found'),
+                          );
+                          final cachedPdfTemplates = await InsuranceHomeScreen.getCachedPdfTemplates();
+                          final pdfTemplateKey = company.pdfTemplateKey.firstWhere(
+                            (key) => cachedPdfTemplates.containsKey(key),
+                            orElse: () => 'default',
+                          );
+
+                          // Submit to Firestore
+                          await FirebaseFirestore.instance.collection('form_submissions').add({
+                            'user_id': widget.insuredItem?.id ?? 'unknown',
+                            'type': widget.type,
+                            'subtype': widget.subtype,
+                            'coverage_type': widget.coverageType,
+                            'company_id': company.id,
+                            'pdf_template_key': pdfTemplateKey,
+                            'details': details,
+                            'timestamp': FieldValue.serverTimestamp(),
+                          });
+
+                          if (kDebugMode) print('Form submitted successfully');
+
+                          // Guard context usage after async gap
+                          if (!mounted) return;
+
+                            final insuranceHomeScreenState = context.findAncestorStateOfType<InsuranceHomeScreenState>();
+                            if (insuranceHomeScreenState != null) {
+                              await insuranceHomeScreenState.handleCoverSubmission(
+                              context,
+                              widget.type,
+                              widget.subtype,
+                              widget.coverageType,
+                              company.id,
+                              pdfTemplateKey,
+                              details,
+                              );
+                            }
+                              // No additional code needed here for InsuranceHomeScreenState usage.
+                          if (mounted) {
+                            Navigator.pop(context);
+                          }
+                        } catch (e, stackTrace) {
+                          if (kDebugMode) print('Error submitting form: $e\n$stackTrace');
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Failed to submit form')),
+                            );
+                          }
+                        }
                       } else {
+                        if (kDebugMode) print('Policy details not loaded: subtypeId=$_subtypeId, coverageTypeId=$_coverageTypeId');
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Policy details not loaded yet')),
                         );
                       }
+                    } else {
+                      if (kDebugMode) print('Form validation failed in CoverDetailScreen');
                     }
                   },
                   style: ElevatedButton.styleFrom(
@@ -717,7 +787,7 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   child: Text(
-                    'Next',
+                    'Submit',
                     style: GoogleFonts.roboto(color: Colors.white, fontWeight: FontWeight.w500),
                   ),
                 ),

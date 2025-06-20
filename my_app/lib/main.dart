@@ -296,7 +296,7 @@ class MyApp extends StatelessWidget {
             vertical: 20,
           ),
         ),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           color: secondaryOlive, // Olive green for containers/cards
           elevation: 6,
           shadowColor: Colors.black,
@@ -445,7 +445,7 @@ class MyApp extends StatelessWidget {
             vertical: 20,
           ),
         ),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           color: const Color.fromARGB(255, 13, 13, 23), // Olive green for containers/cards
           elevation: 6,
           shadowColor: const Color(0xFF000000).withOpacity(0.35),
