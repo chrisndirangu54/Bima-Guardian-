@@ -41,7 +41,6 @@ class PolicySubtype {
   final String name;
   final String policyTypeId;
   final String description;
-  final String? pdfTemplateKey;
 
   String icon; // Made nullable
 
@@ -50,7 +49,6 @@ class PolicySubtype {
     required this.name,
     required this.policyTypeId,
     required this.description,
-    this.pdfTemplateKey, // Made optional
     this.icon = '', // Default to empty string
   });
 
@@ -59,7 +57,6 @@ class PolicySubtype {
         'name': name,
         'policyTypeId': policyTypeId,
         'description': description,
-        'pdfTemplateKey': pdfTemplateKey, // Include in JSON
       };
 
   factory PolicySubtype.fromJson(Map<String, dynamic> json) => PolicySubtype(
@@ -67,7 +64,6 @@ class PolicySubtype {
         name: json['name'],
         policyTypeId: json['policyTypeId'],
         description: json['description'],
-        pdfTemplateKey: json['pdfTemplateKey'], // Nullable in fromJson
       );
 
   // Added fromFirestore factory method
@@ -76,7 +72,6 @@ class PolicySubtype {
         name: data['name'] ?? '',
         policyTypeId: data['policyTypeId'] ?? '',
         description: data['description'] ?? '',
-        pdfTemplateKey: data['pdfTemplateKey'],
       );
 
   @override
@@ -87,7 +82,6 @@ class CoverageType {
   final String id;
   final String name;
   final String description;
-  final String? pdfTemplateKey;
 
   String icon; // Made nullable
 
@@ -95,7 +89,6 @@ class CoverageType {
     required this.id,
     required this.name,
     required this.description,
-    this.pdfTemplateKey, // Made optional
     this.icon = '', // Default to empty string
   });
 
@@ -103,14 +96,12 @@ class CoverageType {
         'id': id,
         'name': name,
         'description': description,
-        'pdfTemplateKey': pdfTemplateKey, // Include in JSON
       };
 
   factory CoverageType.fromJson(Map<String, dynamic> json) => CoverageType(
         id: json['id'],
         name: json['name'],
         description: json['description'],
-        pdfTemplateKey: json['pdfTemplateKey'], // Nullable in fromJson
       );
 
   // Added fromFirestore factory method
@@ -118,7 +109,6 @@ class CoverageType {
         id: data['id'] ?? '',
         name: data['name'] ?? '',
         description: data['description'] ?? '',
-        pdfTemplateKey: data['pdfTemplateKey'],
       );
 
 

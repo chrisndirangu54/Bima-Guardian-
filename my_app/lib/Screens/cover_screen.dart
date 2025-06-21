@@ -11,7 +11,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:my_app/insurance_app.dart';
 
-
+// GenericDialog for selecting extracted data
 class GenericDialog extends StatelessWidget {
   final String title;
   final Map<String, String> extractedData;
@@ -26,16 +26,13 @@ class GenericDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Filter out 'insurer' to avoid premature company selection
-    final filteredData = Map<String, String>.from(extractedData)..remove('insurer');
-
     return AlertDialog(
-      title: Text(title),
+      title: Text(title, style: GoogleFonts.lora(fontSize: 18, fontWeight: FontWeight.w600)),
       content: SingleChildScrollView(
         child: Column(
-          children: filteredData.entries.map((entry) {
+          children: extractedData.entries.map((entry) {
             return ListTile(
-              title: Text('${entry.key}: ${entry.value}'),
+              title: Text('${entry.key}: ${entry.value}', style: GoogleFonts.roboto()),
               onTap: () => onConfirm({entry.key: entry.value}),
             );
           }).toList(),
@@ -44,23 +41,23 @@ class GenericDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text('Cancel', style: GoogleFonts.roboto(color: Colors.grey)),
         ),
         TextButton(
-          onPressed: () => onConfirm(filteredData),
-          child: const Text('Apply All'),
+          onPressed: () => onConfirm(extractedData),
+          child: Text('Apply All', style: GoogleFonts.roboto(color: const Color(0xFF8B0000))),
         ),
       ],
     );
   }
 }
 
-
-class CompanySelectionDialog extends StatelessWidget {
+// CompanySelectionDialog with file upload capability
+class CompanySelectionDialog extends StatefulWidget {
   final String? previousCompany;
   final String subtypeId;
   final String coverageTypeId;
-  final Function(String?) onConfirm;
+  final Function(String?, Map<String, String>?) onConfirm;
 
   const CompanySelectionDialog({
     super.key,
@@ -71,19 +68,99 @@ class CompanySelectionDialog extends StatelessWidget {
   });
 
   @override
+  State<CompanySelectionDialog> createState() => _CompanySelectionDialogState();
+}
+
+class _CompanySelectionDialogState extends State<CompanySelectionDialog> {
+  String? selectedCompany;
+  Map<String, String>? extractedData;
+  File? previousPolicyFile;
+  bool isLoading = false;
+
+  Future<Map<String, String>?> _performOCR(File file) async {
+    try {
+      setState(() => isLoading = true);
+      final bytes = await file.readAsBytes();
+      final base64Image = base64Encode(bytes);
+
+      final requestBody = {
+        'model': 'gpt-4o',
+        'messages': [
+          {
+            'role': 'user',
+            'content': [
+              {
+                'type': 'text',
+                'text':
+                    'Extract the following fields from the provided document: name, email, phone, id_number, kra_pin, vehicle_value, regno, chassis_number, health_condition, travel_destination, employee_count, insurer. Return as a JSON object.',
+              },
+              {
+                'type': 'image_url',
+                'image_url': {'url': 'data:image/jpeg;base64,$base64Image'}
+              }
+            ]
+          }
+        ],
+        'max_tokens': 300
+      };
+
+      final response = await http.post(
+        Uri.parse('https://api.openai.com/v1/chat/completions'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer YOUR_OPENAI_API_KEY', // TODO: Secure this key
+        },
+        body: jsonEncode(requestBody),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final extracted = jsonDecode(data['choices'][0]['message']['content']) as Map<String, dynamic>;
+        return extracted.map((key, value) => MapEntry(key, value.toString()));
+      }
+      return null;
+    } catch (e) {
+      if (kDebugMode) print('OCR Error: $e');
+      return null;
+    } finally {
+      setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> _uploadPreviousPolicy() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+    );
+    if (result != null && result.files.single.path != null) {
+      setState(() {
+        previousPolicyFile = File(result.files.single.path!);
+      });
+
+      final data = await _performOCR(previousPolicyFile!);
+      if (data != null && data.isNotEmpty) {
+        setState(() {
+          extractedData = data;
+          selectedCompany = data['insurer'];
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No data extracted from the document')),
+        );
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       title: Text(
-        previousCompany != null
-            ? 'Previous Insurer Detected: $previousCompany'
+        widget.previousCompany != null
+            ? 'Previous Insurer: ${widget.previousCompany}'
             : 'Select Insurance Company',
-        style: GoogleFonts.lora(
-          color: const Color(0xFF1B263B),
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-        ),
+        style: GoogleFonts.lora(fontSize: 18, fontWeight: FontWeight.w600, color: const Color(0xFF1B263B)),
       ),
       content: FutureBuilder<List<Company>>(
         future: InsuranceHomeScreen.getCompanies(),
@@ -98,89 +175,102 @@ class CompanySelectionDialog extends StatelessWidget {
 
           final companies = snapshot.data ?? [];
           final eligibleCompanies = companies.where((c) {
-            final matchesSubtype = c.policySubtype?.id == subtypeId;
-            final matchesCoverage = c.coverageType?.id == coverageTypeId;
+            final matchesSubtype = c.policySubtype?.id == widget.subtypeId;
+            final matchesCoverage = c.coverageType?.id == widget.coverageTypeId;
             return matchesSubtype || matchesCoverage;
           }).toList();
 
           if (eligibleCompanies.isEmpty) {
-            return const Text('No eligible companies available for this policy');
+            return const Text('No eligible companies available');
           }
 
           final companyNames = eligibleCompanies.map((c) => c.name).toList();
-          String? selectedCompany = previousCompany != null && companyNames.contains(previousCompany)
-              ? previousCompany
+          selectedCompany ??= widget.previousCompany != null && companyNames.contains(widget.previousCompany)
+              ? widget.previousCompany
               : null;
 
-          return StatefulBuilder(
-            builder: (context, setState) {
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (previousCompany != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8.0),
-                      child: Text(
-                        'Proceed with $previousCompany or choose another?',
-                        style: GoogleFonts.roboto(color: const Color(0xFF1B263B)),
-                      ),
+          return SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.previousCompany != null && !companyNames.contains(widget.previousCompany))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0),
+                    child: Text(
+                      'Previous insurer (${widget.previousCompany}) not eligible. Select another.',
+                      style: GoogleFonts.roboto(color: Colors.red),
                     ),
-                  DropdownButtonFormField<String>(
-                    decoration: InputDecoration(
-                      labelText: 'Company',
-                      labelStyle: GoogleFonts.roboto(color: const Color(0xFFD3D3D3)),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Color(0xFFD3D3D3)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Color(0xFFD3D3D3)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Color(0xFF8B0000)),
-                      ),
+                  ),
+                DropdownButtonFormField<String>(
+                  decoration: InputDecoration(
+                    labelText: 'Company',
+                    labelStyle: GoogleFonts.roboto(color: const Color(0xFFD3D3D3)),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFFD3D3D3)),
                     ),
-                    value: selectedCompany,
-                    hint: Text('Select Company', style: GoogleFonts.roboto()),
-                    items: companyNames
-                        .map((company) => DropdownMenuItem(
-                              value: company,
-                              child: Text(
-                                company,
-                                style: GoogleFonts.roboto(color: const Color(0xFF1B263B)),
-                              ),
-                            ))
-                        .toList(),
-                    onChanged: (value) => setState(() => selectedCompany = value),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFF8B0000)),
+                    ),
                   ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: Text(
-                          'Cancel',
-                          style: GoogleFonts.roboto(color: const Color(0xFFD3D3D3)),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          onConfirm(selectedCompany);
-                          Navigator.pop(context);
-                        },
-                        child: Text(
-                          'Confirm',
-                          style: GoogleFonts.roboto(color: const Color(0xFF8B0000)),
-                        ),
-                      ),
-                    ],
+                  value: selectedCompany,
+                  hint: Text('Select Company', style: GoogleFonts.roboto()),
+                  items: companyNames
+                      .map((company) => DropdownMenuItem(
+                            value: company,
+                            child: Text(company, style: GoogleFonts.roboto(color: const Color(0xFF1B263B))),
+                          ))
+                      .toList(),
+                  onChanged: (value) => setState(() => selectedCompany = value),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: isLoading ? null : _uploadPreviousPolicy,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF8B0000),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
+                  child: Text(
+                    isLoading
+                        ? 'Processing...'
+                        : previousPolicyFile == null
+                            ? 'Upload Previous Policy'
+                            : 'Previous Policy Uploaded',
+                    style: GoogleFonts.roboto(color: Colors.white),
+                  ),
+                ),
+                if (extractedData != null && extractedData!.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text('Extracted Data:', style: GoogleFonts.roboto(fontWeight: FontWeight.bold)),
+                  ...extractedData!.entries.map((entry) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2.0),
+                        child: Text('${entry.key}: ${entry.value}',
+                            style: GoogleFonts.roboto(color: const Color(0xFF1B263B))),
+                      )),
                 ],
-              );
-            },
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text('Cancel', style: GoogleFonts.roboto(color: const Color(0xFFD3D3D3))),
+                    ),
+                    TextButton(
+                      onPressed: selectedCompany != null
+                          ? () {
+                              widget.onConfirm(selectedCompany, extractedData);
+                              Navigator.pop(context);
+                            }
+                          : null,
+                      child: Text('Confirm', style: GoogleFonts.roboto(color: const Color(0xFF8B0000))),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           );
         },
       ),
@@ -188,12 +278,13 @@ class CompanySelectionDialog extends StatelessWidget {
   }
 }
 
+// CoverDetailScreen with autofill support
 class CoverDetailScreen extends StatefulWidget {
   final String type;
   final String subtype;
   final String coverageType;
   final InsuredItem? insuredItem;
-  final Function(Map<String, String>) onSubmit; // Not used directly
+  final Function(Map<String, String>) onSubmit;
   final Function(File, Map<String, String>?, String?) onAutofillPreviousPolicy;
   final Function(File, Map<String, String>?) onAutofillLogbook;
   final Map<String, FieldDefinition> fields;
@@ -206,8 +297,9 @@ class CoverDetailScreen extends StatefulWidget {
     String? preSelectedCompany,
     required String subtypeId,
     required String coverageTypeId,
-  }) showCompanyDialog; // Kept for compatibility
-  final String? preSelectedCompany; // Added
+  }) showCompanyDialog;
+  final String? preSelectedCompany;
+  final Map<String, String>? extractedData;
 
   const CoverDetailScreen({
     super.key,
@@ -220,7 +312,8 @@ class CoverDetailScreen extends StatefulWidget {
     required this.onAutofillLogbook,
     required this.fields,
     required this.showCompanyDialog,
-    this.preSelectedCompany, // Added
+    this.preSelectedCompany,
+    this.extractedData,
   });
 
   @override
@@ -246,10 +339,14 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
   String? _selectedCompany;
   String? _subtypeId;
   String? _coverageTypeId;
+  bool _isOcrLoading = false;
 
   @override
   void initState() {
     super.initState();
+    _selectedCompany = widget.preSelectedCompany;
+
+    // Initialize from insuredItem
     if (widget.insuredItem != null) {
       _nameController.text = widget.insuredItem!.details['name'] ?? '';
       _emailController.text = widget.insuredItem!.details['email'] ?? '';
@@ -265,9 +362,12 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
       _employeeCountController.text = widget.insuredItem!.details['employee_count'] ?? '';
       _logbookFile = widget.insuredItem!.logbookPath != null ? File(widget.insuredItem!.logbookPath!) : null;
       _previousPolicyFile = widget.insuredItem!.previousPolicyPath != null ? File(widget.insuredItem!.previousPolicyPath!) : null;
-      _selectedCompany = widget.insuredItem!.details['insurer'] ?? widget.preSelectedCompany;
-    } else {
-      _selectedCompany = widget.preSelectedCompany;
+      _selectedCompany ??= widget.insuredItem!.details['insurer'];
+    }
+
+    // Autofill from extractedData
+    if (widget.extractedData != null) {
+      _autofillFields(widget.extractedData!);
     }
 
     _initializeIds();
@@ -277,24 +377,28 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
     try {
       final subtype = Company.allPolicySubtypes.firstWhere(
         (s) => s.name.toLowerCase() == widget.subtype.toLowerCase(),
-        orElse: () => Company.allPolicySubtypes.first,
+        orElse: () => throw Exception('Subtype not found'),
       );
       final coverageType = Company.allCoverageTypes.firstWhere(
         (c) => c.name.toLowerCase() == widget.coverageType.toLowerCase(),
-        orElse: () => Company.allCoverageTypes.first,
+        orElse: () => throw Exception('Coverage type not found'),
       );
 
       setState(() {
         _subtypeId = subtype.id;
         _coverageTypeId = coverageType.id;
       });
-    } catch (e, stackTrace) {
-      if (kDebugMode) print('Error initializing IDs: $e\n$stackTrace');
+    } catch (e) {
+      if (kDebugMode) print('Error initializing IDs: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to load policy details')),
+      );
     }
   }
 
   Future<Map<String, String>?> _performOCR(File file) async {
     try {
+      setState(() => _isOcrLoading = true);
       final bytes = await file.readAsBytes();
       final base64Image = base64Encode(bytes);
 
@@ -307,7 +411,7 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
               {
                 'type': 'text',
                 'text':
-                    'Extract the following fields from the provided document (logbook or insurance policy): name, email, phone, id_number, kra_pin, vehicle_value, regno, chassis_number, health_condition, travel_destination, employee_count, insurer. Return as a JSON object.',
+                    'Extract the following fields from the provided document: name, email, phone, id_number, kra_pin, vehicle_value, regno, chassis_number, health_condition, travel_destination, employee_count, insurer. Return as a JSON object.',
               },
               {
                 'type': 'image_url',
@@ -323,7 +427,7 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
         Uri.parse('https://api.openai.com/v1/chat/completions'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer YOUR_OPENAI_API_KEY',
+          'Authorization': 'Bearer YOUR_OPENAI_API_KEY', // TODO: Secure this key
         },
         body: jsonEncode(requestBody),
       );
@@ -335,8 +439,10 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
       }
       return null;
     } catch (e) {
-      if (kDebugMode) print('OpenAI OCR Error: $e');
+      if (kDebugMode) print('OCR Error: $e');
       return null;
+    } finally {
+      setState(() => _isOcrLoading = false);
     }
   }
 
@@ -401,18 +507,17 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
           context: context,
           builder: (context) => GenericDialog(
             title: 'Select Logbook Data',
-            extractedData: extractedData,
+            extractedData: extractedData..remove('insurer'),
             onConfirm: (selectedData) {
               _autofillFields(selectedData);
               widget.onAutofillLogbook(_logbookFile!, selectedData);
-              Navigator.pop(context);
             },
           ),
         );
       } else {
         widget.onAutofillLogbook(_logbookFile!, null);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No data extracted from the logbook')),
+          const SnackBar(content: Text('No data extracted from logbook')),
         );
       }
     }
@@ -430,36 +535,35 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
 
       final extractedData = await _performOCR(_previousPolicyFile!);
       if (extractedData != null && extractedData.isNotEmpty) {
-        final previousCompany = extractedData['insurer'];
         showDialog(
           context: context,
           builder: (context) => GenericDialog(
             title: 'Select Previous Policy Data',
-            extractedData: extractedData,
+            extractedData: extractedData..remove('insurer'),
             onConfirm: (selectedData) {
               _autofillFields(selectedData);
               if (_subtypeId != null && _coverageTypeId != null) {
-                showDialog(
-                  context: context,
-                  builder: (context) => CompanySelectionDialog(
-                    previousCompany: previousCompany,
-                    subtypeId: _subtypeId!,
-                    coverageTypeId: _coverageTypeId!,
-                    onConfirm: (selectedCompany) {
-                      setState(() => _selectedCompany = selectedCompany ?? _selectedCompany);
-                      widget.onAutofillPreviousPolicy(_previousPolicyFile!, selectedData, selectedCompany);
-                      FirebaseFirestore.instance.collection('autofilled_forms').add({
-                        'user_id': widget.insuredItem?.id ?? 'unknown',
-                        'fields': selectedData,
-                        'insurer': selectedCompany ?? 'none',
-                        'timestamp': FieldValue.serverTimestamp(),
-                      });
-                    },
-                  ),
-                );
+                widget.showCompanyDialog(
+                  context,
+                  widget.type,
+                  widget.subtype,
+                  widget.coverageType,
+                  selectedData,
+                  preSelectedCompany: extractedData['insurer'],
+                  subtypeId: _subtypeId!,
+                  coverageTypeId: _coverageTypeId!,
+                ).then((_) {
+                  widget.onAutofillPreviousPolicy(_previousPolicyFile!, selectedData, _selectedCompany);
+                  FirebaseFirestore.instance.collection('autofilled_forms').add({
+                    'user_id': widget.insuredItem?.id ?? 'unknown',
+                    'fields': selectedData,
+                    'insurer': _selectedCompany ?? 'none',
+                    'timestamp': FieldValue.serverTimestamp(),
+                  });
+                });
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Policy details not loaded yet')),
+                  const SnackBar(content: Text('Policy details not loaded')),
                 );
               }
             },
@@ -468,7 +572,7 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
       } else {
         widget.onAutofillPreviousPolicy(_previousPolicyFile!, null, null);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No data extracted from the document')),
+          const SnackBar(content: Text('No data extracted from document')),
         );
       }
     }
@@ -476,38 +580,24 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Ensure insuredItem is not null before proceeding
-    final String? insuredItemId = widget.insuredItem?.id;
-    if (insuredItemId == null) {
+    if (_subtypeId == null || _coverageTypeId == null) {
       return Scaffold(
-        appBar: AppBar(
-          title: Text('${widget.type.toUpperCase()} Cover Details'),
-        ),
-        body: const Center(child: Text('No insured item selected')),
+        appBar: AppBar(title: Text('${widget.type.toUpperCase()} Cover Details')),
+        body: const Center(child: CircularProgressIndicator(semanticsLabel: 'Loading policy details')),
       );
     }
 
-    final String? preSelectedCompany = widget.preSelectedCompany;
-      if (preSelectedCompany != null && _selectedCompany == null) {
-        _selectedCompany = preSelectedCompany;
-      }
-      // Ensure subtypeId and coverageTypeId are initialized before building the form
-      if (_subtypeId == null && _coverageTypeId == null) {
-        _initializeIds();
-      }
 
-      if (_subtypeId == null || _coverageTypeId == null) {
-        return Scaffold(
-          appBar: AppBar(
-            title: Text('${widget.type.toUpperCase()} Cover Details'),
-          ),
-          body: const Center(child: CircularProgressIndicator()),
-        );
-      }
+
+    // Check if fields are defined for the cover type
+    if (widget.fields.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: Text('${widget.type.toUpperCase()} Cover Details')),
+        body: const Center(child: Text('No fields defined for this cover type')),
+      );
+    }
     return Scaffold(
-      appBar: AppBar(
-        title: Text('${widget.type.toUpperCase()} Cover Details'),
-      ),
+      appBar: AppBar(title: Text('${widget.type.toUpperCase()} Cover Details')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Form(
@@ -516,99 +606,115 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Personal Details',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: GoogleFonts.roboto(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 TextFormField(
                   controller: _nameController,
                   decoration: const InputDecoration(labelText: 'Name'),
-                  validator: widget.fields['name']?.validator != null
-                      ? (String? value) => value != null ? widget.fields['name']!.validator!(value) : 'Required'
-                      : (String? value) => value == null || value.isEmpty ? 'Required' : null,
+                  validator: widget.fields['name']?.validator ??
+                      (String? value) => value == null || value.isEmpty ? 'Required' : null,
                 ),
                 TextFormField(
                   controller: _emailController,
                   decoration: const InputDecoration(labelText: 'Email'),
-                  validator: widget.fields['email']?.validator != null
-                      ? (String? value) => value != null ? widget.fields['email']!.validator!(value) : 'Required'
-                      : (String? value) {
-                          if (value == null || value.isEmpty) return 'Required';
-                          if (!RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$').hasMatch(value)) return 'Invalid email';
-                          return null;
-                        },
+                  validator: widget.fields['email']?.validator ??
+                      (value) {
+                        if (value == null || value.isEmpty) return 'Required';
+                        if (!RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$').hasMatch(value)) {
+                          return 'Invalid email';
+                        }
+                        return null;
+                      },
                 ),
                 TextFormField(
                   controller: _phoneController,
                   decoration: const InputDecoration(labelText: 'Phone'),
-                  validator: widget.fields['phone']?.validator != null
-                      ? (String? value) => value != null ? widget.fields['phone']!.validator!(value) : 'Required'
-                      : (String? value) {
-                          if (value == null || value.isEmpty) return 'Required';
-                          if (!RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)) return 'Invalid phone number';
-                          return null;
-                        },
+                  validator: widget.fields['phone']?.validator ??
+                      (String? value) {
+                        if (value == null || value.isEmpty) return 'Required';
+                        if (!RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)) return 'Invalid phone number';
+                        return null;
+                      },
                 ),
                 TextFormField(
                   controller: _idNumberController,
                   decoration: const InputDecoration(labelText: 'ID Number'),
-                  validator: widget.fields['id_number']?.validator != null
-                      ? (String? value) => value != null ? widget.fields['id_number']!.validator!(value) : 'Required'
-                      : (String? value) {
-                          if (value == null || value.isEmpty) return 'Required';
-                          if (!RegExp(r'^\d{8,}$').hasMatch(value)) return 'Invalid ID number';
-                          return null;
-                        },
+                  validator: widget.fields['id_number']?.validator ??
+                      (value) {
+                        if (value == null || value.isEmpty) return 'Required';
+                        if (!RegExp(r'^\d{8,}$').hasMatch(value)) return 'Invalid ID number';
+                        return null;
+                      },
                 ),
                 TextFormField(
                   controller: _kraPinController,
                   decoration: const InputDecoration(labelText: 'KRA PIN'),
-                  validator: widget.fields['kra_pin']?.validator != null
-                      ? (String? value) => value != null ? widget.fields['kra_pin']!.validator!(value) : 'Required'
-                      : (String? value) {
-                          if (value == null || value.isEmpty) return 'Required';
-                          if (!RegExp(r'^[A-Z]\d{9}[A-Z]$').hasMatch(value)) return 'Invalid KRA PIN';
-                          return null;
-                        },
+                  validator: widget.fields['kra_pin']?.validator ??
+                      (value) {
+                        if (value == null || value.isEmpty) return 'Required';
+                        if (!RegExp(r'^[A-Z]\d{9}[A-Z]$').hasMatch(value)) return 'Invalid KRA PIN';
+                        return null;
+                      },
                 ),
                 if (widget.type == 'motor') ...[
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'Vehicle Details',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.roboto(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   TextFormField(
                     controller: _vehicleValueController,
                     decoration: const InputDecoration(labelText: 'Vehicle Value'),
-                    validator: widget.fields['vehicle_value']?.validator != null
-                        ? (String? value) => value != null ? widget.fields['vehicle_value']!.validator!(value) : 'Required'
-                        : (String? value) {
-                            if (value == null || value.isEmpty) return 'Required';
-                            if (double.tryParse(value) == null) return 'Invalid value';
-                            return null;
-                          },
+                    validator: widget.fields['vehicle_value']?.validator ??
+                        (value) {
+                          if (value == null || value.isEmpty) return 'Required';
+                          if (double.tryParse(value) == null) return 'Invalid value';
+                          return null;
+                        },
                   ),
                   TextFormField(
                     controller: _regnoController,
                     decoration: const InputDecoration(labelText: 'Registration Number'),
-                    validator: widget.fields['regno']?.validator != null
-                        ? (String? value) => value != null ? widget.fields['regno']!.validator!(value) : 'Required'
-                        : (String? value) => value == null || value.isEmpty ? 'Required' : null,
+                    validator: widget.fields['regno']?.validator ??
+                        (value) => value == null || value.isEmpty ? 'Required' : null,
                   ),
                   TextFormField(
                     controller: _chassisNumberController,
                     decoration: const InputDecoration(labelText: 'Chassis Number'),
-                    validator: widget.fields['chassis_number']?.validator != null
-                        ? (String? value) => value != null ? widget.fields['chassis_number']!.validator!(value) : 'Required'
-                        : (String? value) => value == null || value.isEmpty ? 'Required' : null,
+                    validator: widget.fields['chassis_number']?.validator ??
+                        (value) => value == null || value.isEmpty ? 'Required' : null,
                   ),
                   ElevatedButton(
-                    onPressed: _uploadLogbook,
-                    child: Text(_logbookFile == null ? 'Upload Logbook' : 'Logbook Uploaded'),
+                    onPressed: _isOcrLoading ? null : _uploadLogbook,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF8B0000),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: Text(
+                      _isOcrLoading
+                          ? 'Processing...'
+                          : _logbookFile == null
+                              ? 'Upload Logbook'
+                              : 'Logbook Uploaded',
+                      style: GoogleFonts.roboto(color: Colors.white),
+                    ),
                   ),
                   ElevatedButton(
-                    onPressed: _uploadPreviousPolicy,
-                    child: Text(_previousPolicyFile == null ? 'Upload Previous Policy' : 'Previous Policy Uploaded'),
+                    onPressed: _isOcrLoading ? null : _uploadPreviousPolicy,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF8B0000),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: Text(
+                      _isOcrLoading
+                          ? 'Processing...'
+                          : _previousPolicyFile == null
+                              ? 'Upload Previous Policy'
+                              : 'Previous Policy Uploaded',
+                      style: GoogleFonts.roboto(color: Colors.white),
+                    ),
                   ),
                   if (_selectedCompany != null)
                     Padding(
@@ -621,174 +727,156 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                 ],
                 if (widget.type == 'medical') ...[
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'Medical Details',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.roboto(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   TextFormField(
                     controller: _healthConditionController,
                     decoration: const InputDecoration(labelText: 'Health Conditions (if any)'),
-                    validator: widget.fields['health_condition']?.validator != null
-                        ? (String? value) => value != null ? widget.fields['health_condition']!.validator!(value) : null
-                        : null,
+                    validator: widget.fields['health_condition']?.validator,
                   ),
                 ],
                 if (widget.type == 'travel') ...[
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'Travel Details',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.roboto(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   TextFormField(
                     controller: _travelDestinationController,
                     decoration: const InputDecoration(labelText: 'Travel Destination'),
-                    validator: widget.fields['travel_destination']?.validator != null
-                        ? (String? value) => value != null ? widget.fields['travel_destination']!.validator!(value) : 'Required'
-                        : (String? value) => value == null || value.isEmpty ? 'Required' : null,
+                    validator: widget.fields['travel_destination']?.validator ??
+                        (value) => value == null || value.isEmpty ? 'Required' : null,
                   ),
                 ],
                 if (widget.type == 'property') ...[
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'Property Details',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.roboto(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   TextFormField(
                     controller: _propertyValueController,
                     decoration: const InputDecoration(labelText: 'Property Value'),
-                    validator: widget.fields['property_value']?.validator != null
-                        ? (String? value) => value != null ? widget.fields['property_value']!.validator!(value) : 'Required'
-                        : (String? value) {
-                            if (value == null || value.isEmpty) return 'Required';
-                            if (double.tryParse(value) == null) return 'Invalid value';
-                            return null;
-                          },
+                    validator: widget.fields['property_value']?.validator ??
+                        (value) {
+                          if (value == null || value.isEmpty) return 'Required';
+                          if (double.tryParse(value) == null) return 'Invalid value';
+                          return null;
+                        },
                   ),
                 ],
                 if (widget.type == 'wiba') ...[
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'WIBA Details',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.roboto(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   TextFormField(
                     controller: _employeeCountController,
                     decoration: const InputDecoration(labelText: 'Number of Employees'),
-                    validator: widget.fields['employee_count']?.validator != null
-                        ? (String? value) => value != null ? widget.fields['employee_count']!.validator!(value) : 'Required'
-                        : (String? value) {
-                            if (value == null || value.isEmpty) return 'Required';
-                            if (int.tryParse(value) == null) return 'Invalid number';
-                            return null;
-                          },
+                    validator: widget.fields['employee_count']?.validator ??
+                        (String? value) {
+                          if (value == null || value.isEmpty) return 'Required';
+                          if (int.tryParse(value) == null) return 'Invalid number';
+                          return null;
+                        },
                   ),
                 ],
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () async {
-                    if (kDebugMode) print('CoverDetailScreen submit pressed');
-                    if (_formKey.currentState!.validate()) {
-                      final details = {
-                        if (widget.insuredItem != null) 'insured_item_id': widget.insuredItem!.id,
-                        'name': _nameController.text,
-                        'email': _emailController.text,
-                        'phone': _phoneController.text,
-                        'id_number': _idNumberController.text,
-                        'kra_pin': _kraPinController.text,
-                        if (widget.type == 'motor') ...{
-                          'vehicle_value': _vehicleValueController.text,
-                          'regno': _regnoController.text,
-                          'chassis_number': _chassisNumberController.text,
-                          'logbook_path': _logbookFile?.path ?? '',
-                          'previous_policy_path': _previousPolicyFile?.path ?? '',
-                        },
-                        if (widget.type == 'medical') 'health_condition': _healthConditionController.text,
-                        if (widget.type == 'travel') 'travel_destination': _travelDestinationController.text,
-                        if (widget.type == 'property') 'property_value': _propertyValueController.text,
-                        if (widget.type == 'wiba') 'employee_count': _employeeCountController.text,
-                      };
+                    if (!_formKey.currentState!.validate()) {
+                      if (kDebugMode) print('Form validation failed');
+                      return;
+                    }
 
-                      if (_selectedCompany == null) {
-                        if (kDebugMode) print('No company selected');
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Please select an insurance company')),
-                        );
-                        return;
-                      }
+                    if (_selectedCompany == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please select an insurance company')),
+                      );
+                      return;
+                    }
 
-                      if (_subtypeId != null && _coverageTypeId != null) {
-                        try {
-                          // Fetch company ID and PDF template
-                          final companies = await InsuranceHomeScreen.getCompanies();
-                          final company = companies.firstWhere(
-                            (c) => c.name == _selectedCompany,
-                            orElse: () => throw Exception('Company not found'),
-                          );
-                          final cachedPdfTemplates = await InsuranceHomeScreen.getCachedPdfTemplates();
-                          final pdfTemplateKey = company.pdfTemplateKey.firstWhere(
-                            (key) => cachedPdfTemplates.containsKey(key),
-                            orElse: () => 'default',
-                          );
+                    final details = {
+                      if (widget.insuredItem != null) 'insured_item_id': widget.insuredItem!.id,
+                      'name': _nameController.text,
+                      'email': _emailController.text,
+                      'phone': _phoneController.text,
+                      'id_number': _idNumberController.text,
+                      'kra_pin': _kraPinController.text,
+                      'insurer': _selectedCompany!,
+                      if (widget.type == 'motor') ...{
+                        'vehicle_value': _vehicleValueController.text,
+                        'regno': _regnoController.text,
+                        'chassis_number': _chassisNumberController.text,
+                        'logbook_path': _logbookFile?.path ?? '',
+                        'previous_policy_path': _previousPolicyFile?.path ?? '',
+                      },
+                      if (widget.type == 'medical') 'health_condition': _healthConditionController.text,
+                      if (widget.type == 'travel') 'travel_destination': _travelDestinationController.text,
+                      if (widget.type == 'property') 'property_value': _propertyValueController.text,
+                      if (widget.type == 'wiba') 'employee_count': _employeeCountController.text,
+                    };
 
-                          // Submit to Firestore
-                          await FirebaseFirestore.instance.collection('form_submissions').add({
-                            'user_id': widget.insuredItem?.id ?? 'unknown',
-                            'type': widget.type,
-                            'subtype': widget.subtype,
-                            'coverage_type': widget.coverageType,
-                            'company_id': company.id,
-                            'pdf_template_key': pdfTemplateKey,
-                            'details': details,
-                            'timestamp': FieldValue.serverTimestamp(),
-                          });
+                    try {
+                      final companies = await InsuranceHomeScreen.getCompanies();
+                      final company = companies.firstWhere(
+                        (c) => c.name == _selectedCompany,
+                        orElse: () => throw Exception('Company not found'),
+                      );
+                      final cachedPdfTemplates = await InsuranceHomeScreen.getCachedPdfTemplates();
+                      final pdfTemplateKey = company.pdfTemplateKey.firstWhere(
+                        (key) => cachedPdfTemplates.containsKey(key),
+                        orElse: () => 'default',
+                      );
 
-                          if (kDebugMode) print('Form submitted successfully');
+                      await FirebaseFirestore.instance.collection('form_submissions').add({
+                        'user_id': widget.insuredItem?.id ?? 'unknown',
+                        'type': widget.type,
+                        'subtype': widget.subtype,
+                        'coverage_type': widget.coverageType,
+                        'company_id': company.id,
+                        'pdf_template_key': pdfTemplateKey,
+                        'details': details,
+                        'timestamp': FieldValue.serverTimestamp(),
+                      });
 
-                          // Guard context usage after async gap
-                          if (!mounted) return;
+                      if (kDebugMode) print('Form submitted successfully');
 
-                            final insuranceHomeScreenState = context.findAncestorStateOfType<InsuranceHomeScreenState>();
-                            if (insuranceHomeScreenState != null) {
-                              await insuranceHomeScreenState.handleCoverSubmission(
-                              context,
-                              widget.type,
-                              widget.subtype,
-                              widget.coverageType,
-                              company.id,
-                              pdfTemplateKey,
-                              details,
-                              );
-                            }
-                              // No additional code needed here for InsuranceHomeScreenState usage.
-                          if (mounted) {
-                            Navigator.pop(context);
-                          }
-                        } catch (e, stackTrace) {
-                          if (kDebugMode) print('Error submitting form: $e\n$stackTrace');
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Failed to submit form')),
-                            );
-                          }
-                        }
-                      } else {
-                        if (kDebugMode) print('Policy details not loaded: subtypeId=$_subtypeId, coverageTypeId=$_coverageTypeId');
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Policy details not loaded yet')),
+                      if (!mounted) return;
+
+                      final insuranceHomeScreenState = context.findAncestorStateOfType<InsuranceHomeScreenState>();
+                      if (insuranceHomeScreenState != null) {
+                        await insuranceHomeScreenState.handleCoverSubmission(
+                          context,
+                          widget.type,
+                          widget.subtype,
+                          widget.coverageType,
+                          company.id,
+                          pdfTemplateKey,
+                          details,
                         );
                       }
-                    } else {
-                      if (kDebugMode) print('Form validation failed in CoverDetailScreen');
+
+                      if (mounted) {
+                        Navigator.pop(context);
+                      }
+                    } catch (e) {
+                      if (kDebugMode) print('Error submitting form: $e');
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Failed to submit form')),
+                        );
+                      }
                     }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF8B0000),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
-                  child: Text(
-                    'Submit',
-                    style: GoogleFonts.roboto(color: Colors.white, fontWeight: FontWeight.w500),
-                  ),
+                  child: Text('Submit', style: GoogleFonts.roboto(color: Colors.white, fontWeight: FontWeight.w500)),
                 ),
               ],
             ),
@@ -815,3 +903,4 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
     super.dispose();
   }
 }
+

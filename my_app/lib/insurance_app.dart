@@ -3499,13 +3499,13 @@ final Map<String, FieldDefinition> travelFields = {
   'name': FieldDefinition(
     expectedType: ExpectedType.name,
     validator: (value) =>
-        value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
+        value!.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
             ? null
             : 'Invalid name',
   ),
   'email': FieldDefinition(
     expectedType: ExpectedType.email,
-    validator: (value) => value.isEmpty ||
+    validator: (value) => value!.isEmpty ||
             RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
                 .hasMatch(value)
         ? null
@@ -3514,21 +3514,21 @@ final Map<String, FieldDefinition> travelFields = {
   'phone': FieldDefinition(
     expectedType: ExpectedType.phone,
     validator: (value) =>
-        value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
+        value!.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
             ? null
             : 'Invalid phone number',
   ),
   'destination': FieldDefinition(
     expectedType: ExpectedType.text,
     validator: (value) =>
-        value.isEmpty || RegExp(r'^[A-Za-z\s\,\-]+$').hasMatch(value)
+        value!.isEmpty || RegExp(r'^[A-Za-z\s\,\-]+$').hasMatch(value)
             ? null
             : 'Invalid destination (use letters, commas, or hyphens)',
   ),
   'travel_start_date': FieldDefinition(
     expectedType: ExpectedType.text,
     validator: (value) {
-      if (value.isEmpty) return null;
+      if (value!.isEmpty) return null;
       try {
         DateTime.parse(value);
         return null;
@@ -3540,7 +3540,7 @@ final Map<String, FieldDefinition> travelFields = {
   'travel_end_date': FieldDefinition(
     expectedType: ExpectedType.text,
     validator: (value) {
-      if (value.isEmpty) return null;
+      if (value!.isEmpty) return null;
       try {
         DateTime.parse(value);
         return null;
@@ -3552,7 +3552,7 @@ final Map<String, FieldDefinition> travelFields = {
   'number_of_travelers': FieldDefinition(
     expectedType: ExpectedType.number,
     validator: (value) {
-      if (value.isEmpty) return null;
+      if (value!.isEmpty) return null;
       int? val = int.tryParse(value);
       return val != null && val >= 1
           ? null
@@ -3562,7 +3562,7 @@ final Map<String, FieldDefinition> travelFields = {
   'coverage_limit': FieldDefinition(
     expectedType: ExpectedType.number,
     validator: (value) {
-      if (value.isEmpty) return null;
+      if (value!.isEmpty) return null;
       double? val = double.tryParse(value);
       return val != null && val >= 0 ? null : 'Invalid coverage limit';
     },
@@ -3573,13 +3573,13 @@ final Map<String, FieldDefinition> wibaFields = {
   'name': FieldDefinition(
     expectedType: ExpectedType.name,
     validator: (value) =>
-        value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
+        value!.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
             ? null
             : 'Invalid name',
   ),
   'email': FieldDefinition(
     expectedType: ExpectedType.email,
-    validator: (value) => value.isEmpty ||
+    validator: (value) => value!.isEmpty ||
             RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
                 .hasMatch(value)
         ? null
@@ -3588,21 +3588,21 @@ final Map<String, FieldDefinition> wibaFields = {
   'phone': FieldDefinition(
     expectedType: ExpectedType.phone,
     validator: (value) =>
-        value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
+        value!.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
             ? null
             : 'Invalid phone number',
   ),
   'business_name': FieldDefinition(
     expectedType: ExpectedType.text,
     validator: (value) =>
-        value.isEmpty || RegExp(r'^[A-Za-z0-9\s\-\.]+$').hasMatch(value)
+        value!.isEmpty || RegExp(r'^[A-Za-z0-9\s\-\.]+$').hasMatch(value)
             ? null
             : 'Invalid business name',
   ),
   'number_of_employees': FieldDefinition(
     expectedType: ExpectedType.number,
     validator: (value) {
-      if (value.isEmpty) return null;
+      if (value!.isEmpty) return null;
       int? val = int.tryParse(value);
       return val != null && val >= 1
           ? null
@@ -3612,7 +3612,7 @@ final Map<String, FieldDefinition> wibaFields = {
   'coverage_limit': FieldDefinition(
     expectedType: ExpectedType.number,
     validator: (value) {
-      if (value.isEmpty) return null;
+      if (value!.isEmpty) return null;
       double? val = double.tryParse(value);
       return val != null && val >= 0 ? null : 'Invalid coverage limit';
     },
@@ -3634,13 +3634,13 @@ final Map<String, FieldDefinition> propertyFields = {
   'name': FieldDefinition(
     expectedType: ExpectedType.name,
     validator: (value) =>
-        value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
+        value!.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
             ? null
             : 'Invalid name',
   ),
   'email': FieldDefinition(
     expectedType: ExpectedType.email,
-    validator: (value) => value.isEmpty ||
+    validator: (value) => value!.isEmpty ||
             RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
                 .hasMatch(value)
         ? null
@@ -3649,14 +3649,14 @@ final Map<String, FieldDefinition> propertyFields = {
   'phone': FieldDefinition(
     expectedType: ExpectedType.phone,
     validator: (value) =>
-        value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
+        value!.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
             ? null
             : 'Invalid phone number',
   ),
   'property_value': FieldDefinition(
     expectedType: ExpectedType.number,
     validator: (value) {
-      if (value.isEmpty) return null;
+      if (value!.isEmpty) return null;
       double? val = double.tryParse(value);
       return val != null && val > 0 ? null : 'Invalid property value';
     },
@@ -3675,21 +3675,21 @@ final Map<String, FieldDefinition> propertyFields = {
   'property_location': FieldDefinition(
     expectedType: ExpectedType.text,
     validator: (value) =>
-        value.isEmpty || RegExp(r'^[A-Za-z0-9\s\,\.\-]+$').hasMatch(value)
+        value!.isEmpty || RegExp(r'^[A-Za-z0-9\s\,\.\-]+$').hasMatch(value)
             ? null
             : 'Invalid location (use letters, numbers, commas, or periods)',
   ),
   'deed_number': FieldDefinition(
     expectedType: ExpectedType.text,
     validator: (value) =>
-        value.isEmpty || RegExp(r'^[A-Za-z0-9\-\/]{5,20}$').hasMatch(value)
+        value!.isEmpty || RegExp(r'^[A-Za-z0-9\-\/]{5,20}$').hasMatch(value)
             ? null
             : 'Invalid deed number (5-20 alphanumeric characters)',
   ),
   'construction_year': FieldDefinition(
     expectedType: ExpectedType.number,
     validator: (value) {
-      if (value.isEmpty) return null;
+      if (value!.isEmpty) return null;
       int? val = int.tryParse(value);
       return val != null && val >= 1900 && val <= DateTime.now().year
           ? null
@@ -3702,13 +3702,13 @@ final Map<String, FieldDefinition> medicalFields = {
   'name': FieldDefinition(
     expectedType: ExpectedType.name,
     validator: (value) =>
-        value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
+        value!.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
             ? null
             : 'Invalid name',
   ),
   'email': FieldDefinition(
     expectedType: ExpectedType.email,
-    validator: (value) => value.isEmpty ||
+    validator: (value) => value!.isEmpty ||
             RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
                 .hasMatch(value)
         ? null
@@ -3717,14 +3717,14 @@ final Map<String, FieldDefinition> medicalFields = {
   'phone': FieldDefinition(
     expectedType: ExpectedType.phone,
     validator: (value) =>
-        value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
+        value!.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
             ? null
             : 'Invalid phone number',
   ),
   'age': FieldDefinition(
     expectedType: ExpectedType.number,
     validator: (value) {
-      if (value.isEmpty) return null;
+      if (value!.isEmpty) return null;
       int? val = int.tryParse(value);
       return val != null && val >= 0 && val <= 120 ? null : 'Invalid age';
     },
@@ -3732,7 +3732,7 @@ final Map<String, FieldDefinition> medicalFields = {
   'spouse_age': FieldDefinition(
     expectedType: ExpectedType.number,
     validator: (value) {
-      if (value.isEmpty) return null;
+      if (value!.isEmpty) return null;
       int? val = int.tryParse(value);
       return val != null && val >= 0 && val <= 120
           ? null
@@ -3742,7 +3742,7 @@ final Map<String, FieldDefinition> medicalFields = {
   'children_count': FieldDefinition(
     expectedType: ExpectedType.number,
     validator: (value) {
-      if (value.isEmpty) return null;
+      if (value!.isEmpty) return null;
       int? val = int.tryParse(value);
       return val != null && val >= 0 ? null : 'Invalid number of children';
     },
@@ -3754,7 +3754,7 @@ final Map<String, FieldDefinition> medicalFields = {
   'beneficiaries': FieldDefinition(
     expectedType: ExpectedType.number,
     validator: (value) {
-      if (value.isEmpty) return null;
+      if (value!.isEmpty) return null;
       int? val = int.tryParse(value);
       return val != null && val >= 1
           ? null
@@ -3763,14 +3763,14 @@ final Map<String, FieldDefinition> medicalFields = {
   ),
   'inpatient_limit': FieldDefinition(
     expectedType: ExpectedType.text,
-    validator: (value) => value.isEmpty || inpatientLimits.contains(value)
+    validator: (value) => value!.isEmpty || inpatientLimits.contains(value)
         ? null
         : 'Invalid inpatient limit',
   ),
   'outpatient_limit': FieldDefinition(
     expectedType: ExpectedType.number,
     validator: (value) {
-      if (value.isEmpty) return null;
+      if (value!.isEmpty) return null;
       double? val = double.tryParse(value);
       return val != null && val >= 0 ? null : 'Invalid outpatient limit';
     },
@@ -3778,7 +3778,7 @@ final Map<String, FieldDefinition> medicalFields = {
   'dental_limit': FieldDefinition(
     expectedType: ExpectedType.number,
     validator: (value) {
-      if (value.isEmpty) return null;
+      if (value!.isEmpty) return null;
       double? val = double.tryParse(value);
       return val != null && val >= 0 ? null : 'Invalid dental limit';
     },
@@ -3786,7 +3786,7 @@ final Map<String, FieldDefinition> medicalFields = {
   'optical_limit': FieldDefinition(
     expectedType: ExpectedType.number,
     validator: (value) {
-      if (value.isEmpty) return null;
+      if (value!.isEmpty) return null;
       double? val = double.tryParse(value);
       return val != null && val >= 0 ? null : 'Invalid optical limit';
     },
@@ -3794,7 +3794,7 @@ final Map<String, FieldDefinition> medicalFields = {
   'maternity_limit': FieldDefinition(
     expectedType: ExpectedType.number,
     validator: (value) {
-      if (value.isEmpty) return null;
+      if (value!.isEmpty) return null;
       double? val = double.tryParse(value);
       return val != null && val >= 0 ? null : 'Invalid maternity limit';
     },
@@ -3803,7 +3803,7 @@ final Map<String, FieldDefinition> medicalFields = {
     expectedType: ExpectedType.list,
     listItemType: ExpectedType.text,
     validator: (value) {
-      if (value.isEmpty) return null;
+      if (value!.isEmpty) return null;
       var services = value.split(', ').map((s) => s.trim()).toList();
       return services.every((s) => medicalServices.contains(s))
           ? null
@@ -3814,7 +3814,7 @@ final Map<String, FieldDefinition> medicalFields = {
     expectedType: ExpectedType.list,
     listItemType: ExpectedType.text,
     validator: (value) {
-      if (value.isEmpty) return null;
+      if (value!.isEmpty) return null;
       var selected = value.split(', ').map((s) => s.trim()).toList();
       return selected.length <= 3 &&
               selected.every((s) => underwriters.contains(s))
@@ -3828,13 +3828,13 @@ final Map<String, FieldDefinition> motorFields = {
   'name': FieldDefinition(
     expectedType: ExpectedType.name,
     validator: (value) =>
-        value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
+        value!.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
             ? null
             : 'Invalid name',
   ),
   'email': FieldDefinition(
     expectedType: ExpectedType.email,
-    validator: (value) => value.isEmpty ||
+    validator: (value) => value!.isEmpty ||
             RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
                 .hasMatch(value)
         ? null
@@ -3843,42 +3843,42 @@ final Map<String, FieldDefinition> motorFields = {
   'phone': FieldDefinition(
     expectedType: ExpectedType.phone,
     validator: (value) =>
-        value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
+        value!.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
             ? null
             : 'Invalid phone number',
   ),
   'chassis_number': FieldDefinition(
     expectedType: ExpectedType.text,
     validator: (value) =>
-        value.isEmpty || RegExp(r'^[A-Za-z0-9\-]{10,20}$').hasMatch(value)
+        value!.isEmpty || RegExp(r'^[A-Za-z0-9\-]{10,20}$').hasMatch(value)
             ? null
             : 'Invalid chassis number (10-20 alphanumeric characters)',
   ),
   'kra_pin': FieldDefinition(
     expectedType: ExpectedType.text,
     validator: (value) =>
-        value.isEmpty || RegExp(r'^[A-Za-z0-9]{11}$').hasMatch(value)
+        value!.isEmpty || RegExp(r'^[A-Za-z0-9]{11}$').hasMatch(value)
             ? null
             : 'Invalid KRA PIN (11 alphanumeric characters)',
   ),
   'regno': FieldDefinition(
     expectedType: ExpectedType.text,
     validator: (value) =>
-        value.isEmpty || RegExp(r'^[A-Za-z0-9\s\-]{5,10}$').hasMatch(value)
+        value!.isEmpty || RegExp(r'^[A-Za-z0-9\s\-]{5,10}$').hasMatch(value)
             ? null
             : 'Invalid registration number (5-10 alphanumeric characters)',
   ),
   'vehicle_value': FieldDefinition(
     expectedType: ExpectedType.number,
     validator: (value) {
-      if (value.isEmpty) return null;
+      if (value!.isEmpty) return null;
       double? val = double.tryParse(value);
       return val != null && val > 0 ? null : 'Invalid vehicle value';
     },
   ),
   'vehicle_type': FieldDefinition(
     expectedType: ExpectedType.text,
-    validator: (value) => value.isEmpty || vehicleTypes.contains(value)
+    validator: (value) => value!.isEmpty || vehicleTypes.contains(value)
         ? null
         : 'Invalid vehicle type',
   ),
@@ -6051,7 +6051,7 @@ Future<void> showInsuranceDialog(
                       previousCompany: null,
                       subtypeId: subtypeObj.id,
                       coverageTypeId: coverageType.id,
-                      onConfirm: (company) {
+                      onConfirm: (company, _) {
                         selectedCompany = company;
                         Navigator.pop(ctx);
                       },

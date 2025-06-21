@@ -12,7 +12,7 @@ enum ExpectedType {
 class FieldDefinition {
   final ExpectedType expectedType;
   final ExpectedType? listItemType; // Optional: type of elements in the list
-  final String? Function(String)? validator;
+  final String? Function(String?)? validator;
   final bool isSuggested;
   final double confidence;
   final Map<String, double>? boundingBox;
@@ -49,25 +49,25 @@ class FieldDefinition {
       );
     }
 
-    String? Function(String)? validator;
+    String? Function(String?)? validator;
 
     switch (expectedType) {
       case ExpectedType.text:
         validator = (value) =>
-            value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
+            value == null || value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
                 ? null
                 : 'Invalid text';
         break;
 
       case ExpectedType.number:
         validator = (value) {
-          if (value.isEmpty) return null;
+          if (value == null || value.isEmpty) return null;
           return double.tryParse(value) != null ? null : 'Invalid number';
         };
         break;
 
       case ExpectedType.email:
-        validator = (value) => value.isEmpty ||
+        validator = (value) => value == null || value.isEmpty ||
                 RegExp(
                         r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
                     .hasMatch(value)
@@ -77,14 +77,14 @@ class FieldDefinition {
 
       case ExpectedType.phone:
         validator = (value) =>
-            value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
+            value == null || value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
                 ? null
                 : 'Invalid phone number';
         break;
 
       case ExpectedType.date:
         validator = (value) {
-          if (value.isEmpty) return null;
+          if (value == null || value.isEmpty) return null;
           try {
             DateTime.parse(value);
             return null;
@@ -100,14 +100,14 @@ class FieldDefinition {
 
       case ExpectedType.name:
         validator = (value) =>
-            value.isEmpty || RegExp(r'^[A-Za-z\s\-]+$').hasMatch(value)
+            value == null || value.isEmpty || RegExp(r'^[A-Za-z\s\-]+$').hasMatch(value)
                 ? null
                 : 'Invalid name';
         break;
 
       case ExpectedType.list:
         validator = (value) {
-          if (value.isEmpty) return null;
+          if (value == null || value.isEmpty) return null;
           final items = value.split(',').map((e) => e.trim()).toList();
           if (items.isEmpty) return 'List cannot be empty';
 
@@ -140,32 +140,32 @@ class FieldDefinition {
     );
   }
 
-  static String? Function(String)? getValidatorForType(ExpectedType? type) {
+  static String? Function(String?)? getValidatorForType(ExpectedType? type) {
     switch (type) {
       case ExpectedType.text:
         return (value) =>
-            value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
+            value == null || value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
                 ? null
                 : 'Invalid text';
       case ExpectedType.number:
         return (value) =>
-            value.isEmpty || double.tryParse(value) != null
+            value == null || value.isEmpty || double.tryParse(value) != null
                 ? null
                 : 'Invalid number';
       case ExpectedType.email:
-        return (value) => value.isEmpty ||
+        return (value) => value == null || value.isEmpty ||
                 RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
                     .hasMatch(value)
             ? null
             : 'Invalid email';
       case ExpectedType.phone:
         return (value) =>
-            value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
+            value == null || value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
                 ? null
                 : 'Invalid phone number';
       case ExpectedType.date:
         return (value) {
-          if (value.isEmpty) return null;
+          if (value == null || value.isEmpty) return null;
           try {
             DateTime.parse(value);
             return null;
@@ -175,7 +175,7 @@ class FieldDefinition {
         };
       case ExpectedType.name:
         return (value) =>
-            value.isEmpty || RegExp(r'^[A-Za-z\s\-]+$').hasMatch(value)
+            value == null || value.isEmpty || RegExp(r'^[A-Za-z\s\-]+$').hasMatch(value)
                 ? null
                 : 'Invalid name';
       default:

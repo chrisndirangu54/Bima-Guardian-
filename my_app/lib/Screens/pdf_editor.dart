@@ -332,22 +332,22 @@ class _PdfCoordinateEditorState extends State<PdfCoordinateEditor> {
     }
   }
 
-String? Function(String) _getValidator(ExpectedType type, {ExpectedType? listItemType}) {
+String? Function(String?) _getValidator(ExpectedType type, {ExpectedType? listItemType}) {
   switch (type) {
     case ExpectedType.text:
       return (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
+          value == null || value.isEmpty || RegExp(r'^[A-Za-z\s\-\.]+$').hasMatch(value)
               ? null
               : 'Invalid text';
 
     case ExpectedType.number:
       return (value) {
-        if (value.isEmpty) return null;
+        if (value == null || value.isEmpty) return null;
         return double.tryParse(value) != null ? null : 'Invalid number';
       };
 
     case ExpectedType.email:
-      return (value) => value.isEmpty ||
+      return (value) => value == null || value.isEmpty ||
               RegExp(
                 r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$',
               ).hasMatch(value)
@@ -356,13 +356,13 @@ String? Function(String) _getValidator(ExpectedType type, {ExpectedType? listIte
 
     case ExpectedType.phone:
       return (value) =>
-          value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
+          value == null || value.isEmpty || RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)
               ? null
               : 'Invalid phone number';
 
     case ExpectedType.date:
       return (value) {
-        if (value.isEmpty) return null;
+        if (value == null || value.isEmpty) return null;
         try {
           DateTime.parse(value);
           return null;
@@ -376,13 +376,13 @@ String? Function(String) _getValidator(ExpectedType type, {ExpectedType? listIte
 
     case ExpectedType.name:
       return (value) =>
-          value.isEmpty || RegExp(r'^[A-Za-z\s\-]+$').hasMatch(value)
+          value == null || value.isEmpty || RegExp(r'^[A-Za-z\s\-]+$').hasMatch(value)
               ? null
               : 'Invalid name';
 
     case ExpectedType.list:
       return (value) {
-        if (value.isEmpty) return null;
+        if (value == null || value.isEmpty) return null;
         final items = value.split(',').map((e) => e.trim()).toList();
         if (items.isEmpty) return 'List cannot be empty';
 
