@@ -476,7 +476,6 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final InsuranceHomeScreen insuranceHomeScreen;
     // Ensure insuredItem is not null before proceeding
     final String? insuredItemId = widget.insuredItem?.id;
     if (insuredItemId == null) {

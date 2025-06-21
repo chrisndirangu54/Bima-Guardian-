@@ -6,29 +6,26 @@ class PolicyType {
   final String id;
   final String name;
   final String description;
-  final String? pdfTemplateKey;
 
-  String? icon; // Added nullable field
+  String icon; // Added nullable field
 
   PolicyType({
     required this.id,
     required this.name,
     required this.description,
-    this.pdfTemplateKey, // Made optional
+    this.icon = '', // Default to empty string
   });
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
         'description': description,
-        'pdfTemplateKey': pdfTemplateKey, // Include in JSON
       };
 
   factory PolicyType.fromJson(Map<String, dynamic> json) => PolicyType(
         id: json['id'],
         name: json['name'],
         description: json['description'],
-        pdfTemplateKey: json['pdfTemplateKey'], // Nullable in fromJson
       );
 
   // Added fromFirestore factory method
@@ -36,7 +33,6 @@ class PolicyType {
         id: data['id'] ?? '',
         name: data['name'] ?? '',
         description: data['description'] ?? '',
-        pdfTemplateKey: data['pdfTemplateKey'],
       );
 }
 
@@ -45,7 +41,9 @@ class PolicySubtype {
   final String name;
   final String policyTypeId;
   final String description;
-  final String? pdfTemplateKey; // Added nullable field
+  final String? pdfTemplateKey;
+
+  String icon; // Made nullable
 
   PolicySubtype({
     required this.id,
@@ -53,6 +51,7 @@ class PolicySubtype {
     required this.policyTypeId,
     required this.description,
     this.pdfTemplateKey, // Made optional
+    this.icon = '', // Default to empty string
   });
 
   Map<String, dynamic> toJson() => {
@@ -88,13 +87,16 @@ class CoverageType {
   final String id;
   final String name;
   final String description;
-  final String? pdfTemplateKey; // Added nullable field
+  final String? pdfTemplateKey;
+
+  String icon; // Made nullable
 
   CoverageType({
     required this.id,
     required this.name,
     required this.description,
     this.pdfTemplateKey, // Made optional
+    this.icon = '', // Default to empty string
   });
 
   Map<String, dynamic> toJson() => {

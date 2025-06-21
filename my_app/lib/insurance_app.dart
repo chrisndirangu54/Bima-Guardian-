@@ -403,8 +403,8 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
   final TextEditingController _kraPinController = TextEditingController();
   String? _selectedVehicleType;
   String? _selectedInpatientLimit;
-  List<String> _selectedMedicalServices = [];
-  List<String> _selectedUnderwriters = [];
+  final List<String> _selectedMedicalServices = [];
+  final List<String> _selectedUnderwriters = [];
   File? _logbookFile;
   File? _previousPolicyFile;
   List<String> trendingTopics = [];
@@ -2058,7 +2058,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                             },
                             tooltip: 'Notifications',
                           ),
-                          if ((notifications?.length ?? 0) > 0)
+                          if ((notifications.length ?? 0) > 0)
                             Positioned(
                               right: 8,
                               top: 8,
@@ -2081,7 +2081,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                                 constraints: const BoxConstraints(
                                     minWidth: 20, minHeight: 20),
                                 child: Text(
-                                  '${notifications?.length ?? 0}',
+                                  '${notifications.length ?? 0}',
                                   style: GoogleFonts.roboto(
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,
@@ -2094,41 +2094,11 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                             ),
                         ],
                       ),
-                      IconButton(
-                        icon: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .primaryContainer
-                                .withOpacity(
-                                    currentType.isNotEmpty ? 0.2 : 0.1),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.save,
-                            color: currentType.isNotEmpty
-                                ? Theme.of(context).colorScheme.onPrimary
-                                : Theme.of(context)
-                                    .colorScheme
-                                    .onPrimary
-                                    .withOpacity(0.5),
-                            semanticLabel: 'Save Progress',
-                          ),
-                        ),
-                        onPressed: currentType.isNotEmpty
-                            ? () {
-                                dialogState.saveProgress(
-                                    currentType, dialogIndex);
-                                scaffoldMessengerKey.currentState?.showSnackBar(
-                                  const SnackBar(
-                                      content: Text('Progress saved')),
-                                );
-                              }
-                            : null,
-                        tooltip: 'Save progress',
-                      ),
+
                     ],
+                  ),
+                  const SliverPadding(
+                    padding: EdgeInsets.only(top: 16.0),
                   ),
                 SliverToBoxAdapter(
                   child: Column(
@@ -2328,9 +2298,9 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                                 'Building grid item $index: ${policyTypes[index].name}');
                           }
                           final policyType = policyTypes[index];
-                          final icon = getCustomEmojiWidget(policyType.icon) ??
-                              fallbackEmojiWidget(
-                                  policyType.name.toLowerCase());
+                          final Widget? icon = policyType.icon is Widget
+                              ? policyType.icon as Widget
+                              : getCustomEmojiWidget(policyType.name);
                           return InkWell(
                             onTap: () async {
                               if (kDebugMode) {
@@ -2431,44 +2401,28 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     });
   }
 
-// Returns a Text widget with the appropriate emoji
+  // Returns a Text widget with the appropriate emoji
   Widget? getCustomEmojiWidget(String? iconName) {
     if (iconName == null) {
       return const Text('🔧', style: TextStyle(fontSize: 24));
     }
     switch (iconName.toLowerCase()) {
-      case 'MOTOR':
+      case 'motor':
         return const Text('🚘', style: TextStyle(fontSize: 24));
-      case 'MEDICAL':
+      case 'medical':
         return const Text('🏥', style: TextStyle(fontSize: 24));
-      case 'TRAVEL':
+      case 'travel':
         return const Text('✈️', style: TextStyle(fontSize: 24));
-      case 'PROPERTY':
+      case 'property':
         return const Text('🏠', style: TextStyle(fontSize: 24));
-      case 'WIBA':
+      case 'wiba':
         return const Text('💼', style: TextStyle(fontSize: 24));
       default:
         return const Text('🔧', style: TextStyle(fontSize: 24));
     }
   }
 
-// Fallback version also returns emoji as Text widget
-  Widget fallbackEmojiWidget(String type) {
-    switch (type.toLowerCase()) {
-      case 'MOTOR':
-        return const Text('🚘', style: TextStyle(fontSize: 24));
-      case 'MEDICAL':
-        return const Text('🏥', style: TextStyle(fontSize: 24));
-      case 'TRAVEL':
-        return const Text('✈️', style: TextStyle(fontSize: 24));
-      case 'PROPERTY':
-        return const Text('🏠', style: TextStyle(fontSize: 24));
-      case 'WIBA':
-        return const Text('💼', style: TextStyle(fontSize: 24));
-      default:
-        return const Text('🔧', style: TextStyle(fontSize: 24));
-    }
-  }
+
 
   Widget _buildMyAccountScreen(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -2477,7 +2431,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       appBar: AppBar(
         title: const Text('My Account'),
         elevation: 4,
-        shadowColor: Colors.grey.withOpacity(0.5),
+        shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
       ),
       body: SafeArea(
         child: Padding(
@@ -2488,7 +2442,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
               // Settings-style grouped list
               Card(
                 elevation: 4,
-                shadowColor: Colors.grey.withOpacity(0.3),
+                shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12.0),
                 ),
@@ -2670,7 +2624,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       appBar: AppBar(
         title: const Text('Quotes'),
         elevation: 4,
-        shadowColor: Colors.grey.withOpacity(0.5),
+        shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
       ),
       body: ListView.builder(
         padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
@@ -2681,10 +2635,11 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
             padding: const EdgeInsets.only(bottom: 8.0),
             child: Card(
               elevation: 4,
-              shadowColor: Colors.grey.withOpacity(0.3),
+              shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12.0),
               ),
+
               child: ListTile(
                 contentPadding: const EdgeInsets.all(16.0),
                 title: Text(
@@ -2694,6 +2649,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                     fontSize: 16,
                   ),
                 ),
+
                 subtitle: Text(
                   'Premium: KES ${quote.premium.toStringAsFixed(2)}',
                   style: TextStyle(
@@ -2743,6 +2699,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                   );
                 },
               ),
+
             ),
           );
         },
@@ -2775,7 +2732,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
             padding: const EdgeInsets.only(bottom: 8.0),
             child: Card(
               elevation: 4,
-              shadowColor: Colors.grey.withOpacity(0.3),
+              shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12.0),
               ),
@@ -2987,6 +2944,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                                   ),
                                 ),
                               ),
+                              const SizedBox(height: 16),
                               ListTile(
                                 leading: const Padding(
                                   padding: EdgeInsets.all(8.0),
@@ -2998,6 +2956,8 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                                   Navigator.pop(context);
                                 },
                               ),
+                              const SizedBox(height: 16),
+
                               ListTile(
                                 leading: const Padding(
                                   padding: EdgeInsets.all(8.0),
@@ -3009,6 +2969,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                                   Navigator.pop(context);
                                 },
                               ),
+                              const SizedBox(height: 16),
                               ListTile(
                                 leading: const Padding(
                                   padding: EdgeInsets.all(8.0),
@@ -3020,6 +2981,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                                   Navigator.pop(context);
                                 },
                               ),
+                              const SizedBox(height: 16),
                               ListTile(
                                 leading: const Padding(
                                   padding: EdgeInsets.all(8.0),
@@ -3031,6 +2993,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                                   Navigator.pop(context);
                                 },
                               ),
+                              const SizedBox(height: 16),
                               if (userRole == UserRole.admin)
                                 ListTile(
                                   leading: const Padding(
@@ -3044,6 +3007,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                                     Navigator.pop(context);
                                   },
                                 ),
+                              const SizedBox(height: 16),
                               ListTile(
                                 leading: const Padding(
                                   padding: EdgeInsets.all(8.0),
@@ -3052,8 +3016,15 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                                 title: const Text('Notifications'),
                                 onTap: () {
                                   // Implement notification logic
-                                  Navigator.pop(context,
-                                      (_buildNotificationButton(context)));
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          NotificationsScreen(
+                                              notifications: notifications),
+                                    ),
+                                  );
+
                                 },
                               ),
                             ],
@@ -3409,6 +3380,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                       ),
                       IconButton(
                         icon: const Icon(Icons.send),
+                        color: Theme.of(context).primaryColor,
                         onPressed: () async {
                           final input =
                               chatController.text.trim().toLowerCase();
@@ -4795,7 +4767,6 @@ Future<List<DialogStepConfig>?> _loadCachedConfigs(String type) async {
 Future<Map<String, List<DialogStepConfig>>> _fetchAndCacheConfigs(String normalizedType) async {
   final configs = <String, List<DialogStepConfig>>{};
   try {
-    // Check if cached configs are valid and not stale
     final cachedConfigs = await _loadCachedConfigs(normalizedType);
     if (cachedConfigs != null && _isValidConfigs(cachedConfigs) && !(await _isCacheStale(normalizedType))) {
       if (kDebugMode) print('Using valid cached configs for $normalizedType');
@@ -4803,7 +4774,6 @@ Future<Map<String, List<DialogStepConfig>>> _fetchAndCacheConfigs(String normali
       return configs;
     }
 
-    // Clear stale cache
     await clearCachedConfigs(normalizedType);
     if (kDebugMode) print('Cleared stale cache for $normalizedType');
 
@@ -4829,8 +4799,8 @@ Future<Map<String, List<DialogStepConfig>>> _fetchAndCacheConfigs(String normali
       ).timeout(const Duration(seconds: 5), onTimeout: () {
         if (kDebugMode) print('Subtypes timeout for $normalizedType');
         return [
-          PolicySubtype(id: '1', name: 'Standard', policyTypeId: policyType.id, description: ''),
-          PolicySubtype(id: '2', name: 'Premium', policyTypeId: policyType.id, description: ''),
+          PolicySubtype(id: '1', name: 'Standard', policyTypeId: policyType.id, description: '', icon: '⭐'),
+          PolicySubtype(id: '2', name: 'Premium', policyTypeId: policyType.id, description: '', icon: '💎'),
         ];
       });
 
@@ -4843,23 +4813,21 @@ Future<Map<String, List<DialogStepConfig>>> _fetchAndCacheConfigs(String normali
         ).timeout(const Duration(seconds: 5), onTimeout: () {
           if (kDebugMode) print('Coverage types timeout for $normalizedType');
           return [
-            CoverageType(id: '1', name: 'Basic', description: ''),
-            CoverageType(id: '2', name: 'Comprehensive', description: ''),
+            CoverageType(id: '1', name: 'Basic', description: '', icon: '🛡️'),
+            CoverageType(id: '2', name: 'Comprehensive', description: '', icon: '🔒'),
           ];
         });
         coverageTypes.addAll(types.where((newType) =>
             !coverageTypes.any((existing) => existing.name == newType.name)));
       }
 
-      final subtypeOptions = subtypes.isNotEmpty
-          ? subtypes.map((s) => s.name).toSet().toList()
-          : ['Standard', 'Premium'];
-      final coverageOptions = coverageTypes.isNotEmpty
-          ? coverageTypes.map((c) => c.name).toSet().toList()
-          : ['Basic', 'Comprehensive'];
+      final subtypeOptions = subtypes.map((s) => s.name).toSet().toList();
+      final subtypeIcons = subtypes.map((s) => s.icon ?? '❓').toList();
+      final coverageOptions = coverageTypes.map((c) => c.name).toSet().toList();
+      final coverageIcons = coverageTypes.map((c) => c.icon ?? '❓').toList();
       if (kDebugMode) {
-        print('Subtypes for $normalizedType: $subtypeOptions');
-        print('Coverage types for $normalizedType: $coverageOptions');
+        print('Subtypes for $normalizedType: $subtypeOptions, icons: $subtypeIcons');
+        print('Coverage types for $normalizedType: $coverageOptions, icons: $coverageIcons');
       }
 
       configs[typeName] = [
@@ -4869,16 +4837,18 @@ Future<Map<String, List<DialogStepConfig>>> _fetchAndCacheConfigs(String normali
             FieldConfig(
               key: 'subtype',
               label: '${policyType.name} Subtype',
-              type: 'dropdown',
+              type: 'grid',
               options: subtypeOptions,
+              icons: subtypeIcons,
               isRequired: true,
               validator: (value) => value?.isNotEmpty == true ? null : 'Please select a subtype',
             ),
             FieldConfig(
               key: 'coverage_type',
               label: 'Coverage Type',
-              type: 'dropdown',
+              type: 'grid',
               options: coverageOptions,
+              icons: coverageIcons.cast<String>(),
               isRequired: true,
               validator: (value) => value?.isNotEmpty == true ? null : 'Please select a coverage type',
             ),
@@ -4894,7 +4864,7 @@ Future<Map<String, List<DialogStepConfig>>> _fetchAndCacheConfigs(String normali
               label: 'Selected Subtype',
               type: 'text',
               isRequired: false,
-              initialValue: null, // Set dynamically in GenericInsuranceDialog
+              initialValue: null,
               validator: null,
             ),
             FieldConfig(
@@ -4902,7 +4872,7 @@ Future<Map<String, List<DialogStepConfig>>> _fetchAndCacheConfigs(String normali
               label: 'Selected Coverage Type',
               type: 'text',
               isRequired: false,
-              initialValue: null, // Set dynamically in GenericInsuranceDialog
+              initialValue: null,
               validator: null,
             ),
           ],
@@ -4922,10 +4892,6 @@ Future<Map<String, List<DialogStepConfig>>> _fetchAndCacheConfigs(String normali
           },
         ),
       ];
-
-      configs[typeName]!.forEach((config) {
-        if (kDebugMode) print('Step: ${config.title}, Fields: ${config.fields.map((f) => f.key).toList()}, nextStep: ${config.nextStep}');
-      });
 
       if (_isValidConfigs(configs[typeName]!)) {
         await _cacheConfigs(normalizedType, configs[typeName]!);
@@ -4959,16 +4925,18 @@ Map<String, List<DialogStepConfig>> _defaultConfigs(String normalizedType) {
           FieldConfig(
             key: 'subtype',
             label: '${normalizedType.capitalize()} Subtype',
-            type: 'dropdown',
+            type: 'grid',
             options: ['Standard', 'Premium'],
+            icons: ['⭐', '💎'], // Example emojis
             isRequired: true,
             validator: (value) => value?.isNotEmpty == true ? null : 'Please select a subtype',
           ),
           FieldConfig(
             key: 'coverage_type',
             label: 'Coverage Type',
-            type: 'dropdown',
+            type: 'grid',
             options: ['Basic', 'Comprehensive'],
+            icons: ['🛡️', '🔒'], // Example emojis
             isRequired: true,
             validator: (value) => value?.isNotEmpty == true ? null : 'Please select a coverage type',
           ),
@@ -4984,7 +4952,7 @@ Map<String, List<DialogStepConfig>> _defaultConfigs(String normalizedType) {
             label: 'Selected Subtype',
             type: 'text',
             isRequired: false,
-            initialValue: null, // Set dynamically in GenericInsuranceDialog
+            initialValue: null,
             validator: null,
           ),
           FieldConfig(
@@ -4992,7 +4960,7 @@ Map<String, List<DialogStepConfig>> _defaultConfigs(String normalizedType) {
             label: 'Selected Coverage Type',
             type: 'text',
             isRequired: false,
-            initialValue: null, // Set dynamically in GenericInsuranceDialog
+            initialValue: null,
             validator: null,
           ),
         ],
@@ -5067,6 +5035,8 @@ class FieldConfig {
   final bool isRequired;
   final String? Function(String?)? validator;
   final String type;
+  final List<String>? icons; // Added for grid view
+
   final List<String>? options;
   final String? initialValue;
   final String? dependsOnKey;
@@ -5079,6 +5049,8 @@ class FieldConfig {
     this.keyboardType,
     this.isRequired = true,
     this.validator,
+    this.icons, // Added
+
     this.type = 'text',
     this.options,
     this.initialValue,
@@ -5466,16 +5438,17 @@ class GenericInsuranceDialog extends StatefulWidget {
   final int step;
   final DialogStepConfig config;
   final DialogState dialogState;
+  final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey; // Added
   final VoidCallback onCancel;
   final VoidCallback? onBack;
   final VoidCallback onSubmit;
-  final void Function(BuildContext, String, String, String, String?)? onFinalSubmit; // Updated
+  final void Function(BuildContext, String, String, String, String?)? onFinalSubmit;
   final Future<void> Function(
     BuildContext context,
     PolicyType policyType,
     PolicySubtype subtype,
     CoverageType coverageType, {
-    String? preSelectedCompany, // Added
+    String? preSelectedCompany,
   }) showInsuredItemDialog;
 
   const GenericInsuranceDialog({
@@ -5484,6 +5457,7 @@ class GenericInsuranceDialog extends StatefulWidget {
     required this.step,
     required this.config,
     required this.dialogState,
+    required this.scaffoldMessengerKey, // Added
     required this.onCancel,
     this.onBack,
     required this.onSubmit,
@@ -5513,40 +5487,63 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
 
   Future<List<FieldConfig>> _getFields() async {
     if (kDebugMode) print('Fetching fields for ${widget.config.title}');
-    final fields = widget.config.fields.map((field) {
-      if (field.type == 'dropdown') {
-        return FieldConfig(
+    final fields = <FieldConfig>[];
+    for (var field in widget.config.fields) {
+      if (field.type == 'dropdown' && (field.key == 'subtype' || field.key == 'coverage_type')) {
+        // Fetch PolicySubtype or CoverageType to get icons
+        List<dynamic> optionsWithIcons = [];
+        if (field.key == 'subtype') {
+          final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
+          final policyType = policyTypes.firstWhere(
+            (t) => t.name.toLowerCase() == widget.insuranceType,
+            orElse: () => PolicyType(id: '1', name: widget.insuranceType, description: ''),
+          );
+          final subtypes = await InsuranceHomeScreen.getPolicySubtypes(policyType.id);
+          optionsWithIcons = subtypes.map((s) => {'name': s.name, 'icon': s.icon ?? '❓'}).toList();
+        } else if (field.key == 'coverage_type') {
+          final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
+          final policyType = policyTypes.firstWhere(
+            (t) => t.name.toLowerCase() == widget.insuranceType,
+            orElse: () => PolicyType(id: '1', name: widget.insuranceType, description: ''),
+          );
+          final subtypes = await InsuranceHomeScreen.getPolicySubtypes(policyType.id);
+          final subtype = subtypes.firstWhere(
+            (s) => s.name == (widget.dialogState.responses['subtype']?.toString() ?? 'Standard'),
+            orElse: () => PolicySubtype(id: '1', name: 'Standard', policyTypeId: policyType.id, description: ''),
+          );
+          final coverageTypes = await InsuranceHomeScreen.getCoverageTypes(subtype.id);
+          optionsWithIcons = coverageTypes.map((c) => {'name': c.name, 'icon': c.icon ?? '❓'}).toList();
+        }
+        fields.add(FieldConfig(
           key: field.key,
           label: field.label,
-          options: field.options?.toSet().toList(),
+          type: 'grid', // New type for grid view
+          options: optionsWithIcons.map((o) => o['name'] as String).toList(),
+          icons: optionsWithIcons.map((o) => o['icon'] as String).toList(), // Store icons
           initialValue: field.initialValue,
           dependsOnKey: field.dependsOnKey,
           dependsOnValue: field.dependsOnValue,
-          type: field.type,
           isRequired: field.isRequired,
           validator: field.validator,
-        );
+        ));
       } else if (field.key == 'subtype_summary' || field.key == 'coverage_summary') {
         final responseKey = field.key == 'subtype_summary' ? 'subtype' : 'coverage_type';
-        return FieldConfig(
+        fields.add(FieldConfig(
           key: field.key,
           label: field.label,
           type: field.type,
           isRequired: field.isRequired,
           initialValue: widget.dialogState.responses[responseKey] ?? 'Not selected',
           validator: field.validator,
-        );
+        ));
+      } else {
+        fields.add(field);
       }
-      return field;
-    }).toList();
+    }
     if (fields.isEmpty) {
       if (kDebugMode) print('Warning: No fields returned for ${widget.config.title}');
     } else {
       if (kDebugMode) print('Fields fetched: ${fields.map((f) => f.key).toList()}');
-      if (fields.any((f) => f.key == 'coverage_type')) {
-        final coverageField = fields.firstWhere((f) => f.key == 'coverage_type');
-        if (kDebugMode) print('Coverage type options: ${coverageField.options}, initialValue: ${coverageField.initialValue}');
-      }
     }
     return fields;
   }
@@ -5556,145 +5553,215 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
     final formKey = GlobalKey<FormState>();
     final colorProvider = context.watch<ColorProvider>();
 
-    return FutureBuilder<List<FieldConfig>>(
-      future: _fieldsFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          if (kDebugMode) print('Policy FutureBuilder: state=ConnectionState.waiting');
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.of(context).size.width * 0.6, // 60% of screen width
+      ),
+      child: FutureBuilder<List<FieldConfig>>(
+        future: _fieldsFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            if (kDebugMode) print('Policy FutureBuilder: state=ConnectionState.waiting');
+            return AlertDialog(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(semanticsLabel: 'Loading fields'),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Loading ${widget.insuranceType} options...',
+                    style: GoogleFonts.roboto(),
+                  ),
+                ],
+              ),
+            );
+          }
+          if (snapshot.hasError) {
+            if (kDebugMode) print('Policy FutureBuilder: error=${snapshot.error}');
+            return AlertDialog(
+              title: const Text('Error'),
+              content: Text('Failed to load options: ${snapshot.error}'),
+              actions: [
+                TextButton(
+                  onPressed: widget.onCancel,
+                  child: const Text('Close'),
+                ),
+              ],
+            );
+          }
+
+          final fields = snapshot.data ?? widget.config.fields;
+          if (fields.isEmpty && widget.config.customCallback == null) {
+            if (kDebugMode) print('Policy FutureBuilder: no fields and no custom callback');
+            return AlertDialog(
+              content: const Text('No options available for this step.'),
+              actions: [
+                TextButton(
+                  onPressed: widget.onCancel,
+                  child: const Text('Cancel'),
+                ),
+              ],
+            );
+          }
+          if (widget.config.customCallback != null && fields.isEmpty) {
+            return const SizedBox.shrink();
+          }
+
           return AlertDialog(
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const CircularProgressIndicator(semanticsLabel: 'Loading fields'),
-                const SizedBox(height: 16),
-                Text(
-                  'Loading ${widget.insuranceType} options...',
-                  style: GoogleFonts.roboto(),
+                Expanded(
+                  child: Text(
+                    widget.config.title,
+                    style: GoogleFonts.lora(
+                      color: const Color(0xFF1B263B),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .primaryContainer
+                          .withOpacity(widget.insuranceType.isNotEmpty ? 0.2 : 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.save,
+                      color: widget.insuranceType.isNotEmpty
+                          ? Theme.of(context).colorScheme.onPrimary
+                          : Theme.of(context).colorScheme.onPrimary.withOpacity(0.5),
+                      semanticLabel: 'Save Progress',
+                    ),
+                  ),
+                  onPressed: widget.insuranceType.isNotEmpty
+                      ? () {
+                          widget.dialogState.saveProgress(widget.insuranceType, widget.step);
+                          widget.scaffoldMessengerKey.currentState?.showSnackBar(
+                            const SnackBar(content: Text('Progress saved')),
+                          );
+                        }
+                      : null,
+                  tooltip: 'Save progress',
                 ),
               ],
             ),
-          );
-        }
-        if (snapshot.hasError) {
-          if (kDebugMode) print('Policy FutureBuilder: error=${snapshot.error}');
-          return AlertDialog(
-            title: const Text('Error'),
-            content: Text('Failed to load options: ${snapshot.error}'),
-            actions: [
-              TextButton(
-                onPressed: widget.onCancel,
-                child: const Text('Close'),
-              ),
-            ],
-          );
-        }
-
-        final fields = snapshot.data ?? widget.config.fields;
-        if (fields.isEmpty && widget.config.customCallback == null) {
-          if (kDebugMode) print('Policy FutureBuilder: no fields and no custom callback');
-          return AlertDialog(
-            content: const Text('No options available for this step.'),
-            actions: [
-              TextButton(
-                onPressed: widget.onCancel,
-                child: const Text('Cancel'),
-              ),
-            ],
-          );
-        }
-        if (widget.config.customCallback != null && fields.isEmpty) {
-          return const SizedBox.shrink();
-        }
-
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          title: Text(
-            widget.config.title,
-            style: GoogleFonts.lora(
-              color: const Color(0xFF1B263B),
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          content: SingleChildScrollView(
-            child: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: fields.map((field) {
-                  if (field.dependsOnKey != null &&
-                      widget.dialogState.responses[field.dependsOnKey!] != field.dependsOnValue) {
-                    return const SizedBox.shrink();
-                  }
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16.0),
-                    child: FormFieldWidget(
-                      config: field,
-                      value: field.key == 'subtype_summary'
-                          ? widget.dialogState.responses['subtype'] ?? 'Not selected'
-                          : field.key == 'coverage_summary'
-                              ? widget.dialogState.responses['coverage_type'] ?? 'Not selected'
-                              : widget.dialogState.responses[field.key] ?? field.initialValue,
-                      onChanged: (value) {
-                        widget.dialogState.updateResponse(field.key, value);
-                        if (kDebugMode) print('Field ${field.key} updated: $value');
-                        if (field.key == 'has_spouse' && value == 'No') {
-                          widget.dialogState.updateResponse('spouse_age', '');
-                        }
-                        if (field.key == 'has_children' && value == 'No') {
-                          widget.dialogState.updateResponse('children_count', '');
-                        }
-                        setState(() {});
-                      },
-                      colorProvider: colorProvider,
-                    ),
-                  );
-                }).toList(),
+            content: SingleChildScrollView(
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: fields.map((field) {
+                    if (field.dependsOnKey != null &&
+                        widget.dialogState.responses[field.dependsOnKey!] != field.dependsOnValue) {
+                      return const SizedBox.shrink();
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16.0),
+                      child: field.type == 'grid'
+                          ? GridFieldWidget(
+                              config: field,
+                              value: widget.dialogState.responses[field.key] ?? field.initialValue,
+                              onChanged: (value) {
+                                widget.dialogState.updateResponse(field.key, value!);
+                                if (kDebugMode) print('Field ${field.key} updated: $value');
+                                setState(() {});
+                              },
+                              colorProvider: colorProvider,
+                            )
+                          : FormFieldWidget(
+                              config: field,
+                              value: field.key == 'subtype_summary'
+                                  ? widget.dialogState.responses['subtype'] ?? 'Not selected'
+                                  : field.key == 'coverage_summary'
+                                      ? widget.dialogState.responses['coverage_type'] ?? 'Not selected'
+                                      : widget.dialogState.responses[field.key] ?? field.initialValue,
+                              onChanged: (value) {
+                                widget.dialogState.updateResponse(field.key, value);
+                                if (kDebugMode) print('Field ${field.key} updated: $value');
+                                if (field.key == 'has_spouse' && value == 'No') {
+                                  widget.dialogState.updateResponse('spouse_age', '');
+                                }
+                                if (field.key == 'has_children' && value == 'No') {
+                                  widget.dialogState.updateResponse('children_count', '');
+                                }
+                                setState(() {});
+                              },
+                              colorProvider: colorProvider,
+                            ),
+                    );
+                  }).toList(),
+                ),
               ),
             ),
-          ),
-          actions: [
-            if (widget.onBack != null)
+            actions: [
+              if (widget.onBack != null)
+                TextButton(
+                  onPressed: widget.onBack,
+                  child: Text(
+                    'Back',
+                    style: GoogleFonts.roboto(color: const Color(0xFFD3D3D3)),
+                  ),
+                ),
               TextButton(
-                onPressed: widget.onBack,
+                onPressed: widget.onCancel,
                 child: Text(
-                  'Back',
+                  'Cancel',
                   style: GoogleFonts.roboto(color: const Color(0xFFD3D3D3)),
                 ),
               ),
-            TextButton(
-              onPressed: widget.onCancel,
-              child: Text(
-                'Cancel',
-                style: GoogleFonts.roboto(color: const Color(0xFFD3D3D3)),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (kDebugMode) print('Submit button pressed for ${widget.config.title}');
-                if (formKey.currentState!.validate()) {
-                  bool allRequiredFieldsFilled = widget.dialogState.responses['subtype']?.isNotEmpty == true &&
-                      widget.dialogState.responses['coverage_type']?.isNotEmpty == true;
-                  if (kDebugMode) print('Required fields check: subtype=${widget.dialogState.responses['subtype']}, coverage=${widget.dialogState.responses['coverage_type']}');
-                  if (allRequiredFieldsFilled &&
-                      (widget.config.customValidator == null ||
-                          widget.config.customValidator!(widget.dialogState.responses))) {
-                    formKey.currentState!.save();
-                    if (widget.config.nextStep != null) {
-                      widget.dialogState.saveProgress(widget.insuranceType, widget.step + 1);
-                      widget.onSubmit();
+              ElevatedButton(
+                onPressed: () async {
+                  if (kDebugMode) print('Submit button pressed for ${widget.config.title}');
+                  if (formKey.currentState!.validate()) {
+                    bool allRequiredFieldsFilled = widget.dialogState.responses['subtype']?.isNotEmpty == true &&
+                        widget.dialogState.responses['coverage_type']?.isNotEmpty == true;
+                    if (kDebugMode) print('Required fields check: subtype=${widget.dialogState.responses['subtype']}, coverage=${widget.dialogState.responses['coverage_type']}');
+                    if (allRequiredFieldsFilled &&
+                        (widget.config.customValidator == null ||
+                            widget.config.customValidator!(widget.dialogState.responses))) {
+                      formKey.currentState!.save();
+                      if (widget.config.nextStep != null) {
+                        widget.dialogState.saveProgress(widget.insuranceType, widget.step + 1);
+                        widget.onSubmit();
+                      } else {
+                        if (kDebugMode) print('Final step reached, processing summary');
+                        widget.onSubmit();
+                      }
                     } else {
-                      if (kDebugMode) print('Final step reached, processing summary');
-                      widget.onSubmit(); // Trigger parent to handle company selection
+                      if (kDebugMode) print('Required fields missing or custom validator failed');
+                      if (mounted) {
+                        widget.scaffoldMessengerKey.currentState?.showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Please complete all required fields',
+                              style: GoogleFonts.roboto(color: Colors.white),
+                            ),
+                            backgroundColor: colorProvider.color,
+                          ),
+                        );
+                      }
                     }
                   } else {
-                    if (kDebugMode) print('Required fields missing or custom validator failed');
+                    if (kDebugMode) print('Form validation failed');
+                    for (var field in fields) {
+                      if (field.isRequired && widget.dialogState.responses[field.key]?.isEmpty != false) {
+                        if (kDebugMode) print('Validation failed for required field: ${field.key}');
+                      }
+                    }
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      widget.scaffoldMessengerKey.currentState?.showSnackBar(
                         SnackBar(
                           content: Text(
-                            'Please complete all required fields',
+                            'Please correct the errors in the form',
                             style: GoogleFonts.roboto(color: Colors.white),
                           ),
                           backgroundColor: colorProvider.color,
@@ -5702,41 +5769,23 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
                       );
                     }
                   }
-                } else {
-                  if (kDebugMode) print('Form validation failed');
-                  for (var field in fields) {
-                    if (field.isRequired && widget.dialogState.responses[field.key]?.isEmpty != false) {
-                      if (kDebugMode) print('Validation failed for required field: ${field.key}');
-                    }
-                  }
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Please correct the errors in the form',
-                          style: GoogleFonts.roboto(color: Colors.white),
-                        ),
-                        backgroundColor: colorProvider.color,
-                      ),
-                    );
-                  }
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: colorProvider.color,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              child: Text(
-                widget.config.nextStep == null ? 'Submit' : 'Next',
-                style: GoogleFonts.roboto(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w500,
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: colorProvider.color,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Text(
+                  widget.config.nextStep == null ? 'Submit' : 'Next',
+                  style: GoogleFonts.roboto(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
-            ),
-          ],
-        );
-      },
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -5841,7 +5890,7 @@ Future<void> showInsuranceDialog(
   BuildContext context,
   String insuranceType, {
   int step = 0,
-  void Function(BuildContext, String, String, String, String?)? onFinalSubmit, // Updated to include company
+  void Function(BuildContext, String, String, String, String?)? onFinalSubmit,
   required GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey,
 }) async {
   if (kDebugMode) print('showInsuranceDialog: starting for type=$insuranceType, step=$step, context=${context.widget.runtimeType}');
@@ -5910,6 +5959,7 @@ Future<void> showInsuranceDialog(
           step: currentStep,
           config: config,
           dialogState: dialogState,
+          scaffoldMessengerKey: scaffoldMessengerKey, // Pass scaffoldMessengerKey
           onCancel: () {
             if (kDebugMode) print('Cancel pressed for ${config.title}');
             showDialog(
@@ -5970,7 +6020,6 @@ Future<void> showInsuranceDialog(
               final coverage = dialogState.responses['coverage_type']?.toString();
               if (subtype != null && coverage != null && subtype.isNotEmpty && coverage.isNotEmpty) {
                 if (kDebugMode) print('Final submission: subtype=$subtype, coverage=$coverage');
-                // Fetch PolicyType, PolicySubtype, CoverageType for company selection
                 try {
                   final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
                   final policyType = policyTypes.firstWhere(
@@ -5995,7 +6044,6 @@ Future<void> showInsuranceDialog(
 
                   if (!context.mounted) return;
 
-                  // Show company selection dialog
                   String? selectedCompany;
                   await showDialog(
                     context: context,
@@ -6013,7 +6061,6 @@ Future<void> showInsuranceDialog(
                   if (!context.mounted) return;
 
                   if (selectedCompany != null) {
-                    // Call onFinalSubmit with company
                     final state = context.findAncestorStateOfType<InsuranceHomeScreenState>();
                     if (state != null) {
                       await state._showInsuredItemDialog(
@@ -6021,7 +6068,7 @@ Future<void> showInsuranceDialog(
                         policyType,
                         subtypeObj,
                         coverageType,
-                        preSelectedCompany: selectedCompany, // Pass selected company
+                        preSelectedCompany: selectedCompany,
                       );
                     }
                     dialogState.clearProgress(normalizedType);
@@ -6067,6 +6114,7 @@ Future<void> showInsuranceDialog(
     );
   }
 }
+
 Map<String, List<DialogStepConfig>> _defaultConfigs(String normalizedType) {
   logger.i('Using default configs for $normalizedType');
   return {
@@ -6279,5 +6327,97 @@ class DialogController {
       currentStep--;
       showNextStep(context);
     }
+  }
+}
+
+
+class GridFieldWidget extends StatelessWidget {
+  final FieldConfig config;
+  final String? value;
+  final Function(String?) onChanged;
+  final ColorProvider colorProvider;
+
+  const GridFieldWidget({
+    super.key,
+    required this.config,
+    this.value,
+    required this.onChanged,
+    required this.colorProvider,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          config.label,
+          style: GoogleFonts.roboto(
+            color: const Color(0xFF1B263B),
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2, // Adjust based on design needs
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            childAspectRatio: 2,
+          ),
+          itemCount: config.options?.length ?? 0,
+          itemBuilder: (context, index) {
+            final option = config.options![index];
+            final icon = config.icons![index];
+            final isSelected = value == option;
+            return GestureDetector(
+              onTap: () {
+                onChanged(option);
+                if (kDebugMode) print('Selected ${config.key}: $option');
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isSelected ? colorProvider.color.withOpacity(0.2) : Colors.grey[100],
+                  border: Border.all(
+                    color: isSelected ? colorProvider.color : Colors.grey,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        icon,
+                        style: const TextStyle(fontSize: 24),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        option,
+                        style: GoogleFonts.roboto(
+                          color: const Color(0xFF1B263B),
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        if (config.isRequired && value == null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0),
+            child: Text(
+              'Please select an option',
+              style: GoogleFonts.roboto(color: Colors.red, fontSize: 12),
+            ),
+          ),
+      ],
+    );
   }
 }
