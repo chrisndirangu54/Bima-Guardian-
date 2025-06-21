@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:async/async.dart';
+import 'package:my_app/Screens/admin_panel.dart';
 import 'package:web/web.dart' as web; // Use this instead of dart:html
 
 // Remove this import; see below for correct usage.
@@ -1901,6 +1902,21 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
 
     return Consumer<DialogState>(builder: (context, dialogState, _) {
       return Scaffold(
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        appBar: AppBar(
+          title: Text(
+            'Home',
+            style: GoogleFonts.lora(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onPrimary,
+            ),
+          ),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          elevation: 8,
+          shadowColor:
+              Theme.of(context).colorScheme.shadow.withOpacity(0.3),
+        ),
         key: scaffoldMessengerKey,
         body: FutureBuilder<List<PolicyType>>(
           future: Future.value(cachedPolicyTypes),
@@ -2100,82 +2116,35 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                   const SliverPadding(
                     padding: EdgeInsets.only(top: 16.0),
                   ),
-                SliverToBoxAdapter(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      CarouselSlider(
-                        options: CarouselOptions(
-                          height: 180.0, // Reduced height to prevent overflow
-                          autoPlay: true,
-                          autoPlayInterval: const Duration(seconds: 3),
-                          enlargeCenterPage: true,
-                          viewportFraction: 0.9,
-                          aspectRatio: 2.0,
-                        ),
-                        items: [
-                          'banners/promo1.jpg',
-                          'banners/promo2.jpg',
-                          'banners/promo3.jpg',
-                        ].asMap().entries.map((entry) {
-                          final index = entry.key;
-                          final imagePath = entry.value;
-                          return Builder(
-                            builder: (BuildContext context) {
-                              return Container(
-                                width: MediaQuery.of(context).size.width,
-                                margin:
-                                    const EdgeInsets.symmetric(horizontal: 8.0),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .shadow
-                                          .withOpacity(0.2),
-                                      blurRadius: 12,
-                                      spreadRadius: 2,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: Image.asset(
-                                    imagePath,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      //if (kDebugMode) {
-                                      //print('Image load error: $error');
-                                      //}
-                                      return Container(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .primary
-                                            .withOpacity(0.2),
-                                        child: Center(
-                                          child: Text(
-                                            'Promo ${index + 1}',
-                                            style: GoogleFonts.lora(
-                                              fontSize: 24,
-                                              fontWeight: FontWeight.bold,
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .onSurface,
-                                            ),
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              );
-                            },
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 24),
+
+        SliverToBoxAdapter(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [ BannerCarousel(
+          banners: [
+            BannerModel(
+              imagePath: 'banners/promo1.jpg',
+              title: 'Promo 1',
+              createdAt: DateTime.now(),
+            ),
+            BannerModel(
+              imagePath: 'banners/promo2.jpg',
+              title: 'Promo 2',
+              createdAt: DateTime.now(),
+            ),
+            BannerModel(
+              imagePath: 'banners/promo3.jpg',
+              title: 'Promo 3',
+              createdAt: DateTime.now(),
+            ),
+          ],
+          onUpload: (File file) {
+            if (kDebugMode) {
+              print('New banner uploaded: ${file.path}');
+            }
+          },
+        ),
+                    const SizedBox(height: 24),
                       if (currentType.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -2428,10 +2397,13 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('My Account'),
         elevation: 4,
         shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        actionsPadding: const EdgeInsets.only(right: 16.0),
       ),
       body: SafeArea(
         child: Padding(
@@ -2621,10 +2593,48 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
 
   Widget _buildQuotesScreen() {
     return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('Quotes'),
         elevation: 4,
         shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        actionsPadding: const EdgeInsets.only(right: 16.0),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              setState(() {
+                // Trigger a rebuild to refresh quotes
+                if (kDebugMode) {
+                  print('Refreshing quotes...');
+                }
+                // Simulate fetching new quotes
+                quotes = [
+                  Quote(
+                    type: 'Motor',
+                    subtype: 'Comprehensive',
+                    premium: 15000.0,
+                    generatedAt: DateTime.now(), id: '', company: '', formData: {},
+                  ),
+                  Quote(
+                    type: 'Health',
+                    subtype: 'Family',
+                    premium: 12000.0,
+                    generatedAt: DateTime.now(), id: '', company: '', formData: {},
+                  ),
+                  Quote(
+                    type: 'Property',
+                    subtype: 'Home Insurance',
+                    premium: 8000.0,
+                    generatedAt: DateTime.now(), id: '', company: '', formData: {},
+                  ),
+                ];
+              });
+            },
+            tooltip: 'Refresh Quotes',
+          ),
+        ],
       ),
       body: ListView.builder(
         padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
@@ -2716,11 +2726,17 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     }).toList();
 
     return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
+    
       appBar: AppBar(
         title: const Text('Upcoming Expirations'),
         elevation: 4,
         shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        actionsPadding: const EdgeInsets.only(right: 16.0),
       ),
+
+      
       body: ListView.builder(
         padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
         itemCount: upcomingPolicies.length,

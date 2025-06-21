@@ -784,6 +784,25 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                         },
                   ),
                 ],
+                if (widget.type != 'motor' && widget.type != 'medical' || widget.type != 'property' || widget.type != 'travel' || widget.type != 'wiba') ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    '${widget.type} Details',
+                    style: GoogleFonts.roboto(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  ...widget.fields.entries.map((entry) {
+                    return TextFormField(
+                      controller: TextEditingController(text: entry.value.expectedType == ExpectedType.text
+                          ? ''
+                          : entry.value.expectedType == ExpectedType.number
+                              ? '0'
+                              : ''),
+                      decoration: InputDecoration(labelText: entry.key),
+                      validator: entry.value.validator,
+                    );
+                  }),
+                ],
+
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () async {

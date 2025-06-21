@@ -14,6 +14,13 @@ import 'package:my_app/Models/pdf_template.dart';
 import 'package:my_app/Models/policy.dart';
 import 'package:my_app/Screens/pdf_editor.dart';
 import 'package:my_app/insurance_app.dart'; // Import PdfCoordinateEditor
+import 'package:flutter/material.dart';
+import 'package:carousel_slider/carousel_slider.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 
 class AdminPanel extends StatefulWidget {
   const AdminPanel({super.key});
@@ -773,6 +780,196 @@ class _AdminPanelState extends State<AdminPanel> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+
+// Model for Banner data
+class BannerModel {
+  final String imagePath;
+  final String title;
+  final DateTime createdAt;
+
+  BannerModel({
+    required this.imagePath,
+    required this.title,
+    required this.createdAt,
+  });
+}
+
+class BannerCarousel extends StatefulWidget {
+  final List<BannerModel> banners;
+  final double height;
+  final Function(File)? onUpload; // Callback for handling image upload
+
+  const BannerCarousel({
+    Key? key,
+    required this.banners,
+    this.height = 180.0,
+    this.onUpload,
+  }) : super(key: key);
+
+  @override
+  _BannerCarouselState createState() => _BannerCarouselState();
+}
+
+class _BannerCarouselState extends State<BannerCarousel> {
+  List<BannerModel> _banners = [];
+  
+  @override
+  void initState() {
+    super.initState();
+    _banners = widget.banners;
+    _checkAndCreateMonthlyBanner();
+  }
+
+  // Check if it's end of month and create new banner
+  Future<void> _checkAndCreateMonthlyBanner() async {
+    final now = DateTime.now();
+    final lastDayOfMonth = DateTime(now.year, now.month + 1, 0);
+    
+    // Check if today is within last 3 days of the month
+    if (now.day >= lastDayOfMonth.day - 3) {
+      await _createMonthlyBanner();
+    }
+  }
+
+  // Create a new banner automatically
+  Future<void> _createMonthlyBanner() async {
+    final directory = await getApplicationDocumentsDirectory();
+    final monthYear = DateFormat('MMMMyyyy').format(DateTime.now());
+    final newBannerPath = '${directory.path}/banners/promo_$monthYear.jpg';
+    
+    // Create placeholder image or copy from default template
+    try {
+      final defaultImage = File('assets/banners/default_template.jpg');
+      if (await defaultImage.exists()) {
+        await defaultImage.copy(newBannerPath);
+        
+        setState(() {
+          _banners.add(BannerModel(
+            imagePath: newBannerPath,
+            title: 'Promo $monthYear',
+            createdAt: DateTime.now(),
+          ));
+        });
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error creating monthly banner: $e');
+      }
+    }
+  }
+
+  // Handle manual banner upload
+  Future<void> _uploadBanner() async {
+    // Note: You'll need to add an image picker package for actual implementation
+    // This is a placeholder for the upload functionality
+    try {
+
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+      if (image != null) {
+        final directory = await getApplicationDocumentsDirectory();
+        final fileName = 'promo_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final savedImage = await File(image.path).copy('${directory.path}/banners/$fileName');
+        
+        setState(() {
+          _banners.add(BannerModel(
+            imagePath: savedImage.path,
+            title: 'Promo ${DateFormat('MMM yyyy').format(DateTime.now())}',
+            createdAt: DateTime.now(),
+          ));
+        });
+        
+        widget.onUpload?.call(savedImage);
+      }
+
+    } catch (e) {
+      print('Error uploading banner: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverToBoxAdapter(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CarouselSlider(
+            options: CarouselOptions(
+              height: widget.height,
+              autoPlay: true,
+              autoPlayInterval: const Duration(seconds: 3),
+              enlargeCenterPage: true,
+              viewportFraction: 0.9,
+              aspectRatio: 2.0,
+            ),
+            items: _banners.asMap().entries.map((entry) {
+              final index = entry.key;
+              final banner = entry.value;
+              return Builder(
+                builder: (BuildContext context) {
+                  return Container(
+                    width: MediaQuery.of(context).size.width,
+                    margin: const EdgeInsets.symmetric(horizontal: 8.0),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .shadow
+                              .withOpacity(0.2),
+                          blurRadius: 12,
+                          spreadRadius: 2,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.file(
+                        File(banner.imagePath),
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primary
+                                .withOpacity(0.2),
+                            child: Center(
+                              child: Text(
+                                banner.title,
+                                style: GoogleFonts.lora(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  );
+                },
+              );
+            }).toList(),
+          ),
+          // Optional: Add upload button
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: ElevatedButton(
+              onPressed: _uploadBanner,
+              child: Text('Upload New Banner'),
+            ),
+          ),
+        ],
       ),
     );
   }
