@@ -5911,7 +5911,7 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
           }
 
           return AlertDialog(
-            backgroundColor: Colors.white,
+            backgroundColor: Theme.of(context).cardTheme.color,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             title: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -6650,13 +6650,20 @@ class GridFieldWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dialogWidth = MediaQuery.of(context).size.width < 500
+        ? MediaQuery.of(context).size.width * 0.80
+        : MediaQuery.of(context).size.width < 750
+            ? MediaQuery.of(context).size.width * 0.70
+            : 600;
+    final crossAxisCount = dialogWidth > 400 ? 3 : 2; // 3 columns if wider, 2 if narrower
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           config.label,
           style: GoogleFonts.roboto(
-            color: const Color(0xFF1B263B),
+            color: ThemeData().colorScheme.onSurface,
             fontSize: 16,
             fontWeight: FontWeight.w500,
           ),
@@ -6665,8 +6672,8 @@ class GridFieldWidget extends StatelessWidget {
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2, // Adjust based on design needs
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
             crossAxisSpacing: 8,
             mainAxisSpacing: 8,
             childAspectRatio: 2,

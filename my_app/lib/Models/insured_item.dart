@@ -103,6 +103,7 @@ class InsuredItem {
   /// Converts the [InsuredItem] to a JSON object.
   Map<String, dynamic> toJson() => toMap();
 
+
   /// Creates a copy of this [InsuredItem] with the specified fields replaced.
   InsuredItem copyWith({
     String? id,
@@ -131,23 +132,6 @@ class InsuredItem {
       subtype: subtype ?? this.subtype,
       coverageType: coverageType ?? this.coverageType,
       previousCompanies: previousCompanies ?? this.previousCompanies,
-    );
-  }
-  // Add this static method
-  static InsuredItem fromJson(Map<String, dynamic> json) {
-    // Replace the following with your actual fields and parsing logic
-    return InsuredItem(
-      id: json['id'] as String,
-      name: json['name'] as String? ?? '',
-      email: json['email'] as String? ?? '',
-      contact: json['contact'] as String? ?? '',
-      type: json['type'] != null ? PolicyType.fromJson(json['type']) : PolicyType(id: '', name: '', description: ''),
-      subtype: json['subtype'] != null ? PolicySubtype.fromJson(json['subtype']) : PolicySubtype(id: '', name: '', policyTypeId: '', description: ''),
-      coverageType: json['coverageType'] != null ? CoverageType.fromJson(json['coverageType']) : CoverageType(id: '', name: '', description: ''),
-      details: Map<String, String>.from(json['details'] ?? {}),
-      kraPin: json['kraPin'] as String?,
-      logbookPath: json['logbookPath'] as String?,
-      previousPolicyPath: json['previousPolicyPath'] as String?,
     );
   }
 

@@ -317,8 +317,8 @@ class MyApp extends StatelessWidget {
           surface: const Color.fromARGB(255, 31, 31, 31), // White surface
           onPrimary: const Color.fromARGB(255, 33, 32, 32), // White on olive
           onSecondary: Colors.black, // Black on cyan
-          onTertiary: const Color(0xFF10212B), // Dark teal on cream
-          onSurface: const Color.fromARGB(255, 74, 108, 2), // Dark teal on white
+          onTertiary: const Color.fromARGB(255, 195, 201, 204), // Dark teal on cream
+          onSurface: const Color.fromARGB(255, 108, 156, 3), // Dark teal on white
           error: const Color(0xFFE57373), // Error red
         ),
         textTheme: GoogleFonts.robotoTextTheme()
