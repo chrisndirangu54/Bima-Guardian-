@@ -13,7 +13,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:my_app/Models/Insured_item.dart';
+import 'package:my_app/Models/insured_item.dart';
 import 'package:my_app/Models/company.dart' as company_models;
 import 'package:my_app/Models/cover.dart';
 import 'package:my_app/Models/field_definition.dart';
@@ -38,7 +38,6 @@ import 'package:encrypt/encrypt.dart' as encrypt;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:uuid/uuid.dart';
 import 'package:google_fonts/google_fonts.dart'; // For elegant typography
-import 'package:carousel_slider/carousel_slider.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart'; // Correct import for url_launcher
 import 'package:logger/logger.dart';
