@@ -34,6 +34,18 @@ class PolicyType {
         name: data['name'] ?? '',
         description: data['description'] ?? '',
       );
+  // Added toMap method
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'name': name,
+        'description': description,
+      };
+  // Added fromMap factory method
+  factory PolicyType.fromMap(Map<String, dynamic> map) => PolicyType(
+        id: map['id'] ?? '',
+        name: map['name'] ?? '',
+        description: map['description'] ?? '',
+      );
 }
 
 class PolicySubtype {
@@ -74,6 +86,21 @@ class PolicySubtype {
         description: data['description'] ?? '',
       );
 
+  // Added toMap method
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'name': name,
+        'policyTypeId': policyTypeId,
+        'description': description,
+      };
+  // Added fromMap factory method
+  factory PolicySubtype.fromMap(Map<String, dynamic> map) => PolicySubtype(
+        id: map['id'] ?? '',
+        name: map['name'] ?? '',
+        policyTypeId: map['policyTypeId'] ?? '',
+        description: map['description'] ?? '',
+      );
+
   @override
   String toString() => name;
 }
@@ -110,7 +137,19 @@ class CoverageType {
         name: data['name'] ?? '',
         description: data['description'] ?? '',
       );
+  // Added toMap method
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'name': name,
+        'description': description,
+      };
 
+  // Added fromMap factory method
+  factory CoverageType.fromMap(Map<String, dynamic> map) => CoverageType( 
+        id: map['id'] ?? '',
+        name: map['name'] ?? '',
+        description: map['description'] ?? '',
+      );
 
 
 

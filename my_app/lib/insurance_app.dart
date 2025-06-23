@@ -391,7 +391,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
   static const String mpesaApiKey = 'your-mpesa-api-key-here';
   List<Policy> policies = [];
   static const String paystackSecretKey = 'your-paystack-secret-key-here';
-
+InsuredItem? insuredItem;
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -531,8 +531,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       final item = insuredItems.firstWhere(
         (i) => i.id == selectedInsuredItemId,
       );
-      _selectedVehicleType = item.vehicleType;
-      _chassisNumberController.text = item.chassisNumber ?? '';
+
       _kraPinController.text = item.kraPin ?? '';
     }
   }
@@ -1231,14 +1230,14 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       } else {
         insuredItem = InsuredItem(
           id: Uuid().v4(),
-          type: type,
-          vehicleType: type == 'motor' ? subtype : '',
-          details: details,
-          vehicleValue: type == 'motor' ? details['vehicle_value'] : null,
-          regno: type == 'motor' ? details['regno'] : null,
-          propertyValue: type == 'property' ? details['property_value'] : null,
-          chassisNumber: type == 'motor' ? details['chassis_number'] : null,
-          kraPin: type == 'motor' ? details['kra_pin'] : null,
+          name: details['name'] ?? '',
+          email: details['email'] ?? '',
+          contact: details['phone'] ?? '',
+          type: PolicyType(id: '', name: type, description: ''),
+          subtype: PolicySubtype(id: '', name: subtype, policyTypeId: type, description: ''),
+          coverageType: CoverageType(id: coverageType, name: coverageType, description: ''),
+          details: details, // <-- Added required 'details' parameter
+          kraPin: type == 'motor' ? (details['kra_pin'] ?? '') : '',
           logbookPath: type == 'motor' ? details['logbook_path'] : null,
           previousPolicyPath:
               type == 'motor' ? details['previous_policy_path'] : null,
@@ -4011,7 +4010,7 @@ final Map<String, FieldDefinition> motorFields = {
                         .map((item) => DropdownMenuItem(
                               value: item.id,
                               child: Text(
-                                '${item.details['name'] ?? 'Item'} (${item.type.toUpperCase()})',
+                                '${item.details['name'] ?? 'Item'} (${item.type.name.toUpperCase()})',
                                 style: const TextStyle(color: Color(0xFF1B263B)),
                               ),
                             ))
@@ -4199,9 +4198,7 @@ final Map<String, FieldDefinition> motorFields = {
         final extractedData = {
           ...selectedItem.details,
           if (selectedItem.kraPin != null) 'kra_pin': selectedItem.kraPin!,
-          if (selectedItem.vehicleValue != null) 'vehicle_value': selectedItem.vehicleValue!,
-          if (selectedItem.regno != null) 'regno': selectedItem.regno!,
-          if (selectedItem.chassisNumber != null) 'chassis_number': selectedItem.chassisNumber!,
+
         };
 
         setState(() {
@@ -4267,9 +4264,11 @@ final Map<String, FieldDefinition> motorFields = {
         context,
         MaterialPageRoute(
           builder: (context) => CoverDetailScreen(
-            type: insuredItem?.type ?? type, // Use InsuredItem type if available
-            subtype: insuredItem?.subtype ?? subtype,
-            coverageType: insuredItem?.coverageType ?? coverageType,
+            type: insuredItem?.type is String ? insuredItem?.type as String : insuredItem?.type?.toString() ?? type, // Use InsuredItem type if available
+            subtype: insuredItem?.subtype is PolicySubtype
+                ? (insuredItem?.subtype as PolicySubtype).name
+                : subtype,
+            coverageType: (insuredItem?.coverageType ?? coverageType).toString(),
             insuredItem: insuredItem,
             onSubmit: (details) {},
             onAutofillPreviousPolicy: (file, data, company) {},
@@ -5724,12 +5723,14 @@ class DialogStepConfig {
 }
 
 
+
+
 class GenericInsuranceDialog extends StatefulWidget {
   final String insuranceType;
   final int step;
   final DialogStepConfig config;
   final DialogState dialogState;
-  final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey; // Added
+  final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey;
   final VoidCallback onCancel;
   final VoidCallback? onBack;
   final VoidCallback onSubmit;
@@ -5748,7 +5749,7 @@ class GenericInsuranceDialog extends StatefulWidget {
     required this.step,
     required this.config,
     required this.dialogState,
-    required this.scaffoldMessengerKey, // Added
+    required this.scaffoldMessengerKey,
     required this.onCancel,
     this.onBack,
     required this.onSubmit,
@@ -5781,7 +5782,6 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
     final fields = <FieldConfig>[];
     for (var field in widget.config.fields) {
       if (field.type == 'dropdown' && (field.key == 'subtype' || field.key == 'coverage_type')) {
-        // Fetch PolicySubtype or CoverageType to get icons
         List<dynamic> optionsWithIcons = [];
         if (field.key == 'subtype') {
           final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
@@ -5808,9 +5808,9 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
         fields.add(FieldConfig(
           key: field.key,
           label: field.label,
-          type: 'grid', // New type for grid view
+          type: 'grid',
           options: optionsWithIcons.map((o) => o['name'] as String).toList(),
-          icons: optionsWithIcons.map((o) => o['icon'] as String).toList(), // Store icons
+          icons: optionsWithIcons.map((o) => o['icon'] as String).toList(),
           initialValue: field.initialValue,
           dependsOnKey: field.dependsOnKey,
           dependsOnValue: field.dependsOnValue,
@@ -5843,10 +5843,22 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
   Widget build(BuildContext context) {
     final formKey = GlobalKey<FormState>();
     final colorProvider = context.watch<ColorProvider>();
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    // Adaptive width logic
+    double dialogWidth;
+    if (screenWidth < 500) {
+      dialogWidth = screenWidth * 0.80; // 80% for small screens
+    } else if (screenWidth < 750) {
+      dialogWidth = screenWidth * 0.70; // 70% for medium screens
+    } else {
+      dialogWidth = 600; // Fixed max for large screens
+    }
+    dialogWidth = dialogWidth.clamp(280, 600); // Min 280px, max 600px
 
     return ConstrainedBox(
       constraints: BoxConstraints(
-        maxWidth: MediaQuery.of(context).size.width * 0.6, // 60% of screen width
+        maxWidth: dialogWidth,
       ),
       child: FutureBuilder<List<FieldConfig>>(
         future: _fieldsFuture,
@@ -5962,7 +5974,7 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
                               config: field,
                               value: widget.dialogState.responses[field.key] ?? field.initialValue,
                               onChanged: (value) {
-                                widget.dialogState.updateResponse(field.key, value!);
+                                widget.dialogState.updateResponse(field.key, value ?? '');
                                 if (kDebugMode) print('Field ${field.key} updated: $value');
                                 setState(() {});
                               },

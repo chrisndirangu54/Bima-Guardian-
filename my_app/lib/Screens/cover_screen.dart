@@ -368,10 +368,7 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
       _phoneController.text = widget.insuredItem!.details['phone'] ?? '';
       _idNumberController.text = widget.insuredItem!.details['id_number'] ?? '';
       _kraPinController.text = widget.insuredItem!.kraPin ?? '';
-      _vehicleValueController.text = widget.insuredItem!.vehicleValue ?? '';
-      _regnoController.text = widget.insuredItem!.regno ?? '';
-      _propertyValueController.text = widget.insuredItem!.propertyValue ?? '';
-      _chassisNumberController.text = widget.insuredItem!.chassisNumber ?? '';
+
       _healthConditionController.text = widget.insuredItem!.details['health_condition'] ?? '';
       _travelDestinationController.text = widget.insuredItem!.details['travel_destination'] ?? '';
       _employeeCountController.text = widget.insuredItem!.details['employee_count'] ?? '';
