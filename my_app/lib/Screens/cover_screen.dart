@@ -57,6 +57,8 @@ class CompanySelectionDialog extends StatefulWidget {
   final String? previousCompany;
   final String subtypeId;
   final String coverageTypeId;
+  final Map<String, String>? initialExtractedData;
+  final List<String> previousCompanies; // New parameter
   final Function(String?, Map<String, String>?) onConfirm;
 
   const CompanySelectionDialog({
@@ -64,6 +66,8 @@ class CompanySelectionDialog extends StatefulWidget {
     this.previousCompany,
     required this.subtypeId,
     required this.coverageTypeId,
+    this.initialExtractedData,
+    this.previousCompanies = const [], // Default to empty list
     required this.onConfirm,
   });
 
@@ -76,6 +80,18 @@ class _CompanySelectionDialogState extends State<CompanySelectionDialog> {
   Map<String, String>? extractedData;
   File? previousPolicyFile;
   bool isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    extractedData = widget.initialExtractedData;
+    // Prioritize previousCompany, then first eligible previousCompanies
+    selectedCompany = widget.previousCompany ??
+        widget.previousCompanies.firstWhere(
+          (company) => company.isNotEmpty,
+          orElse: () => '',
+        );
+  }
 
   Future<Map<String, String>?> _performOCR(File file) async {
     try {
@@ -346,7 +362,6 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
     super.initState();
     _selectedCompany = widget.preSelectedCompany;
 
-    // Initialize from insuredItem
     if (widget.insuredItem != null) {
       _nameController.text = widget.insuredItem!.details['name'] ?? '';
       _emailController.text = widget.insuredItem!.details['email'] ?? '';
@@ -365,13 +380,13 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
       _selectedCompany ??= widget.insuredItem!.details['insurer'];
     }
 
-    // Autofill from extractedData
     if (widget.extractedData != null) {
       _autofillFields(widget.extractedData!);
     }
 
     _initializeIds();
   }
+
 
   Future<void> _initializeIds() async {
     try {

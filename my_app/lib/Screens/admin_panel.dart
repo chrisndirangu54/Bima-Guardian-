@@ -851,18 +851,23 @@ class _BannerCarouselState extends State<BannerCarousel> {
         setState(() {
           _banners.add(BannerModel(
             imagePath: newBannerPath,
-            title: 'Promo $monthYear',
+            title: 'Promo ${monthYear}',
             createdAt: DateTime.now(),
           ));
         });
       }
     } catch (e) {
-      if (kDebugMode) {
-        print('Error creating monthly banner: $e');
-      }
+      // Fallback for banner creation failure
+      setState(() {
+        _banners.add(BannerModel(
+          imagePath: '', // Empty path to trigger fallback
+          title: 'Promo ${monthYear}',
+          createdAt: DateTime.now(),
+        ));
+      });
+      print('Error creating monthly banner: $e');
     }
   }
-
   // Handle manual banner upload
   Future<void> _uploadBanner() async {
     // Note: You'll need to add an image picker package for actual implementation
@@ -931,30 +936,51 @@ class _BannerCarouselState extends State<BannerCarousel> {
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(16),
-                      child: Image.file(
-                        File(banner.imagePath),
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .primary
-                                .withOpacity(0.2),
-                            child: Center(
-                              child: Text(
-                                banner.title,
-                                style: GoogleFonts.lora(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
+                      child: banner.imagePath.isNotEmpty
+                          ? Image.file(
+                              File(banner.imagePath),
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                // Fallback similar to original code
+                                return Container(
                                   color: Theme.of(context)
                                       .colorScheme
-                                      .onSurface,
+                                      .primary
+                                      .withOpacity(0.2),
+                                  child: Center(
+                                    child: Text(
+                                      banner.title,
+                                      style: GoogleFonts.lora(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            )
+                          : Container(
+                              // Fallback for empty or invalid image path
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withOpacity(0.2),
+                              child: Center(
+                                child: Text(
+                                  banner.title,
+                                  style: GoogleFonts.lora(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface,
+                                  ),
                                 ),
                               ),
                             ),
-                          );
-                        },
-                      ),
                     ),
                   );
                 },

@@ -1,55 +1,29 @@
+import 'package:my_app/Models/policy.dart';
+
 class InsuredItem {
   final String id;
-  final String type;
-  final String vehicleType;
   final Map<String, String> details;
-  final String? vehicleValue;
-  final String? regno;
-  final String? propertyValue;
-  final String? chassisNumber;
-  final String? kraPin;
+  final String name;
+  final String email;
+  final String contact;
+  final String kraPin; // New: KRA PIN for tax purposes
   final String? logbookPath;
   final String? previousPolicyPath;
+  final PolicyType type; // New: Policy type (e.g., 'motor')
+  final PolicySubtype subtype; // New: Policy subtype (e.g., 'comprehensive')
+  final CoverageType coverageType; // New: Coverage type (e.g., 'third_party')
+  final List<String> previousCompanies; // New: List of previous insurers
 
-  InsuredItem({
+  InsuredItem( {
     required this.id,
-    required this.type,
-    required this.vehicleType,
     required this.details,
-    this.vehicleValue,
-    this.regno,
-    this.propertyValue,
-    this.chassisNumber,
-    this.kraPin,
+    required this.kraPin,
+required this.name, required this.email, required this.contact,
     this.logbookPath,
     this.previousPolicyPath,
+    required this.type,
+    required this.subtype,
+    required this.coverageType,
+    this.previousCompanies = const [],
   });
-
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'type': type,
-    'vehicleType': vehicleType,
-    'details': details,
-    'vehicleValue': vehicleValue,
-    'regno': regno,
-    'propertyValue': propertyValue,
-    'chassisNumber': chassisNumber,
-    'kraPin': kraPin,
-    'logbookPath': logbookPath,
-    'previousPolicyPath': previousPolicyPath,
-  };
-
-  factory InsuredItem.fromJson(Map<String, dynamic> json) => InsuredItem(
-    id: json['id'],
-    type: json['type'],
-    vehicleType: json['vehicleType'] ?? '',
-    details: Map<String, String>.from(json['details']),
-    vehicleValue: json['vehicleValue'],
-    regno: json['regno'],
-    propertyValue: json['propertyValue'],
-    chassisNumber: json['chassisNumber'],
-    kraPin: json['kraPin'],
-    logbookPath: json['logbookPath'],
-    previousPolicyPath: json['previousPolicyPath'],
-  );
 }

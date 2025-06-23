@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:async/async.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:my_app/Screens/admin_panel.dart';
 import 'package:web/web.dart' as web; // Use this instead of dart:html
 
@@ -411,6 +412,10 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
   List<String> trendingTopics = [];
   List<String> blogPosts = [];
   late bool _isDialogOpening = false;
+  bool _isOcrLoading = false;
+  Map<String, String>? _initialExtractedData;
+  InsuredItem? _selectedInsuredItem; // New state for selected item
+  bool _isLoadingItems = false;
 
   String pdfTemplateKey = 'default_template';
   List<PolicyType> cachedPolicyTypes = [];
@@ -2144,6 +2149,55 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
             }
           },
         ),
+        const SizedBox(height: 24),
+                    ElevatedButton(
+              onPressed: _isOcrLoading || _isLoadingItems ? null : _uploadPreviousPolicy,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF8B0000),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: Text(
+                _isOcrLoading
+                    ? 'Processing...'
+                    : _initialExtractedData == null || _selectedInsuredItem != null
+                        ? 'Upload Previous Policy'
+                        : 'Previous Policy Uploaded',
+                style: GoogleFonts.roboto(color: Colors.white),
+              ),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _isOcrLoading || _isLoadingItems ? null : _autofillFromInsuredItem,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF8B0000),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: Text(
+                _isLoadingItems
+                    ? 'Loading...'
+                    : _selectedInsuredItem == null
+                        ? 'Autofill from Insured Item'
+                        : 'Insured Item Loaded',
+                style: GoogleFonts.roboto(color: Colors.white),
+              ),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                navigateToCoverDetailScreen(
+                  'motor',
+                  'comprehensive',
+                  'third_party',
+                  'subtype_id',
+                  'coverage_type_id',
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF8B0000),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: Text('Select Policy', style: GoogleFonts.roboto(color: Colors.white)),
+            ),
                     const SizedBox(height: 24),
                       if (currentType.isNotEmpty)
                         Padding(
@@ -4025,6 +4079,227 @@ final Map<String, FieldDefinition> motorFields = {
     },
   );
 }
+
+
+  Future<Map<String, String>?> _performOCR(File file) async {
+    try {
+      setState(() => _isOcrLoading = true);
+      final bytes = await file.readAsBytes();
+      final base64Image = base64Encode(bytes);
+
+      final requestBody = {
+        'model': 'gpt-4o',
+        'messages': [
+          {
+            'role': 'user',
+            'content': [
+              {
+                'type': 'text',
+                'text':
+                    'Extract the following fields from the provided document: name, email, phone, id_number, kra_pin, vehicle_value, regno, chassis_number, health_condition, travel_destination, employee_count, insurer. Return as a JSON object.',
+              },
+              {
+                'type': 'image_url',
+                'image_url': {'url': 'data:image/jpeg;base64,$base64Image'}
+              }
+            ]
+          }
+        ],
+        'max_tokens': 300
+      };
+
+      final response = await http.post(
+        Uri.parse('https://api.openai.com/v1/chat/completions'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer YOUR_OPENAI_API_KEY',
+        },
+        body: jsonEncode(requestBody),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final extracted = jsonDecode(data['choices'][0]['message']['content']) as Map<String, dynamic>;
+        return extracted.map((key, value) => MapEntry(key, value.toString()));
+      }
+      return null;
+    } catch (e) {
+      if (kDebugMode) print('OCR Error: $e');
+      return null;
+    } finally {
+      setState(() => _isOcrLoading = false);
+    }
+  }
+
+  Future<void> _uploadPreviousPolicy() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+    );
+    if (result != null && result.files.single.path != null) {
+      final file = File(result.files.single.path!);
+      final data = await _performOCR(file);
+      if (data != null && data.isNotEmpty) {
+        setState(() {
+          _initialExtractedData = data;
+          _selectedInsuredItem = null; // Clear selected item if policy uploaded
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Previous policy data extracted successfully')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No data extracted from the document')),
+        );
+      }
+    }
+  }
+
+  Future<void> _autofillFromInsuredItem() async {
+    setState(() => _isLoadingItems = true);
+    try {
+      await _loadInsuredItems();
+      if (!mounted) return;
+
+      if (insuredItems.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No insured items available')),
+        );
+        return;
+      }
+
+      // Show dialog to select an InsuredItem
+      final selectedItem = await showDialog<InsuredItem>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Select Insured Item', style: GoogleFonts.lora(fontSize: 18, fontWeight: FontWeight.w600)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: insuredItems
+                  .map((item) => ListTile(
+                        title: Text(item.details['name'] ?? 'Unknown', style: GoogleFonts.roboto()),
+                        subtitle: Text(item.id, style: GoogleFonts.roboto(color: Colors.grey)),
+                        onTap: () => Navigator.pop(context, item),
+                      ))
+                  .toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancel', style: GoogleFonts.roboto(color: const Color(0xFFD3D3D3))),
+            ),
+          ],
+        ),
+      );
+
+      if (selectedItem != null && mounted) {
+        // Construct extracted data from InsuredItem
+        final extractedData = {
+          ...selectedItem.details,
+          if (selectedItem.kraPin != null) 'kra_pin': selectedItem.kraPin!,
+          if (selectedItem.vehicleValue != null) 'vehicle_value': selectedItem.vehicleValue!,
+          if (selectedItem.regno != null) 'regno': selectedItem.regno!,
+          if (selectedItem.chassisNumber != null) 'chassis_number': selectedItem.chassisNumber!,
+        };
+
+        setState(() {
+          _selectedInsuredItem = selectedItem;
+          _initialExtractedData = extractedData;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Insured item data loaded successfully')),
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) print('Error loading insured items: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to load insured items')),
+        );
+      }
+    } finally {
+      setState(() => _isLoadingItems = false);
+    }
+  }
+
+  Future<void> showCompanyDialog(
+    BuildContext context,
+    String type,
+    String subtype,
+    String coverageType,
+    Map<String, String> details, {
+    String? preSelectedCompany,
+    required String subtypeId,
+    required String coverageTypeId,
+    Map<String, String>? initialExtractedData,
+    InsuredItem? insuredItem, // New parameter
+  }) async {
+    company_models.Company? selectedCompany;
+    Map<String, String>? extractedData;
+    PDFTemplate? pdfTemplate;
+    if (preSelectedCompany != null) {
+      final doc = await FirebaseFirestore.instance
+          .collection('pdf_templates')
+          .doc(preSelectedCompany)
+          .get();
+      pdfTemplate = doc.exists ? PDFTemplate.fromJson(doc.data()!) : null;
+    }
+    await showDialog(
+      context: context,
+      builder: (context) => CompanySelectionDialog(
+        previousCompany: preSelectedCompany ?? initialExtractedData?['insurer'],
+        subtypeId: subtypeId,
+        coverageTypeId: coverageTypeId,
+        initialExtractedData: initialExtractedData,
+        previousCompanies: insuredItem?.previousCompanies ?? [], // Pass previousCompanies
+        onConfirm: (company, data) {
+          selectedCompany = company as company_models.Company?;
+          extractedData = data;
+        },
+      ),
+    );
+
+    if (selectedCompany != null && mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CoverDetailScreen(
+            type: insuredItem?.type ?? type, // Use InsuredItem type if available
+            subtype: insuredItem?.subtype ?? subtype,
+            coverageType: insuredItem?.coverageType ?? coverageType,
+            insuredItem: insuredItem,
+            onSubmit: (details) {},
+            onAutofillPreviousPolicy: (file, data, company) {},
+            onAutofillLogbook: (file, data) {},
+            fields: pdfTemplate?.fields ?? {},
+            showCompanyDialog: showCompanyDialog,
+            preSelectedCompany: selectedCompany?.id,
+            extractedData: extractedData,
+          ),
+        ),
+      );
+    }
+  }
+
+  void navigateToCoverDetailScreen(
+      String type, String subtype, String coverageType, String subtypeId, String coverageTypeId) {
+    showCompanyDialog(
+      context,
+      type,
+      subtype,
+      coverageType,
+      {},
+      subtypeId: subtypeId,
+      coverageTypeId: coverageTypeId,
+      initialExtractedData: _initialExtractedData,
+      insuredItem: _selectedInsuredItem, // Pass selected InsuredItem
+    );
+  }
+
+
   Future<void> _showCompanyDialog(
     BuildContext context,
     String type,
