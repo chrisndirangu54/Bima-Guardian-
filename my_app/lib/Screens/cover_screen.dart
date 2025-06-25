@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:my_app/Models/policy.dart';
 import 'package:my_app/insurance_app.dart';
 
 // GenericDialog for selecting extracted data
@@ -306,9 +307,9 @@ class CoverDetailScreen extends StatefulWidget {
   final Map<String, FieldDefinition> fields;
   final Future<void> Function(
     BuildContext context,
-    String type,
-    String subtype,
-    String coverageType,
+    PolicyType type,
+    PolicySubtype subtype,
+    CoverageType coverageType,
     Map<String, String> details, {
     String? preSelectedCompany,
     required String subtypeId,

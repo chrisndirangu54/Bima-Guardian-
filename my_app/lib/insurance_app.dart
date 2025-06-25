@@ -13,7 +13,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:my_app/Models/insured_item.dart';
+import 'package:my_app/Models/Insured_item.dart';
 import 'package:my_app/Models/company.dart' as company_models;
 import 'package:my_app/Models/cover.dart';
 import 'package:my_app/Models/field_definition.dart';
@@ -25,6 +25,7 @@ import 'package:my_app/Screens/cover_screen.dart';
 import 'package:my_app/Screens/notifications_screen.dart';
 import 'package:my_app/Screens/pdf_preview.dart';
 import 'package:my_app/Services/webview.dart';
+import 'package:my_app/Screens/cover_screen.dart'; // <-- Add this import
 import 'package:pdf/pdf.dart';
 import 'package:pdf_text/pdf_text.dart';
 import 'package:path_provider/path_provider.dart';
@@ -390,7 +391,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
   static const String mpesaApiKey = 'your-mpesa-api-key-here';
   List<Policy> policies = [];
   static const String paystackSecretKey = 'your-paystack-secret-key-here';
-InsuredItem? insuredItem;
+  InsuredItem? insuredItem;
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -1207,9 +1208,9 @@ InsuredItem? insuredItem;
 
   Future<void> handleCoverSubmission(
     BuildContext context,
-    String type,
-    String subtype,
-    String coverageType,
+    PolicyType type,
+    PolicySubtype subtype,
+    CoverageType coverageType,
     String companyId,
     String pdfTemplateKey,
     Map<String, String> details,
@@ -1232,9 +1233,9 @@ InsuredItem? insuredItem;
           name: details['name'] ?? '',
           email: details['email'] ?? '',
           contact: details['phone'] ?? '',
-          type: PolicyType(id: '', name: type, description: ''),
-          subtype: PolicySubtype(id: '', name: subtype, policyTypeId: type, description: ''),
-          coverageType: CoverageType(id: coverageType, name: coverageType, description: ''),
+          type: type,
+          subtype: subtype,
+          coverageType: coverageType,
           details: details, // <-- Added required 'details' parameter
           kraPin: type == 'motor' ? (details['kra_pin'] ?? '') : '',
           logbookPath: type == 'motor' ? details['logbook_path'] : null,
@@ -1250,7 +1251,7 @@ InsuredItem? insuredItem;
       }
 
       // Calculate premium
-      double premium = await _calculatePremium(type, subtype, details);
+      double premium = await _calculatePremium(type.name, subtype.name, details);
 
       // Ask user whether to generate a quote or proceed with payment
       bool? proceedWithPayment;
@@ -1294,8 +1295,8 @@ InsuredItem? insuredItem;
         // Generate and save quote
         final quote = Quote(
           id: Uuid().v4(),
-          type: type,
-          subtype: subtype,
+          type: type.name,
+          subtype: subtype.name,
           company: companyId,
           premium: premium,
           generatedAt: DateTime.now(),
@@ -1315,8 +1316,8 @@ InsuredItem? insuredItem;
           if (await _previewPdf(pdfFile)) {
             await _sendEmail(
               companyId,
-              type,
-              subtype,
+              type.name,
+              subtype.name,
               details,
               pdfFile,
               details['regno'] ?? '',
@@ -1345,7 +1346,7 @@ InsuredItem? insuredItem;
         chatMessages.add({
           'sender': 'bot',
           'text':
-              'Your ${type.toUpperCase()} quote ($subtype) has been generated.',
+              'Your ${type.name.toUpperCase()} quote ($subtype) has been generated.',
         });
         return;
       }
@@ -1357,7 +1358,11 @@ InsuredItem? insuredItem;
         companyId: companyId,
         type: type,
         subtype: subtype,
-        coverageType: type == 'motor' ? coverageType : 'custom',
+        coverageType: CoverageType(
+          id: coverageType.name,
+          name: coverageType.name,
+          description: '',
+        ),
         status: CoverStatus.pending,
         expirationDate: DateTime.now().add(const Duration(days: 365)),
         pdfTemplateKey: pdfTemplateKey,
@@ -1383,14 +1388,14 @@ InsuredItem? insuredItem;
         pdfFile = await _fillPdfTemplate(
           pdfTemplateKey ?? '',
           details,
-          type,
+          type.name,
           context,
         );
         if (pdfFile != null && await _previewPdf(pdfFile)) {
           await _sendEmail(
             companyId,
-            type,
-            subtype,
+            type.name,
+            subtype.name,
             details,
             pdfFile,
             details['regno'] ?? '',
@@ -1414,12 +1419,12 @@ InsuredItem? insuredItem;
             ),
           );
         }
-        pdfFile = await _generateFallbackPdf(type, subtype, details);
+        pdfFile = await _generateFallbackPdf(type.name, subtype.name, details);
         if (pdfFile != null) {
           await _sendEmail(
             companyId,
-            type,
-            subtype,
+            type.name,
+            subtype.name,
             details,
             pdfFile,
             details['regno'] ?? '',
@@ -1461,7 +1466,7 @@ InsuredItem? insuredItem;
       chatMessages.add({
         'sender': 'bot',
         'text':
-            'Your ${type.toUpperCase()} cover ($subtype) has been created. Payment status: $paymentStatus.',
+            'Your ${type.name.toUpperCase()} cover ($subtype) has been created. Payment status: $paymentStatus.',
       });
 
       if (context.mounted) {
@@ -1474,7 +1479,7 @@ InsuredItem? insuredItem;
         // Show completion dialog
         _showCompletionDialog(
           context,
-          type,
+          type.name,
           await Policy.fromCover(updatedCover),
           pdfTemplateKey,
           (context, type, subtype, coverageType, [String? extra]) {
@@ -1884,6 +1889,8 @@ InsuredItem? insuredItem;
         return _buildUpcomingScreen();
       case 3:
         return _buildMyAccountScreen(context);
+      case 4:
+        return _buildInsurableItemScreen(context);
       default:
         return _buildHomeScreen(
           context,
@@ -1893,6 +1900,526 @@ InsuredItem? insuredItem;
         );
     }
   }
+
+
+Widget _buildInsurableItemScreen(BuildContext context) {
+  return Scaffold(
+    backgroundColor: Theme.of(context).colorScheme.surface,
+    appBar: AppBar(
+      title: const Text('Insurable Items'),
+      elevation: 4,
+      shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      actionsPadding: const EdgeInsets.only(right: 16.0),
+    ),
+    body: StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('insured_items').snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final insuredItems = snapshot.data!.docs
+            .map((doc) => InsuredItem.fromJson(doc.data() as Map<String, dynamic>))
+            .toList();
+
+        if (insuredItems.isEmpty) {
+          return const Center(child: Text('No insurable items found.'));
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+          itemCount: insuredItems.length,
+          itemBuilder: (context, index) {
+            final item = insuredItems[index];
+            final cover = item.cover!;
+            final daysUntilExpiration = cover?.expirationDate != null
+                ? cover!.expirationDate!.difference(DateTime.now()).inDays
+                : null;
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Card(
+                elevation: 4,
+                shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12.0),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.all(16.0),
+                  title: Text(
+                    '${item.type.name} - ${item.subtype.name}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                  ),
+                  subtitle: cover != null
+                      ? Text(
+                          'Status: ${cover.status.name}${daysUntilExpiration != null ? ', Expires in $daysUntilExpiration days' : ''}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: daysUntilExpiration != null && daysUntilExpiration <= 7
+                                ? Colors.red
+                                : Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        )
+                      : const Text(
+                          'No active cover',
+                          style: TextStyle(fontSize: 14, color: Colors.grey),
+                        ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (cover != null && daysUntilExpiration != null)
+                        Padding(
+                          padding: const EdgeInsets.all(4.0),
+                          child: Icon(
+                            Icons.warning_amber_rounded,
+                            color: daysUntilExpiration <= 7 ? Colors.red : Colors.amber,
+                            size: 24,
+                          ),
+                        ),
+                      const SizedBox(width: 8),
+                      Padding(
+                        padding: const EdgeInsets.all(4.0),
+                        child: Icon(
+                          Icons.arrow_forward_ios,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          size: 20,
+                        ),
+                      ),
+                    ],
+                  ),
+                  onTap: () => _showCoverActionsDialog(context, item),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    ),
+  );
+}
+
+// Dialog to handle extend, renew, cancel, or file claim actions
+Future<void> _showCoverActionsDialog(BuildContext context, InsuredItem item) async {
+  final cover = item.cover;
+  final canExtend = cover != null &&
+      (cover.status == CoverStatus.active || cover.status == CoverStatus.nearingExpiration);
+  final canFileClaim = cover != null &&
+      (cover.status == CoverStatus.active || cover.status == CoverStatus.extended);
+
+  await showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+      title: Text('${item.type.name} - ${item.subtype.name}'),
+      content: cover != null
+          ? Text(
+              'Status: ${cover.status.name}\n'
+              '${cover.expirationDate != null ? 'Expires: ${cover.expirationDate!.toLocal().toString().split(' ')[0]}' : 'No expiration date'}\n'
+              'Extensions: ${cover.extensionCount}/2',
+            )
+          : const Text('No active cover for this item.'),
+      actions: [
+        TextButton(
+          child: const Text('Close'),
+          onPressed: () => Navigator.pop(context),
+        ),
+        if (cover != null)
+          TextButton(
+            child: const Text('Cancel'),
+            onPressed: () async {
+              Navigator.pop(context);
+              await _cancelCover(context, cover);
+            },
+          ),
+        if (canExtend)
+          TextButton(
+            child: const Text('Extend'),
+            onPressed: () async {
+              Navigator.pop(context);
+              await _showExtendDialog(context, item);
+            },
+          ),
+        if (canFileClaim)
+          TextButton(
+            child: const Text('File Claim'),
+            onPressed: () async {
+              Navigator.pop(context);
+              await showFileClaimDialog(context, item, cover);
+            },
+          ),
+        TextButton(
+          child: const Text('Renew'),
+          onPressed: () async {
+            Navigator.pop(context);
+            await _showRenewDialog(context, item);
+          },
+        ),
+      ],
+    ),
+  );
+}
+
+// Cancel a cover by updating its status to inactive
+Future<void> _cancelCover(BuildContext context, Cover cover) async {
+  try {
+    final updatedCover = cover.copyWith(status: CoverStatus.inactive);
+    await FirebaseFirestore.instance
+        .collection('covers')
+        .doc(cover.id)
+        .update(updatedCover.toJson());
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Cover canceled successfully.')),
+    );
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to cancel cover: $e')),
+    );
+  }
+}
+
+// Dialog for extending a cover with options to change company, subtype, or coverage type
+Future<void> _showExtendDialog(BuildContext context, InsuredItem item) async {
+  // Placeholder list for companies with pdfTemplateKey
+  // Fetch companies where isExtension is true
+  final companiesSnapshot = await FirebaseFirestore.instance
+      .collection('company')
+      .where('isExtension', isEqualTo: true)
+      .get();
+  final companies = companiesSnapshot.docs
+      .map((doc) => doc.data() as Map<String, dynamic>)
+      .toList();
+
+  if (companies.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('No companies available for this action.')),
+    );
+    return;
+  }
+  final subtypes = await InsuranceHomeScreen.getPolicySubtypes(item.type.id);
+  final coverageTypes = await InsuranceHomeScreen.getCoverageTypes(item.type.id);
+
+  String? selectedCompanyId = item.cover?.companyId ?? companies[0]['id'];
+  PolicySubtype? selectedSubtype = item.subtype;
+  CoverageType? selectedCoverageType = item.coverageType;
+  final details = Map<String, String>.from(item.details);
+
+  await showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+        title: const Text('Extend Cover'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                value: selectedCompanyId,
+                decoration: const InputDecoration(labelText: 'Insurance Company'),
+                items: companies
+                    .map((company) => DropdownMenuItem(
+                          value: company['id'] as String,
+                          child: Text(company['name'] as String),
+                        ))
+                    .toList(),
+                onChanged: (value) {
+                  setState(() {
+                    selectedCompanyId = value;
+                  });
+                },
+              ),
+              DropdownButtonFormField<PolicySubtype>(
+                value: selectedSubtype,
+                decoration: const InputDecoration(labelText: 'Policy Subtype'),
+                items: subtypes
+                    .map((subtype) => DropdownMenuItem(
+                          value: subtype,
+                          child: Text(subtype.name),
+                        ))
+                    .toList(),
+                onChanged: (value) {
+                  setState(() {
+                    selectedSubtype = value;
+                  });
+                },
+              ),
+              DropdownButtonFormField<CoverageType>(
+                value: selectedCoverageType,
+                decoration: const InputDecoration(labelText: 'Coverage Type'),
+                items: coverageTypes
+                    .map((coverageType) => DropdownMenuItem(
+                          value: coverageType,
+                          child: Text(coverageType.name),
+                        ))
+                    .toList(),
+                onChanged: (value) {
+                  setState(() {
+                    selectedCoverageType = value;
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.pop(context),
+          ),
+          TextButton(
+            child: const Text('Submit'),
+            onPressed: () async {
+              if (selectedCompanyId == null || selectedSubtype == null || selectedCoverageType == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please select all options.')),
+                );
+                return;
+              }
+              Navigator.pop(context);
+              // Get pdfTemplateKey from selected company
+              final selectedCompany = companies.firstWhere(
+                (company) => company['id'] == selectedCompanyId,
+                orElse: () => {'pdfTemplateKey': 'default_template'},
+              );
+              final pdfTemplateKey = selectedCompany['pdfTemplateKey'] ?? 'default_template';
+
+              await handleCoverSubmission(
+                context,
+                item.type,
+                selectedSubtype!,
+                selectedCoverageType!,
+                selectedCompanyId!,
+                pdfTemplateKey,
+                details,
+              );
+            },
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+// Dialog for renewing a cover with options to change company, subtype, or coverage type
+Future<void> _showRenewDialog(BuildContext context, InsuredItem item) async {
+  // Same company list as extend
+  final companies = [
+    {'id': 'COMP001', 'name': 'Insurer A', 'pdfTemplateKey': 'motor_template'},
+    {'id': 'COMP002', 'name': 'Insurer B', 'pdfTemplateKey': 'default_template'},
+  ];
+  final subtypes = await InsuranceHomeScreen.getPolicySubtypes(item.type.id);
+  final coverageTypes = await InsuranceHomeScreen.getCoverageTypes(item.type.id);
+
+  String? selectedCompanyId = item.cover?.companyId ?? companies[0]['id'];
+  PolicySubtype? selectedSubtype = item.subtype;
+  CoverageType? selectedCoverageType = item.coverageType;
+  final details = Map<String, String>.from(item.details);
+
+  await showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+        title: const Text('Renew Cover'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                value: selectedCompanyId,
+                decoration: const InputDecoration(labelText: 'Insurance Company'),
+                items: companies
+                    .map((company) => DropdownMenuItem(
+                          value: company['id'] as String,
+                          child: Text(company['name'] as String),
+                        ))
+                    .toList(),
+                onChanged: (value) {
+                  setState(() {
+                    selectedCompanyId = value;
+                  });
+                },
+              ),
+              DropdownButtonFormField<PolicySubtype>(
+                value: selectedSubtype,
+                decoration: const InputDecoration(labelText: 'Policy Subtype'),
+                items: subtypes
+                    .map((subtype) => DropdownMenuItem(
+                          value: subtype,
+                          child: Text(subtype.name),
+                        ))
+                    .toList(),
+                onChanged: (value) {
+                  setState(() {
+                    selectedSubtype = value;
+                  });
+                },
+              ),
+              DropdownButtonFormField<CoverageType>(
+                value: selectedCoverageType,
+                decoration: const InputDecoration(labelText: 'Coverage Type'),
+                items: coverageTypes
+                    .map((coverageType) => DropdownMenuItem(
+                          value: coverageType,
+                          child: Text(coverageType.name),
+                        ))
+                    .toList(),
+                onChanged: (value) {
+                  setState(() {
+                    selectedCoverageType = value;
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.pop(context),
+          ),
+          TextButton(
+            child: const Text('Submit'),
+            onPressed: () async {
+              if (selectedCompanyId == null || selectedSubtype == null || selectedCoverageType == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please select all options.')),
+                );
+                return;
+              }
+              Navigator.pop(context);
+              // Get pdfTemplateKey from selected company
+              final selectedCompany = companies.firstWhere(
+                (company) => company['id'] == selectedCompanyId,
+                orElse: () => {'pdfTemplateKey': 'default_template'},
+              );
+              final pdfTemplateKey = selectedCompany['pdfTemplateKey'] as String? ?? 'default_template';
+
+              await handleCoverSubmission(
+                context,
+                item.type,
+                selectedSubtype!,
+                selectedCoverageType!,
+                selectedCompanyId!,
+                pdfTemplateKey,
+                details,
+              );
+            },
+          ),
+        ],
+      ),
+    ),
+  );
+}
+  // Dialog for filing a claim by selecting a company with isClaim true
+Future<void> showFileClaimDialog(BuildContext context, InsuredItem item, Cover cover) async {
+  if (!context.mounted) {
+    if (kDebugMode) print('FileClaimDialog: context not mounted');
+    return;
+  }
+
+  try {
+    // Fetch companies where isClaim is true
+    final companiesSnapshot = await FirebaseFirestore.instance
+        .collection('companies')
+        .where('isClaim', isEqualTo: true)
+        .get();
+    final companies = companiesSnapshot.docs
+        .map((doc) => doc.data() as Map<String, dynamic>)
+        .toList();
+
+    if (companies.isEmpty) {
+      if (kDebugMode) print('No companies available for claims');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No companies available for filing claims.')),
+      );
+      return;
+    }
+
+    if (!context.mounted) {
+      if (kDebugMode) print('FileClaimDialog: context not mounted after fetching companies');
+      return;
+    }
+
+    String? selectedCompanyId = cover.companyId ?? companies[0]['id'] as String?;
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+          title: const Text('Select Company for Claim'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                value: selectedCompanyId,
+                decoration: const InputDecoration(labelText: 'Insurance Company'),
+                items: companies
+                    .map((company) => DropdownMenuItem(
+                          value: company['id'] as String,
+                          child: Text(company['name'] as String),
+                        ))
+                    .toList(),
+                onChanged: (value) {
+                  setState(() {
+                    selectedCompanyId = value;
+                  });
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              child: const Text('Cancel'),
+              onPressed: () {
+                if (kDebugMode) print('File claim canceled');
+                Navigator.pop(dialogContext);
+              },
+            ),
+            TextButton(
+              child: const Text('Confirm'),
+              onPressed: () {
+                if (selectedCompanyId == null) {
+                  if (kDebugMode) print('No company selected for claim');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please select a company.')),
+                  );
+                  return;
+                }
+                if (kDebugMode) print('Filing claim with company: $selectedCompanyId');
+                Navigator.pop(dialogContext);
+                if (context.mounted) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => CoverDetailsScreen(
+                        cover: cover,
+                        companyId: selectedCompanyId!,
+                      ),
+                    ),
+                  );
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  } catch (e) {
+    if (kDebugMode) print('Error in FileClaimDialog: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to load companies for claim: $e')),
+    );
+  }
+}
 
   Widget _buildHomeScreen(
     BuildContext context,
@@ -2963,11 +3490,9 @@ InsuredItem? insuredItem;
                   elevation: 4,
                   shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
                   shape: const RoundedRectangleBorder(
-                    borderRadius:
-                        BorderRadius.vertical(bottom: Radius.circular(12)),
+                    borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
                   ),
-                  actions:
-                      isDesktop ? [_buildNotificationButton(context)] : null,
+                  actions: isDesktop ? [_buildNotificationButton(context)] : null,
                   leading: isDesktop
                       ? null
                       : Builder(
@@ -3005,8 +3530,7 @@ InsuredItem? insuredItem;
                                 child: Text(
                                   'BIMA GUARDIAN',
                                   style: TextStyle(
-                                    color:
-                                        Theme.of(context).secondaryHeaderColor,
+                                    color: Theme.of(context).secondaryHeaderColor,
                                     fontSize: 20,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -3025,7 +3549,6 @@ InsuredItem? insuredItem;
                                 },
                               ),
                               const SizedBox(height: 16),
-
                               ListTile(
                                 leading: const Padding(
                                   padding: EdgeInsets.all(8.0),
@@ -3062,12 +3585,23 @@ InsuredItem? insuredItem;
                                 },
                               ),
                               const SizedBox(height: 16),
+                              ListTile(
+                                leading: const Padding(
+                                  padding: EdgeInsets.all(8.0),
+                                  child: Icon(Icons.add_business, size: 24),
+                                ),
+                                title: const Text('Insurable Items'),
+                                onTap: () {
+                                  _onItemTapped(4);
+                                  Navigator.pop(context);
+                                },
+                              ),
+                              const SizedBox(height: 16),
                               if (userRole == UserRole.admin)
                                 ListTile(
                                   leading: const Padding(
                                     padding: EdgeInsets.all(8.0),
-                                    child: Icon(Icons.admin_panel_settings,
-                                        size: 24),
+                                    child: Icon(Icons.admin_panel_settings, size: 24),
                                   ),
                                   title: const Text('Admin Panel'),
                                   onTap: () {
@@ -3083,16 +3617,14 @@ InsuredItem? insuredItem;
                                 ),
                                 title: const Text('Notifications'),
                                 onTap: () {
-                                  // Implement notification logic
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (context) =>
-                                          NotificationsScreen(
-                                              notifications: notifications),
+                                      builder: (context) => NotificationsScreen(
+                                          notifications: notifications),
                                     ),
                                   );
-
+                                  Navigator.pop(context);
                                 },
                               ),
                             ],
@@ -3145,13 +3677,18 @@ InsuredItem? insuredItem;
                               title: 'My Account',
                               onTap: () => _onItemTapped(3),
                             ),
+                            _buildNavItem(
+                              context,
+                              icon: Icons.add_business,
+                              title: 'Insurable Items',
+                              onTap: () => _onItemTapped(4),
+                            ),
                             if (userRole == UserRole.admin)
                               _buildNavItem(
                                 context,
                                 icon: Icons.admin_panel_settings,
                                 title: 'Admin Panel',
-                                onTap: () =>
-                                    Navigator.pushNamed(context, '/admin'),
+                                onTap: () => Navigator.pushNamed(context, '/admin'),
                               ),
                           ],
                         ),
@@ -3163,11 +3700,11 @@ InsuredItem? insuredItem;
                         padding: const EdgeInsets.all(24),
                         decoration: BoxDecoration(
                           color: Theme.of(context).colorScheme.surface,
-                          borderRadius: BorderRadius.only(
+                          borderRadius: const BorderRadius.only(
                             topLeft: Radius.circular(16),
                             bottomLeft: Radius.circular(16),
                           ),
-                          boxShadow: [
+                          boxShadow: const [
                             BoxShadow(
                               color: Colors.black,
                               blurRadius: 12,
@@ -3182,10 +3719,7 @@ InsuredItem? insuredItem;
                               children: [
                                 Text(
                                   'Trending in Insurance',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleLarge
-                                      ?.copyWith(
+                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                         fontSize: 20,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -3194,43 +3728,31 @@ InsuredItem? insuredItem;
                                 trendingTopics.isNotEmpty
                                     ? ListView.builder(
                                         shrinkWrap: true,
-                                        physics:
-                                            const NeverScrollableScrollPhysics(),
+                                        physics: const NeverScrollableScrollPhysics(),
                                         itemCount: trendingTopics.length,
                                         itemBuilder: (context, index) {
                                           return Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                                vertical: 8),
+                                            padding: const EdgeInsets.symmetric(vertical: 8),
                                             child: Card(
                                               elevation: 4,
                                               shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
+                                                borderRadius: BorderRadius.circular(12),
                                               ),
                                               child: ListTile(
                                                 title: Text(
-                                                  trendingTopics[index]
-                                                      .toString()
-                                                      .split('.')
-                                                      .last, // Convert PolicyType to String
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .bodyMedium,
+                                                  trendingTopics[index].toString().split('.').last,
+                                                  style: Theme.of(context).textTheme.bodyMedium,
                                                 ),
                                               ),
                                             ),
                                           );
                                         },
                                       )
-                                    : const Center(
-                                        child: CircularProgressIndicator()),
+                                    : const Center(child: CircularProgressIndicator()),
                                 const SizedBox(height: 24),
                                 Text(
                                   'Learn more about Insurance',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleLarge
-                                      ?.copyWith(
+                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                         fontSize: 20,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -3239,36 +3761,27 @@ InsuredItem? insuredItem;
                                 blogPosts.isNotEmpty
                                     ? ListView.builder(
                                         shrinkWrap: true,
-                                        physics:
-                                            const NeverScrollableScrollPhysics(),
+                                        physics: const NeverScrollableScrollPhysics(),
                                         itemCount: blogPosts.length,
                                         itemBuilder: (context, index) {
                                           return Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                                vertical: 8),
+                                            padding: const EdgeInsets.symmetric(vertical: 8),
                                             child: Card(
                                               elevation: 4,
                                               shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
+                                                borderRadius: BorderRadius.circular(12),
                                               ),
                                               child: ListTile(
                                                 title: Text(
-                                                  blogPosts[index]
-                                                      .toString()
-                                                      .split('.')
-                                                      .last, // Convert PolicyType to String
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .bodyMedium,
+                                                  blogPosts[index].toString().split('.').last,
+                                                  style: Theme.of(context).textTheme.bodyMedium,
                                                 ),
                                               ),
                                             ),
                                           );
                                         },
                                       )
-                                    : const Center(
-                                        child: CircularProgressIndicator()),
+                                    : const Center(child: CircularProgressIndicator()),
                               ],
                             ),
                           ),
@@ -3328,6 +3841,13 @@ InsuredItem? insuredItem;
                   ),
                   label: 'My Account',
                 ),
+                BottomNavigationBarItem(
+                  icon: Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Icon(Icons.add_business, size: 30),
+                  ),
+                  label: 'Insurable Items',
+                ),
               ],
               currentIndex: _selectedIndex,
               onTap: _onItemTapped,
@@ -3357,6 +3877,7 @@ InsuredItem? insuredItem;
             ),
           );
   }
+
 
 // Updated _buildNavItem to match Material Design with elevation and rounded corners
   Widget _buildNavItem(BuildContext context,
@@ -4044,9 +4565,9 @@ final Map<String, FieldDefinition> motorFields = {
                       context,
                       MaterialPageRoute(
                         builder: (context) => CoverDetailScreen(
-                          type: type.name,
-                          subtype: subtype.name,
-                          coverageType: coverageType.name,
+                          type: type.name.toLowerCase(),
+                          subtype: subtype.name.toLowerCase(),
+                          coverageType: coverageType.name.toLowerCase(),
                           insuredItem: insuredItemId != null
                               ? insuredItems.firstWhere((item) => item.id == insuredItemId)
                               : null,
@@ -4054,7 +4575,18 @@ final Map<String, FieldDefinition> motorFields = {
                           onSubmit: (details) {}, // No-op, handled in submit
                           onAutofillPreviousPolicy: autofillFromPreviousPolicy,
                           onAutofillLogbook: autofillFromLogbook,
-                          showCompanyDialog: _showCompanyDialog, // Still passed but not used
+                          showCompanyDialog: (BuildContext context, String type, String subtype, String coverageType, Map<String, String> details, {required String subtypeId, required String coverageTypeId, String? preSelectedCompany}) {
+                            return _showCompanyDialog(
+                              context,
+                              PolicyType(id: '', name: type, description: ''),
+                              PolicySubtype(id: '', name: subtype, policyTypeId: '', description: ''),
+                              CoverageType(id: '', name: coverageType, description: ''),
+                              details,
+                              subtypeId: subtypeId,
+                              coverageTypeId: coverageTypeId,
+                              preSelectedCompany: preSelectedCompany,
+                            );
+                          }, // Still passed but not used
                           preSelectedCompany: preSelectedCompany, // Pass company
                         ),
                       ),
@@ -4300,9 +4832,9 @@ final Map<String, FieldDefinition> motorFields = {
 
   Future<void> _showCompanyDialog(
     BuildContext context,
-    String type,
-    String subtype,
-    String coverageType,
+    PolicyType type,
+    PolicySubtype subtype,
+    CoverageType coverageType,
     Map<String, String> details, {
     String? preSelectedCompany,
     required String subtypeId,

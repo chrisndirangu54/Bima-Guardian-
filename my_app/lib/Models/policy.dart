@@ -1,3 +1,5 @@
+import 'dart:ffi';
+
 import 'package:flutter/foundation.dart';
 import 'package:my_app/Models/cover.dart';
 import 'package:my_app/insurance_app.dart';
@@ -168,6 +170,8 @@ class Policy {
   final CoverageType? coverageType;
   final CoverStatus status;
   final DateTime? endDate;
+  final bool? isClaim = false; // Added isClaim field
+  final bool? isExtention = false; // Added isExtension field
 
   Policy({
     required this.id,
@@ -238,10 +242,10 @@ class Policy {
       // Fetch PolicyType
       final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
       final policyType = policyTypes.firstWhere(
-        (t) => t.name.toLowerCase() == updatedCover.type.toLowerCase(),
+        (t) => t.name.toLowerCase() == updatedCover.type.toString().toLowerCase(),
         orElse: () => PolicyType(
-          id: updatedCover.type,
-          name: updatedCover.type,
+          id: '', // Provide an empty string or generate a unique id if needed
+          name: updatedCover.type.toString(),
           description: '',
         ),
       );
@@ -249,10 +253,10 @@ class Policy {
       // Fetch PolicySubtype
       final subtypes = await InsuranceHomeScreen.getPolicySubtypes(policyType.id);
       final policySubtype = subtypes.firstWhere(
-        (s) => s.name.toLowerCase() == updatedCover.subtype.toLowerCase(),
+        (s) => s.name.toLowerCase() == updatedCover.subtype.toString().toLowerCase(),
         orElse: () => PolicySubtype(
-          id: updatedCover.subtype,
-          name: updatedCover.subtype,
+          id: updatedCover.subtype.toString(),
+          name: updatedCover.subtype.toString(),
           policyTypeId: policyType.id,
           description: '',
         ),
@@ -261,10 +265,10 @@ class Policy {
       // Fetch CoverageType
       final coverageTypes = await InsuranceHomeScreen.getCoverageTypes(policyType.id);
       final coverageType = coverageTypes.firstWhere(
-        (c) => c.name.toLowerCase() == updatedCover.coverageType.toLowerCase(),
+        (c) => c.name.toLowerCase() == updatedCover.coverageType.toString().toLowerCase(),
         orElse: () => CoverageType(
-          id: updatedCover.coverageType,
-          name: updatedCover.coverageType,
+          id: updatedCover.coverageType.toString(),
+          name: updatedCover.coverageType.toString(),
           description: '',
         ),
       );

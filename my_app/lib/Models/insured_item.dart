@@ -1,4 +1,6 @@
+import 'package:my_app/Models/cover.dart';
 import 'package:my_app/Models/policy.dart';
+import 'package:my_app/insurance_app.dart';
 
 
 
@@ -17,7 +19,10 @@ class InsuredItem {
   final CoverageType coverageType; // New: Coverage type (e.g., 'third_party')
   final List<String> previousCompanies; // New: List of previous insurers
 
-  /// Creates an [InsuredItem] with the specified properties.
+  /// The cover this item is insured against, if any.
+  final Cover? cover;
+
+  /// Creates an [InsuredItem].
   InsuredItem({
     required String id,
     required Map<String, String> details,
@@ -30,6 +35,7 @@ class InsuredItem {
     required this.type,
     required this.subtype,
     required this.coverageType,
+    this.cover, // Nullable
     List<String> previousCompanies = const [],
   })  : assert(id.isNotEmpty, 'id cannot be empty'),
         assert(kraPin.isNotEmpty, 'kraPin cannot be empty'),
@@ -47,6 +53,16 @@ class InsuredItem {
         email = email,
         contact = contact,
         previousCompanies = List.unmodifiable(previousCompanies);
+
+  /// Whether the associated cover is active.
+  /// Returns `true` if the cover exists, its status is active or extended,
+  /// its expirationDate is null or in the future, and it has at most 2 extensions.
+  /// Returns `false` otherwise.
+  bool get isCoverActive =>
+      cover != null &&
+      (cover!.status == CoverStatus.active || cover!.status == CoverStatus.extended) &&
+      (cover!.expirationDate?.isAfter(DateTime.now()) ?? true) &&
+      (cover?.extensionCount ?? 0) <= 2;
 
   /// Creates an [InsuredItem] from a [Map].
   factory InsuredItem.fromMap(Map<String, dynamic> map) {
@@ -73,6 +89,9 @@ class InsuredItem {
       type: PolicyType.fromMap(map['type'] as Map<String, dynamic>),
       subtype: PolicySubtype.fromMap(map['subtype'] as Map<String, dynamic>),
       coverageType: CoverageType.fromMap(map['coverageType'] as Map<String, dynamic>),
+      cover: map['cover'] != null
+          ? Cover.fromMap(map['cover'] as Map<String, dynamic>)
+          : null,
       previousCompanies: map['previousCompanies'] is List
           ? List<String>.from(map['previousCompanies'])
           : [],
@@ -93,6 +112,7 @@ class InsuredItem {
       'type': type.toMap(),
       'subtype': subtype.toMap(),
       'coverageType': coverageType.toMap(),
+      'cover': cover?.toMap(),
       'previousCompanies': previousCompanies,
     };
   }
@@ -102,7 +122,6 @@ class InsuredItem {
 
   /// Converts the [InsuredItem] to a JSON object.
   Map<String, dynamic> toJson() => toMap();
-
 
   /// Creates a copy of this [InsuredItem] with the specified fields replaced.
   InsuredItem copyWith({
@@ -117,6 +136,7 @@ class InsuredItem {
     PolicyType? type,
     PolicySubtype? subtype,
     CoverageType? coverageType,
+    Cover? cover,
     List<String>? previousCompanies,
   }) {
     return InsuredItem(
@@ -131,6 +151,7 @@ class InsuredItem {
       type: type ?? this.type,
       subtype: subtype ?? this.subtype,
       coverageType: coverageType ?? this.coverageType,
+      cover: cover ?? this.cover,
       previousCompanies: previousCompanies ?? this.previousCompanies,
     );
   }
@@ -138,7 +159,7 @@ class InsuredItem {
   /// Returns a string representation of the [InsuredItem].
   @override
   String toString() {
-    return 'InsuredItem(id: $id, details: $details, kraPin: $kraPin, name: $name, email: $email, contact: $contact, logbookPath: $logbookPath, previousPolicyPath: $previousPolicyPath, type: $type, subtype: $subtype, coverageType: $coverageType, previousCompanies: $previousCompanies)';
+    return 'InsuredItem(id: $id, details: $details, kraPin: $kraPin, name: $name, email: $email, contact: $contact, logbookPath: $logbookPath, previousPolicyPath: $previousPolicyPath, type: $type, subtype: $subtype, coverageType: $coverageType, cover: $cover, previousCompanies: $previousCompanies)';
   }
 
   /// Compares two [InsuredItem] instances for equality.
@@ -158,6 +179,7 @@ class InsuredItem {
           type == other.type &&
           subtype == other.subtype &&
           coverageType == other.coverageType &&
+          cover == other.cover &&
           previousCompanies == other.previousCompanies;
 
   /// Computes the hash code for this [InsuredItem].
@@ -174,6 +196,7 @@ class InsuredItem {
         type,
         subtype,
         coverageType,
+        cover,
         previousCompanies,
       );
 }

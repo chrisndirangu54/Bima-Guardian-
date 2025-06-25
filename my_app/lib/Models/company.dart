@@ -6,7 +6,10 @@ class Company {
   final List<String> pdfTemplateKey; // e.g., ['default', 'health_template']
   final CoverageType? coverageType; // Add this line
   final PolicySubtype? policySubtype; // Added missing field
+  final bool? isClaim = false; // Added isClaim field
+  final bool? isExtention = false; // Added isExtension field
 
+  /// Static lists of all coverage types and policy subtypes
   static final List<CoverageType> allCoverageTypes = [
     CoverageType(
         id: 'vehicle', name: 'Vehicle', description: 'Covers vehicles'),
