@@ -56,8 +56,47 @@ class _SignupPageState extends State<SignupPage> {
     }
   }
 
+  Future<void> _signInWithGoogle() async {
+    setState(() => _isLoading = true);
+    try {
+      UserCredential userCredential;
 
+      if (kIsWeb) {
+        // Web-specific Google Sign-In
+        GoogleAuthProvider googleProvider = GoogleAuthProvider();
+        userCredential =
+            await FirebaseAuth.instance.signInWithPopup(googleProvider);
+             
 
+      final user = userCredential.user;
+      if (user != null) {
+        // Update user profile
+        await user.updateDisplayName(user.displayName ?? 'Anonymous');
+        // Initialize user data in Firestore
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .set({
+          'createdAt': FieldValue.serverTimestamp(),
+          'details': {
+            'name': user.displayName ?? 'Anonymous',
+            'email': user.email ?? '',
+          },
+        }, SetOptions(merge: true));
+        await initializeUserData(user.uid);
+        if (mounted) Navigator.pushReplacementNamed(context, '/home');
+      }}
+    } catch (e) {
+      if (kDebugMode) print('Google Sign-In error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Google Sign-In failed: $e')),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -133,7 +172,21 @@ class _SignupPageState extends State<SignupPage> {
                                 ),
                                 child: const Text('Sign Up'),
                               ),
-
+                              const SizedBox(height: 16),
+                              ElevatedButton.icon(
+                                onPressed: _signInWithGoogle,
+                                icon: const Icon(Icons.g_mobiledata),
+                                label: const Text('Sign up with Google'),
+                                style: ElevatedButton.styleFrom(
+                                  minimumSize: const Size(double.infinity, 50),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: Colors.black,
+                                  side: const BorderSide(color: Colors.grey),
+                                ),
+                              ),
                             ],
                           ),
                     TextButton(
