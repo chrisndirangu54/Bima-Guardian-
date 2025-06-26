@@ -6,11 +6,13 @@ import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:my_app/Screens/login.dart';
 import 'package:provider/provider.dart';
 import 'package:my_app/Providers/theme_provider.dart';
 import 'package:my_app/Screens/Policy_report_screen.dart';
 import 'package:my_app/Screens/admin_panel.dart';
 import 'package:my_app/insurance_app.dart';
+import 'package:my_app/Screens/signup.dart';
 import 'firebase_options.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -461,6 +463,8 @@ class MyApp extends StatelessWidget {
       routes: {
         '/admin': (context) => const AdminPanel(),
         '/policy_report': (context) => const CoverReportScreen(),
+        '/login': (context) => const LoginPage(),
+        '/signup': (context) => const SignupPage(),
       },
     );
   }

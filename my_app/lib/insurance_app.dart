@@ -648,7 +648,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
             }
           });
         }
-        return;
+        return null;
       }
 
       final snapshot = await FirebaseFirestore.instance
@@ -1205,192 +1205,59 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     }
   }
 
-  Future<void> handleCoverSubmission(
-    BuildContext context,
-    PolicyType type,
-    PolicySubtype subtype,
-    CoverageType coverageType,
-    String companyId,
-    String pdfTemplateKey,
-    Map<String, String> details,
-  ) async {
-    try {
-      // Create or select InsuredItem
-      InsuredItem insuredItem;
-      if (details['insured_item_id']?.isNotEmpty ?? false) {
-        final snapshot = await FirebaseFirestore.instance
-            .collection('insured_items')
-            .doc(details['insured_item_id'])
-            .get();
-        if (!snapshot.exists) {
-          throw Exception('Insured item not found');
-        }
-        insuredItem = InsuredItem.fromJson(snapshot.data()!);
-      } else {
-        insuredItem = InsuredItem(
-          id: Uuid().v4(),
-          name: details['name'] ?? '',
-          email: details['email'] ?? '',
-          contact: details['phone'] ?? '',
-          type: type,
-          subtype: subtype,
-          coverageType: coverageType,
-          details: details, // <-- Added required 'details' parameter
-          kraPin: type == 'motor' ? (details['kra_pin'] ?? '') : '',
-          logbookPath: type == 'motor' ? details['logbook_path'] : null,
-          previousPolicyPath:
-              type == 'motor' ? details['previous_policy_path'] : null,
-        );
-        // Save to Firestore
-        await FirebaseFirestore.instance
-            .collection('insured_items')
-            .doc(insuredItem.id)
-            .set(insuredItem.toJson());
-        insuredItems.add(insuredItem); // Update global list
+Future<void> handleCoverSubmission(
+  BuildContext context,
+  PolicyType type,
+  PolicySubtype subtype,
+  CoverageType coverageType,
+  String companyId,
+  String pdfTemplateKey,
+  Map<String, String> details,
+) async {
+  try {
+    // Check for claim or extension flags
+    final isClaim = details['isClaim'] == 'true';
+    final isExtension = details['isExtension'] == 'true';
+
+    // Create or select InsuredItem
+    InsuredItem insuredItem;
+    if (details['insured_item_id']?.isNotEmpty ?? false) {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('insured_items')
+          .doc(details['insured_item_id'])
+          .get();
+      if (!snapshot.exists) {
+        throw Exception('Insured item not found');
       }
-
-      // Calculate premium
-      double premium =
-          await _calculatePremium(type.name, subtype.name, details);
-
-      // Ask user whether to generate a quote or proceed with payment
-      bool? proceedWithPayment;
-      if (context.mounted) {
-        proceedWithPayment = await showDialog<bool>(
-          context: context,
-          builder: (BuildContext context) {
-            return AlertDialog(
-              title: const Text('Choose an Option'),
-              content: const Text(
-                'Would you like to generate a quote or proceed with payment?',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () =>
-                      Navigator.pop(context, false), // Generate quote
-                  child: const Text('Generate Quote'),
-                ),
-                TextButton(
-                  onPressed: () =>
-                      Navigator.pop(context, true), // Proceed with payment
-                  child: const Text('Proceed with Payment'),
-                ),
-              ],
-            );
-          },
-        );
-      }
-
-      if (proceedWithPayment == null) {
-        // User dismissed the dialog
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Action canceled.')),
-          );
-        }
-        return;
-      }
-
-      if (!proceedWithPayment) {
-        // Generate and save quote
-        final quote = Quote(
-          id: Uuid().v4(),
-          type: type.name,
-          subtype: subtype.name,
-          company: companyId,
-          premium: premium,
-          generatedAt: DateTime.now(),
-          formData: details,
-        );
-
-        // Save quote to Firestore
-        await FirebaseFirestore.instance
-            .collection('quotes')
-            .doc(quote.id)
-            .set(quote.toJson());
-
-        // Generate quote PDF
-        final pdfFile = await _generateQuotePdf(quote);
-        if (pdfFile != null && context.mounted) {
-          // Optionally preview the quote PDF
-          if (await _previewPdf(pdfFile)) {
-            await _sendEmail(
-              companyId,
-              type.name,
-              subtype.name,
-              details,
-              pdfFile,
-              details['regno'] ?? '',
-              details['vehicle_type'] ?? '',
-            );
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Quote generated and sent.')),
-            );
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                  content:
-                      Text('Quote PDF preview failed or was not approved.')),
-            );
-          }
-        } else {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Failed to generate quote PDF.')),
-            );
-          }
-        }
-
-        // Update chatbot state for quote
-        currentState = 'quote_process';
-        chatMessages.add({
-          'sender': 'bot',
-          'text':
-              'Your ${type.name.toUpperCase()} quote ($subtype) has been generated.',
-        });
-        return;
-      }
-
-      // Proceed with payment
-      final cover = Cover(
+      insuredItem = InsuredItem.fromJson(snapshot.data()!);
+    } else {
+      insuredItem = InsuredItem(
         id: Uuid().v4(),
-        insuredItemId: insuredItem.id,
-        companyId: companyId,
+        name: details['name'] ?? '',
+        email: details['email'] ?? '',
+        contact: details['phone'] ?? '',
         type: type,
         subtype: subtype,
-        coverageType: CoverageType(
-          id: coverageType.name,
-          name: coverageType.name,
-          description: '',
-        ),
-        status: CoverStatus.pending,
-        expirationDate: DateTime.now().add(const Duration(days: 365)),
-        pdfTemplateKey: pdfTemplateKey,
-        paymentStatus: 'pending',
-        startDate: DateTime.now(),
-        formData: details,
-        premium: premium,
-        billingFrequency: 'annual',
-        name: '',
+        coverageType: coverageType,
+        details: details,
+        kraPin: type.name == 'motor' ? (details['kra_pin'] ?? '') : '',
+        logbookPath: type.name == 'motor' ? details['logbook_path'] : null,
+        previousPolicyPath: type.name == 'motor' ? details['previous_policy_path'] : null,
       );
-
-      // Save cover to Firestore
+      // Save to Firestore
       await FirebaseFirestore.instance
-          .collection('covers')
-          .doc(cover.id)
-          .set(cover.toJson());
-      covers.add(cover);
+          .collection('insured_items')
+          .doc(insuredItem.id)
+          .set(insuredItem.toJson());
+      insuredItems.add(insuredItem); // Update global list
+    }
 
-      // Handle PDF generation
+    if (isClaim) {
+      // Handle claim: skip premium and payment, send email
+      if (kDebugMode) print('Processing claim for ${type.name}');
       File? pdfFile;
-      if (cachedPdfTemplates.isNotEmpty &&
-          cachedPdfTemplates.containsKey(pdfTemplateKey)) {
-        pdfFile = await _fillPdfTemplate(
-          pdfTemplateKey ?? '',
-          details,
-          type.name,
-          context,
-        );
+      if (cachedPdfTemplates.isNotEmpty && cachedPdfTemplates.containsKey(pdfTemplateKey)) {
+        pdfFile = await _fillPdfTemplate(pdfTemplateKey, details, type.name, context);
         if (pdfFile != null && await _previewPdf(pdfFile)) {
           await _sendEmail(
             companyId,
@@ -1401,24 +1268,19 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
             details['regno'] ?? '',
             details['vehicle_type'] ?? '',
           );
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Claim email sent successfully.')),
+            );
+          }
         } else {
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('PDF preview failed or was not approved.'),
-              ),
+              const SnackBar(content: Text('Claim PDF preview failed or was not approved.')),
             );
           }
         }
       } else {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content:
-                  Text('No PDF templates available. Proceeding without PDF.'),
-            ),
-          );
-        }
         pdfFile = await _generateFallbackPdf(type.name, subtype.name, details);
         if (pdfFile != null) {
           await _sendEmail(
@@ -1430,78 +1292,258 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
             details['regno'] ?? '',
             details['vehicle_type'] ?? '',
           );
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Claim email sent with fallback PDF.')),
+            );
+          }
+        } else {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Failed to generate claim PDF.')),
+            );
+          }
+        }
+      }
+      // Update chatbot state for claim
+      currentState = 'claim_process';
+      chatMessages.add({
+        'sender': 'bot',
+        'text': 'Your ${type.name.toUpperCase()} claim ($subtype) has been submitted.',
+      });
+      return;
+    }
+
+    // Calculate premium for non-claims
+    double premium = await _calculatePremium(type.name, subtype.name, details);
+
+    // Ask user whether to generate a quote or proceed with payment
+    bool? proceedWithPayment;
+    if (context.mounted) {
+      proceedWithPayment = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Choose an Option'),
+            content: const Text(
+              'Would you like to generate a quote or proceed with payment?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false), // Generate quote
+                child: const Text('Generate Quote'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true), // Proceed with payment
+                child: const Text('Proceed with Payment'),
+              ),
+            ],
+          );
+        },
+      );
+    }
+
+    if (proceedWithPayment == null) {
+      // User dismissed the dialog
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Action canceled.')),
+        );
+      }
+      return;
+    }
+
+    if (!proceedWithPayment) {
+      // Generate and save quote
+      final quote = Quote(
+        id: Uuid().v4(),
+        type: type.name,
+        subtype: subtype.name,
+        company: companyId,
+        premium: premium,
+        generatedAt: DateTime.now(),
+        formData: details,
+      );
+
+      // Save quote to Firestore
+      await FirebaseFirestore.instance
+          .collection('quotes')
+          .doc(quote.id)
+          .set(quote.toJson());
+
+      // Generate quote PDF
+      final pdfFile = await _generateQuotePdf(quote);
+      if (pdfFile != null && context.mounted) {
+        // Optionally preview the quote PDF
+        if (await _previewPdf(pdfFile)) {
+          await _sendEmail(
+            companyId,
+            type.name,
+            subtype.name,
+            details,
+            pdfFile,
+            details['regno'] ?? '',
+            details['vehicle_type'] ?? '',
+          );
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Quote generated and sent.')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Quote PDF preview failed or was not approved.')),
+          );
+        }
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to generate quote PDF.')),
+          );
         }
       }
 
-      // Initialize payment
-      final paymentStatus = await _initializePayment(
-        cover.id,
-        premium.toString(),
-      );
-
-      // Update cover status in Firestore
-      await FirebaseFirestore.instance
-          .collection('covers')
-          .doc(cover.id)
-          .update({
-        'status': paymentStatus == 'completed'
-            ? CoverStatus.active.toString()
-            : CoverStatus.pending.toString(),
-        'paymentStatus': paymentStatus,
-      });
-
-      final updatedCover = cover.copyWith(
-        status: paymentStatus == 'completed'
-            ? CoverStatus.active
-            : CoverStatus.pending,
-        paymentStatus: paymentStatus,
-      );
-      final index = covers.indexWhere((c) => c.id == cover.id);
-      if (index != -1) {
-        covers[index] = updatedCover;
-      }
-
-      // Update chatbot state and UI
-      currentState = type == 'medical' ? 'health_process' : 'pdf_process';
+      // Update chatbot state for quote
+      currentState = 'quote_process';
       chatMessages.add({
         'sender': 'bot',
-        'text':
-            'Your ${type.name.toUpperCase()} cover ($subtype) has been created. Payment status: $paymentStatus.',
+        'text': 'Your ${type.name.toUpperCase()} quote ($subtype) has been generated.',
       });
+      return;
+    }
 
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                'Cover created, payment $paymentStatus${pdfFile == null ? ', no PDF generated' : ''}'),
-          ),
-        );
-        // Show completion dialog
-        _showCompletionDialog(
-          context,
+    // Proceed with payment for cover or extension
+    final cover = Cover(
+      id: Uuid().v4(),
+      insuredItemId: insuredItem.id,
+      companyId: companyId,
+      type: type,
+      subtype: subtype,
+      coverageType: CoverageType(
+        id: coverageType.name,
+        name: coverageType.name,
+        description: '',
+      ),
+      status: CoverStatus.pending,
+      expirationDate: isExtension
+          ? DateTime.now().add(const Duration(days: 30)) // 1 month for extensions
+          : DateTime.now().add(const Duration(days: 365)), // 1 year for others
+      pdfTemplateKey: pdfTemplateKey,
+      paymentStatus: 'pending',
+      startDate: DateTime.now(),
+      formData: details,
+      premium: premium,
+      billingFrequency: 'annual',
+      name: '',
+    );
+
+    // Save cover to Firestore
+    await FirebaseFirestore.instance
+        .collection('covers')
+        .doc(cover.id)
+        .set(cover.toJson());
+    covers.add(cover);
+
+    // Handle PDF generation
+    File? pdfFile;
+    if (cachedPdfTemplates.isNotEmpty && cachedPdfTemplates.containsKey(pdfTemplateKey)) {
+      pdfFile = await _fillPdfTemplate(pdfTemplateKey, details, type.name, context);
+      if (pdfFile != null && await _previewPdf(pdfFile)) {
+        await _sendEmail(
+          companyId,
           type.name,
-          await Policy.fromCover(updatedCover),
-          pdfTemplateKey,
-          (context, type, subtype, coverageType, [String? extra]) {
-            if (kDebugMode) {
-              print('Final submission: $type, $subtype, $coverageType');
-            }
-          },
+          subtype.name,
+          details,
+          pdfFile,
+          details['regno'] ?? '',
+          details['vehicle_type'] ?? '',
         );
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('PDF preview failed or was not approved.')),
+          );
+        }
       }
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error in handleCoverSubmission: $e');
-      }
+    } else {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to create cover: $e'),
-          ),
+          const SnackBar(content: Text('No PDF templates available. Proceeding without PDF.')),
+        );
+      }
+      pdfFile = await _generateFallbackPdf(type.name, subtype.name, details);
+      if (pdfFile != null) {
+        await _sendEmail(
+          companyId,
+          type.name,
+          subtype.name,
+          details,
+          pdfFile,
+          details['regno'] ?? '',
+          details['vehicle_type'] ?? '',
         );
       }
     }
+
+    // Initialize payment
+    final paymentStatus = await _initializePayment(
+      cover.id,
+      premium.toString(),
+      '', // Provide the payment method as needed, e.g., 'mpesa' or 'paystack'
+      context: context,
+    );
+
+    // Update cover status in Firestore
+    await FirebaseFirestore.instance
+        .collection('covers')
+        .doc(cover.id)
+        .update({
+      'status': paymentStatus == 'completed' ? CoverStatus.active.toString() : CoverStatus.pending.toString(),
+      'paymentStatus': paymentStatus,
+    });
+
+    final updatedCover = cover.copyWith(
+      status: paymentStatus == 'completed' ? CoverStatus.active : CoverStatus.pending,
+      paymentStatus: paymentStatus,
+    );
+    final index = covers.indexWhere((c) => c.id == cover.id);
+    if (index != -1) {
+      covers[index] = updatedCover;
+    }
+
+    // Update chatbot state and UI
+    currentState = type.name == 'medical' ? 'health_process' : 'pdf_process';
+    chatMessages.add({
+      'sender': 'bot',
+      'text': 'Your ${type.name.toUpperCase()} ${isExtension ? 'extension' : 'cover'} ($subtype) has been created. Payment status: $paymentStatus.',
+    });
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Cover created, payment $paymentStatus${pdfFile == null ? ', no PDF generated' : ''}'),
+        ),
+      );
+      // Show completion dialog
+      _showCompletionDialog(
+        context,
+        type.name,
+        await Policy.fromCover(updatedCover),
+        pdfTemplateKey,
+        (context, type, subtype, coverageType, [String? extra]) {
+          if (kDebugMode) {
+            print('Final submission: $type, $subtype, $coverageType');
+          }
+        },
+      );
+    }
+  } catch (e) {
+    if (kDebugMode) print('Error in handleCoverSubmission: $e');
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to process action: $e')),
+      );
+    }
   }
+}
 
 // Assuming _generateQuotePdf remains the same as provided
   Future<File?> _generateQuotePdf(Quote quote) async {
@@ -2063,7 +2105,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
               child: const Text('File Claim'),
               onPressed: () async {
                 Navigator.pop(context);
-                await showFileClaimDialog(context, item, cover);
+                await _showFileClaimDialog(context, item, cover);
               },
             ),
           TextButton(
@@ -2355,136 +2397,65 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     );
   }
 
-  // Dialog for filing a claim by selecting a company with isClaim true
-  Future<void> showFileClaimDialog(
-      BuildContext context, InsuredItem item, Cover cover) async {
-    final CoverDetailScreen coverDetailsScreen;
-    if (!context.mounted) {
-      if (kDebugMode) print('FileClaimDialog: context not mounted');
+// Dialog for filing a claim using the cover's companyId
+Future<void> _showFileClaimDialog(BuildContext context, InsuredItem item, Cover cover) async {
+  if (!context.mounted) {
+    if (kDebugMode) print('FileClaimDialog: context not mounted');
+    return;
+  }
+
+  try {
+    // Fetch the company with cover.companyId and check isClaim == true
+    final companySnapshot = await FirebaseFirestore.instance
+        .collection('companies')
+        .doc(cover.companyId)
+        .get();
+
+    if (!companySnapshot.exists) {
+      if (kDebugMode) print('Company not found: ${cover.companyId}');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Company not found for filing claims.')),
+      );
       return;
     }
 
-    try {
-      // Fetch companies where isClaim is true
-      final companiesSnapshot = await FirebaseFirestore.instance
-          .collection('companies')
-          .where('isClaim', isEqualTo: true)
-          .get();
-      final companies = companiesSnapshot.docs
-          .map((doc) => doc.data() as Map<String, dynamic>)
-          .toList();
-
-      if (companies.isEmpty) {
-        if (kDebugMode) print('No companies available for claims');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('No companies available for filing claims.')),
-        );
-        return;
-      }
-
-      if (!context.mounted) {
-        if (kDebugMode)
-          print(
-              'FileClaimDialog: context not mounted after fetching companies');
-        return;
-      }
-
-      String? selectedCompanyId =
-          cover.companyId ?? companies[0]['id'] as String?;
-
-      await showDialog(
-        context: context,
-        builder: (dialogContext) => StatefulBuilder(
-          builder: (dialogContext, setState) => AlertDialog(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12.0)),
-            title: const Text('Select Company for Claim'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<String>(
-                  value: selectedCompanyId,
-                  decoration:
-                      const InputDecoration(labelText: 'Insurance Company'),
-                  items: companies
-                      .map((company) => DropdownMenuItem(
-                            value: company['id'] as String,
-                            child: Text(company['name'] as String),
-                          ))
-                      .toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      selectedCompanyId = value;
-                    });
-                  },
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                child: const Text('Cancel'),
-                onPressed: () {
-                  if (kDebugMode) print('File claim canceled');
-                  Navigator.pop(dialogContext);
-                },
-              ),
-              TextButton(
-                child: const Text('Confirm'),
-                onPressed: () {
-                  if (selectedCompanyId == null) {
-                    if (kDebugMode) print('No company selected for claim');
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please select a company.')),
-                    );
-                    return;
-                  }
-                  if (kDebugMode)
-                    print('Filing claim with company: $selectedCompanyId');
-                  Navigator.pop(dialogContext);
-                  if (context.mounted) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) => CoverDetailScreen(
-                                type: item.type.name,
-                                subtype: item.subtype.name,
-                                coverageType: item.coverageType.name,
-                                onSubmit: (Map<String, String> data) {
-                                  // Provide your onSubmit logic here or pass a suitable function
-                                },
-                                onAutofillPreviousPolicy:
-                                    (context, extractedData, selectedCompany) {
-                                  // Provide your autofill previous policy logic here or pass a suitable function
-                                },
-                                onAutofillLogbook: (context, extractedData) {
-                                  // Provide your autofill logbook logic here or pass a suitable function
-                                },
-                                fields: const {}, // Provide the appropriate fields map here
-                                showCompanyDialog: (context, type, subtype,
-                                    coverageType, details,
-                                    {preSelectedCompany,
-                                    subtypeId = '',
-                                    coverageTypeId = ''}) {
-                                  // Provide your showCompanyDialog logic here or pass a suitable function
-                                  return;
-                                },
-                              )),
-                    );
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
-      );
-    } catch (e) {
-      if (kDebugMode) print('Error in FileClaimDialog: $e');
+    final companyData = companySnapshot.data() as Map<String, dynamic>;
+    if (companyData['isClaim'] != true) {
+      if (kDebugMode) print('Company does not support claims: ${cover.companyId}');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load companies for claim: $e')),
+        const SnackBar(content: Text('Selected company does not support claims.')),
       );
+      return;
     }
+
+    if (!context.mounted) {
+      if (kDebugMode) print('FileClaimDialog: context not mounted after fetching company');
+      return;
+    }
+
+    // Get pdfTemplateKey from company or default to 'default_template'
+    final pdfTemplateKey = companyData['pdfTemplateKey'] as String? ?? 'default_template';
+
+    if (kDebugMode) print('Filing claim with company: ${cover.companyId}');
+    
+    // Call handleCoverSubmission with existing details
+    await handleCoverSubmission(
+      context,
+      item.type,
+      item.subtype,
+      item.coverageType,
+      cover.companyId,
+      pdfTemplateKey,
+      Map<String, String>.from(item.details),
+    );
+  } catch (e) {
+    if (kDebugMode) print('Error in FileClaimDialog: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to process claim: $e')),
+    );
   }
+}
+  
 
   Widget _buildHomeScreen(
     BuildContext context,
@@ -5240,10 +5211,190 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     }
   }
 
-  // Mock payment initialization
-  Future<String> _initializePayment(String coverId, String amount) async {
-    try {
-      // Mock API call to payment gateway (e.g., Stripe, PayPal)
+
+
+// Function to show the payment dialog
+Future<void> showPaymentDialog(BuildContext context) async {
+  String _paymentMethod = 'mpesa';
+  String _phoneNumber = '';
+  String _amount = '';
+  bool _autoBilling = false;
+  final _formKey = GlobalKey<FormState>();
+  final secureStorage = const FlutterSecureStorage();
+
+  await showDialog(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Text('Make a Payment'),
+        content: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  decoration: const InputDecoration(labelText: 'Amount (KES)'),
+                  keyboardType: TextInputType.number,
+                  validator: (value) => double.tryParse(value ?? '') == null ? 'Enter a valid amount' : null,
+                  onSaved: (value) => _amount = value!,
+                ),
+                const SizedBox(height: 16),
+                const Text('Select Payment Method', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                GridView.count(
+                  crossAxisCount: 2,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                  childAspectRatio: 1.5,
+                  children: [
+                    GridTile(
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() => _paymentMethod = 'mpesa');
+                        },
+                        child: Card(
+                          color: _paymentMethod == 'mpesa' ? Colors.blue.shade100 : Colors.white,
+                          elevation: _paymentMethod == 'mpesa' ? 8 : 2,
+                          child: const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.phone, size: 40, color: Colors.green),
+                                SizedBox(height: 8),
+                                Text('M-Pesa', style: TextStyle(fontSize: 16)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    GridTile(
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() => _paymentMethod = 'paystack');
+                        },
+                        child: Card(
+                          color: _paymentMethod == 'paystack' ? Colors.blue.shade100 : Colors.white,
+                          elevation: _paymentMethod == 'paystack' ? 8 : 2,
+                          child: const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.credit_card, size: 40, color: Colors.blue),
+                                SizedBox(height: 8),
+                                Text('Paystack', style: TextStyle(fontSize: 16)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_paymentMethod == 'paystack')
+                  CheckboxListTile(
+                    title: const Text('Enable Auto-Billing'),
+                    value: _autoBilling,
+                    onChanged: (value) {
+                      setState(() => _autoBilling = value!);
+                    },
+                  ),
+                if (_paymentMethod == 'mpesa')
+                  TextFormField(
+                    decoration: const InputDecoration(labelText: 'Phone Number'),
+                    keyboardType: TextInputType.phone,
+                    validator: (value) => value!.startsWith('254') && value.length == 12 ? null : 'Enter a valid phone number (e.g., 254712345678)',
+                    onSaved: (value) => _phoneNumber = value!,
+                  ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              if (_formKey.currentState!.validate()) {
+                _formKey.currentState!.save();
+                final result = await _initializePayment(
+                  'cover123',
+                  _amount,
+                  _paymentMethod,
+                  phoneNumber: _phoneNumber,
+                  autoBilling: _autoBilling,
+                  context: dialogContext,
+                );
+                Navigator.pop(dialogContext); // Close dialog
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(result == 'completed' ? 'Payment successful' : 'Payment failed')),
+                );
+              }
+            },
+            child: const Text('Pay'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+// Payment initialization function
+Future<String> _initializePayment(
+  String coverId,
+  String amount,
+  String paymentMethod, {
+  String? phoneNumber,
+  bool autoBilling = false,
+  required BuildContext context,
+}) async {
+  try {
+    final parsedAmount = double.tryParse(amount);
+    if (parsedAmount == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid amount')),
+      );
+      return 'failed';
+    }
+
+    if (paymentMethod == 'mpesa') {
+      if (phoneNumber == null || !phoneNumber.startsWith('254') || phoneNumber.length != 12) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Invalid phone number')),
+        );
+        return 'failed';
+      }
+      final success = await _initiateMpesaPayment(phoneNumber, parsedAmount);
+      return success ? 'completed' : 'failed';
+    } else if (paymentMethod == 'paystack') {
+      final success = await _initiatePaystackPayment(parsedAmount, autoBilling);
+      if (success && autoBilling) {
+        final cover = Cover(
+          id: coverId,
+          premium: parsedAmount,
+          billingFrequency: 'monthly',
+          formData: {'email': userDetails['email'] ?? '', 'name': 'User Name'},
+          name: '',
+          insuredItemId: '',
+          companyId: '',
+          type: PolicyType(id: '', name: '', description: ''),
+          subtype: PolicySubtype(id: '', name: '', policyTypeId: '', description: ''),
+          coverageType: CoverageType(id: '', name: '', description: ''),
+          status: CoverStatus.pending,
+          pdfTemplateKey: '',
+          paymentStatus: '',
+          startDate: DateTime.now(),
+        );
+        await _schedulePaystackAutoBilling(cover);
+      }
+      return success ? 'completed' : 'failed';
+    } else {
       final response = await http.post(
         Uri.parse('https://api.payment-gateway.com/v1/payments'),
         headers: {
@@ -5252,24 +5403,26 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         },
         body: jsonEncode({
           'coverId': coverId,
-          'amount': double.parse(amount),
+          'amount': parsedAmount,
           'currency': 'KES',
           'description': 'Insurance cover payment',
         }),
       );
 
-      if (response.statusCode == 200) {
-        return 'completed';
-      } else {
-        return 'failed';
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('Payment initialization error: $e');
-      }
-      return 'failed';
+      return response.statusCode == 200 ? 'completed' : 'failed';
     }
+  } catch (e) {
+    if (kDebugMode) {
+      print('Payment initialization error: $e');
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Payment initialization error: $e')),
+    );
+    return 'failed';
   }
+}
+
+
 
   Future<void> _loadCachedPdfTemplates() async {
     try {
@@ -5551,15 +5704,17 @@ class DialogState extends ChangeNotifier {
     _currentStep = 0;
     _insuredItemId = null;
     _companyId = null;
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
           'Reset dialog state: step=$_currentStep, insuredItemId=$_insuredItemId, companyId=$_companyId');
+    }
     notifyListeners();
   }
 
   void saveProgress(String type, int step) async {
-    if (kDebugMode)
+    if (kDebugMode) {
       print('Saving progress: type=$type, step=$step, responses=$_responses');
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
@@ -5588,9 +5743,10 @@ class DialogState extends ChangeNotifier {
         _responses.addAll(Map<String, String>.from(data['responses'] ?? {}));
         _insuredItemId = data['insuredItemId'];
         _companyId = data['companyId'];
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
               'Loaded progress for $type: step=$_currentStep, responses=$_responses');
+        }
         notifyListeners();
       } else {
         if (kDebugMode) print('No saved progress found for $type');
@@ -5744,11 +5900,12 @@ class ConfigCache {
       final List<dynamic> jsonList = jsonDecode(jsonString);
       final configs =
           jsonList.map((json) => DialogStepConfig.fromJson(json)).toList();
-      if (kDebugMode)
+      if (kDebugMode) {
         print('Loaded cached configs for $type: ${configs.map((c) => {
               'title': c.title,
               'nextStep': c.nextStep
             }).toList()}');
+      }
       return configs;
     }
     return null;
@@ -5890,9 +6047,10 @@ class ConfigCache {
             ],
             nextStep: null,
             customCallback: (context, dialogState) async {
-              if (kDebugMode)
+              if (kDebugMode) {
                 print(
                     'Summary callback for $normalizedType: ${dialogState.responses}');
+              }
               final subtype = dialogState.responses['subtype'] ?? '';
               final coverage = dialogState.responses['coverage_type'] ?? '';
               if (subtype.isEmpty || coverage.isEmpty) {
@@ -5909,32 +6067,37 @@ class ConfigCache {
 
         if (_isValidConfigs(configs[typeName]!)) {
           await _cacheConfigs(normalizedType, configs[typeName]!);
-          if (kDebugMode)
+          if (kDebugMode) {
             print(
                 'Cached ${configs[typeName]!.length} configs for $normalizedType with timestamp');
+          }
         } else {
-          if (kDebugMode)
+          if (kDebugMode) {
             print('Invalid configs for $normalizedType, not caching');
+          }
         }
       }
 
       if (!typeFound) {
-        if (kDebugMode)
+        if (kDebugMode) {
           print('No policy type found for $normalizedType, using default');
+        }
         configs[normalizedType] =
             _defaultConfigs(normalizedType)[normalizedType]!;
         await _cacheConfigs(normalizedType, configs[normalizedType]!);
       }
     } catch (e, stackTrace) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print('Error fetching configs for $normalizedType: $e\n$stackTrace');
+      }
       configs[normalizedType] =
           _defaultConfigs(normalizedType)[normalizedType]!;
       await _cacheConfigs(normalizedType, configs[normalizedType]!);
     }
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
           'Generated ${configs[normalizedType]!.length} steps for $normalizedType');
+    }
     return configs;
   }
 
@@ -5992,9 +6155,10 @@ class ConfigCache {
           ],
           nextStep: null,
           customCallback: (context, dialogState) async {
-            if (kDebugMode)
+            if (kDebugMode) {
               print(
                   'Summary callback for $normalizedType: ${dialogState.responses}');
+            }
             final subtype = dialogState.responses['subtype'] ?? '';
             final coverage = dialogState.responses['coverage_type'] ?? '';
             if (subtype.isEmpty || coverage.isEmpty) {
@@ -6030,8 +6194,9 @@ class ConfigCache {
       final configs = jsonList
           .map((json) => DialogStepConfig.fromJson(jsonDecode(json)))
           .toList();
-      if (kDebugMode)
+      if (kDebugMode) {
         print('Retrieved ${configs.length} cached configs for $typeName');
+      }
       return configs;
     } catch (e) {
       if (kDebugMode) print('Error retrieving cached configs: $e');
@@ -6598,11 +6763,13 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
       }
     }
     if (fields.isEmpty) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print('Warning: No fields returned for ${widget.config.title}');
+      }
     } else {
-      if (kDebugMode)
+      if (kDebugMode) {
         print('Fields fetched: ${fields.map((f) => f.key).toList()}');
+      }
     }
     return fields;
   }
@@ -6632,8 +6799,9 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
         future: _fieldsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            if (kDebugMode)
+            if (kDebugMode) {
               print('Policy FutureBuilder: state=ConnectionState.waiting');
+            }
             return AlertDialog(
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -6650,8 +6818,9 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
             );
           }
           if (snapshot.hasError) {
-            if (kDebugMode)
+            if (kDebugMode) {
               print('Policy FutureBuilder: error=${snapshot.error}');
+            }
             return AlertDialog(
               title: const Text('Error'),
               content: Text('Failed to load options: ${snapshot.error}'),
@@ -6666,8 +6835,9 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
 
           final fields = snapshot.data ?? widget.config.fields;
           if (fields.isEmpty && widget.config.customCallback == null) {
-            if (kDebugMode)
+            if (kDebugMode) {
               print('Policy FutureBuilder: no fields and no custom callback');
+            }
             return AlertDialog(
               content: const Text('No options available for this step.'),
               actions: [
@@ -6757,8 +6927,9 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
                               onChanged: (value) {
                                 widget.dialogState
                                     .updateResponse(field.key, value ?? '');
-                                if (kDebugMode)
+                                if (kDebugMode) {
                                   print('Field ${field.key} updated: $value');
+                                }
                                 setState(() {});
                               },
                               colorProvider: colorProvider,
@@ -6778,8 +6949,9 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
                               onChanged: (value) {
                                 widget.dialogState
                                     .updateResponse(field.key, value);
-                                if (kDebugMode)
+                                if (kDebugMode) {
                                   print('Field ${field.key} updated: $value');
+                                }
                                 if (field.key == 'has_spouse' &&
                                     value == 'No') {
                                   widget.dialogState
@@ -6817,8 +6989,9 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
               ),
               ElevatedButton(
                 onPressed: () async {
-                  if (kDebugMode)
+                  if (kDebugMode) {
                     print('Submit button pressed for ${widget.config.title}');
+                  }
                   if (formKey.currentState!.validate()) {
                     bool allRequiredFieldsFilled =
                         widget.dialogState.responses['subtype']?.isNotEmpty ==
@@ -6826,9 +6999,10 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
                             widget.dialogState.responses['coverage_type']
                                     ?.isNotEmpty ==
                                 true;
-                    if (kDebugMode)
+                    if (kDebugMode) {
                       print(
                           'Required fields check: subtype=${widget.dialogState.responses['subtype']}, coverage=${widget.dialogState.responses['coverage_type']}');
+                    }
                     if (allRequiredFieldsFilled &&
                         (widget.config.customValidator == null ||
                             widget.config.customValidator!(
@@ -6839,14 +7013,16 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
                             widget.insuranceType, widget.step + 1);
                         widget.onSubmit();
                       } else {
-                        if (kDebugMode)
+                        if (kDebugMode) {
                           print('Final step reached, processing summary');
+                        }
                         widget.onSubmit();
                       }
                     } else {
-                      if (kDebugMode)
+                      if (kDebugMode) {
                         print(
                             'Required fields missing or custom validator failed');
+                      }
                       if (mounted) {
                         widget.scaffoldMessengerKey.currentState?.showSnackBar(
                           SnackBar(
@@ -6865,9 +7041,10 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
                       if (field.isRequired &&
                           widget.dialogState.responses[field.key]?.isEmpty !=
                               false) {
-                        if (kDebugMode)
+                        if (kDebugMode) {
                           print(
                               'Validation failed for required field: ${field.key}');
+                        }
                       }
                     }
                     if (mounted) {
@@ -6980,11 +7157,13 @@ Future<void> authenticateUser() async {
     final auth = FirebaseAuth.instance;
     if (auth.currentUser == null) {
       final userCredential = await auth.signInAnonymously();
-      if (kDebugMode)
+      if (kDebugMode) {
         print('Signed in anonymously: ${userCredential.user?.uid}');
+      }
     } else {
-      if (kDebugMode)
+      if (kDebugMode) {
         print('User already authenticated: ${auth.currentUser?.uid}');
+      }
     }
   } catch (e, stackTrace) {
     if (kDebugMode) print('Authentication failed: $e\n$stackTrace');
@@ -7012,9 +7191,10 @@ Future<void> showInsuranceDialog(
   void Function(BuildContext, String, String, String, String?)? onFinalSubmit,
   required GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey,
 }) async {
-  if (kDebugMode)
+  if (kDebugMode) {
     print(
         'showInsuranceDialog: starting for type=$insuranceType, step=$step, context=${context.widget.runtimeType}');
+  }
   if (!context.mounted) {
     if (kDebugMode) print('showInsuranceDialog: initial context not mounted');
     return;
@@ -7033,24 +7213,28 @@ Future<void> showInsuranceDialog(
       await dialogState.loadProgress(normalizedType);
     }
     int currentStep = step == 0 ? 0 : dialogState.currentStep;
-    if (kDebugMode)
+    if (kDebugMode) {
       print('Initialized step for $normalizedType: step=$currentStep');
+    }
     dialogState.setCurrentStep(currentStep);
 
     final configs = await fetchConfigs(normalizedType);
-    if (kDebugMode)
+    if (kDebugMode) {
       print('Fetched configs for $normalizedType: ${configs.keys.toList()}');
+    }
 
     if (!context.mounted) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print('showInsuranceDialog: context not mounted after configs');
+      }
       return;
     }
 
     if (!configs.containsKey(normalizedType) ||
         configs[normalizedType]!.isEmpty) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print('Invalid insurance type or no configs: $normalizedType');
+      }
       scaffoldMessengerKey.currentState?.showSnackBar(
         SnackBar(content: Text('Invalid insurance type: $normalizedType')),
       );
@@ -7059,22 +7243,25 @@ Future<void> showInsuranceDialog(
 
     final configList = configs[normalizedType]!;
     if (currentStep >= configList.length) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print('Invalid step: $currentStep for type: $normalizedType');
+      }
       dialogState.setCurrentStep(0);
       currentStep = 0;
       await dialogState.clearProgress(normalizedType);
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
             'Reset invalid step to 0 and cleared progress for $normalizedType');
+      }
     }
 
     final config = configList[currentStep];
     if (kDebugMode) print('Config for step $currentStep: ${config.title}');
 
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
           'showInsuranceDialog: showing GenericInsuranceDialog for step $currentStep');
+    }
     await showDialog<void>(
       context: context,
       barrierDismissible: true,
@@ -7135,13 +7322,15 @@ Future<void> showInsuranceDialog(
                 }
               : null,
           onSubmit: () async {
-            if (kDebugMode)
+            if (kDebugMode) {
               print(
                   'Submit pressed for ${config.title}, responses: ${dialogState.responses}');
+            }
             Navigator.of(dialogContext).pop();
             if (currentStep + 1 < configList.length) {
-              if (kDebugMode)
+              if (kDebugMode) {
                 print('Navigating to next step: ${currentStep + 1}');
+              }
               if (context.mounted) {
                 showInsuranceDialog(
                   context,
@@ -7159,9 +7348,10 @@ Future<void> showInsuranceDialog(
                   coverage != null &&
                   subtype.isNotEmpty &&
                   coverage.isNotEmpty) {
-                if (kDebugMode)
+                if (kDebugMode) {
                   print(
                       'Final submission: subtype=$subtype, coverage=$coverage');
+                }
                 try {
                   final policyTypes =
                       await InsuranceHomeScreen.getPolicyTypes();
@@ -7231,17 +7421,19 @@ Future<void> showInsuranceDialog(
                     );
                   }
                 } catch (e, stackTrace) {
-                  if (kDebugMode)
+                  if (kDebugMode) {
                     print('Error processing final step: $e\n$stackTrace');
+                  }
                   scaffoldMessengerKey.currentState?.showSnackBar(
                     const SnackBar(
                         content: Text('Failed to process insurance options')),
                   );
                 }
               } else {
-                if (kDebugMode)
+                if (kDebugMode) {
                   print(
                       'Missing required fields: subtype=$subtype, coverage=$coverage');
+                }
                 scaffoldMessengerKey.currentState?.showSnackBar(
                   const SnackBar(
                       content: Text('Please complete all required fields')),
@@ -7260,9 +7452,10 @@ Future<void> showInsuranceDialog(
                   context, policyType, subtype, coverageType,
                   preSelectedCompany: preSelectedCompany);
             } else {
-              if (kDebugMode)
+              if (kDebugMode) {
                 print(
                     'showInsuranceDialog: _InsuranceHomeScreenState not found or context not mounted');
+              }
             }
           },
         ),

@@ -1,4 +1,3 @@
-import 'dart:ffi';
 
 import 'package:flutter/foundation.dart';
 import 'package:my_app/Models/cover.dart';

@@ -558,9 +558,18 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
               if (_subtypeId != null && _coverageTypeId != null) {
                 widget.showCompanyDialog(
                   context,
-                  widget.type,
-                  widget.subtype,
-                  widget.coverageType,
+                  Company.allPolicyTypes.firstWhere(
+                    (t) => t.name.toLowerCase() == widget.type.toLowerCase(),
+                    orElse: () => throw Exception('Subtype not found'),
+                  ),
+                  Company.allPolicySubtypes.firstWhere(
+                    (s) => s.name.toLowerCase() == widget.subtype.toLowerCase(),
+                    orElse: () => throw Exception('Subtype not found'),
+                  ),
+                  Company.allCoverageTypes.firstWhere(
+                    (c) => c.name.toLowerCase() == widget.coverageType.toLowerCase(),
+                    orElse: () => throw Exception('Coverage type not found'),
+                  ),
                   selectedData,
                   preSelectedCompany: extractedData['insurer'],
                   subtypeId: _subtypeId!,
@@ -839,6 +848,7 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                       'id_number': _idNumberController.text,
                       'kra_pin': _kraPinController.text,
                       'insurer': _selectedCompany!,
+
                       if (widget.type == 'motor') ...{
                         'vehicle_value': _vehicleValueController.text,
                         'regno': _regnoController.text,
@@ -883,9 +893,20 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                       if (insuranceHomeScreenState != null) {
                         await insuranceHomeScreenState.handleCoverSubmission(
                           context,
-                          widget.type,
-                          widget.subtype,
-                          widget.coverageType,
+
+                  Company.allPolicyTypes.firstWhere(
+                    (t) => t.name.toLowerCase() == widget.type.toLowerCase(),
+                    orElse: () => throw Exception('Subtype not found'),
+                  ),
+                  Company.allPolicySubtypes.firstWhere(
+                    (s) => s.name.toLowerCase() == widget.subtype.toLowerCase(),
+                    orElse: () => throw Exception('Subtype not found'),
+                  ),
+                  Company.allCoverageTypes.firstWhere(
+                    (c) => c.name.toLowerCase() == widget.coverageType.toLowerCase(),
+                    orElse: () => throw Exception('Coverage type not found'),
+                  ),
+
                           company.id,
                           pdfTemplateKey,
                           details,

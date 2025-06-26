@@ -31,6 +31,14 @@ class Company {
         policyTypeId: 'property'),
     // Add more as needed
   ];
+    static List<PolicyType> allPolicyTypes = [
+    PolicyType(id: '1', name: 'motor', description: ''),
+    PolicyType(id: '2', name: 'medical', description: ''),
+    PolicyType(id: '3', name: 'travel', description: ''),
+    PolicyType(id: '4', name: 'property', description: ''),
+    PolicyType(id: '5', name: 'wiba', description: ''),
+    // Add more as needed
+  ];
   final String? icon; // Optional icon field
 
   Company({
