@@ -3013,48 +3013,169 @@ Future<void> _showFileClaimDialog(BuildContext context, InsuredItem item, Cover 
     }
   }
 
-  Widget _buildMyAccountScreen(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter/foundation.dart'; // For kDebugMode
 
-    return Scaffold(
+Widget _buildMyAccountScreen(BuildContext context) {
+  final themeProvider = Provider.of<ThemeProvider>(context);
+  final user = FirebaseAuth.instance.currentUser;
+
+  return Scaffold(
+    backgroundColor: Theme.of(context).colorScheme.surface,
+    appBar: AppBar(
+      title: const Text('My Account'),
+      elevation: 4,
+      shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
       backgroundColor: Theme.of(context).colorScheme.surface,
-      appBar: AppBar(
-        title: const Text('My Account'),
-        elevation: 4,
-        shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        actionsPadding: const EdgeInsets.only(right: 16.0),
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Settings-style grouped list
-              Card(
-                elevation: 4,
-                shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12.0),
-                ),
-                margin:
-                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: Column(
-                  children: [
-                    // Policy Reports Row
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(12.0),
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => const CoverReportScreen(),
+      actionsPadding: const EdgeInsets.only(right: 16.0),
+    ),
+    body: SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: StreamBuilder<DocumentSnapshot>(
+          stream: user != null
+              ? FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(user.uid)
+                  .snapshots()
+              : null,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return Center(child: Text('Error: ${snapshot.error}'));
+            }
+            if (!snapshot.hasData || !snapshot.data!.exists) {
+              return const Center(child: Text('User data not found'));
+            }
+
+            final userData = snapshot.data!.data() as Map<String, dynamic>;
+            final String name = userData['name'] ?? 'N/A';
+            final String email = user?.email ?? 'N/A';
+            final String phone = userData['phone'] ?? 'N/A';
+            final bool autobillingEnabled = userData['autobilling_enabled'] ?? false;
+
+            return SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // User Details Section
+                  Card(
+                    elevation: 4,
+                    shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.0),
+                    ),
+                    margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'User Details',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                          const SizedBox(height: 12),
+                          _buildDetailRow(context, 'Name', name),
+                          _buildDetailRow(context, 'Email', email),
+                          _buildDetailRow(context, 'Phone', phone),
+                          const SizedBox(height: 12),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: () {
+                                _showEditUserDetailsDialog(context, name, phone);
+                              },
+                              child: Text(
+                                'Edit Details',
+                                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                      color: Theme.of(context).colorScheme.primary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
                             ),
-                          );
-                        },
-                        child: Container(
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Settings Section
+                  Card(
+                    elevation: 4,
+                    shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.0),
+                    ),
+                    margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                    child: Column(
+                      children: [
+                        // Policy Reports Row
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12.0),
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) => const CoverReportScreen(),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16.0,
+                                vertical: 12.0,
+                              ),
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  bottom: BorderSide(
+                                    color: Colors.grey[300]!,
+                                    width: 0.5,
+                                  ),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.all(4.0),
+                                    child: Icon(
+                                      Icons.description_outlined,
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                      size: 24,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      'Policy Reports',
+                                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                            fontSize: 16,
+                                          ),
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.all(4.0),
+                                    child: Icon(
+                                      Icons.arrow_forward_ios,
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                      size: 18,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Autobilling Toggle Row
+                        Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16.0,
                             vertical: 12.0,
@@ -3063,7 +3184,7 @@ Future<void> _showFileClaimDialog(BuildContext context, InsuredItem item, Cover 
                             border: Border(
                               bottom: BorderSide(
                                 color: Colors.grey[300]!,
-                                width: 0.5,
+                                width:  personally
                               ),
                             ),
                           ),
@@ -3072,145 +3193,259 @@ Future<void> _showFileClaimDialog(BuildContext context, InsuredItem item, Cover 
                               Padding(
                                 padding: const EdgeInsets.all(4.0),
                                 child: Icon(
-                                  Icons.description_outlined,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
+                                  Icons.payment_outlined,
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                                   size: 24,
                                 ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
-                                  'Policy Reports',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyLarge
-                                      ?.copyWith(
+                                  'Autobilling',
+                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                                         fontSize: 16,
                                       ),
                                 ),
                               ),
-                              Padding(
-                                padding: const EdgeInsets.all(4.0),
-                                child: Icon(
-                                  Icons.arrow_forward_ios,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                                  size: 18,
-                                ),
+                              Switch(
+                                value: autobillingEnabled,
+                                onChanged: (value) async {
+                                  try {
+                                    await FirebaseFirestore.instance
+                                        .collection('users')
+                                        .doc(user!.uid)
+                                        .update({'autobilling_enabled': value});
+                                    columnas
+                                    if (kDebugMode) {
+                                      print('Autobilling toggled to: $value');
+                                    }
+                                  } catch (e) {
+                                    if (kDebugMode) {
+                                      print('Error updating autobilling: $e');
+                                    }
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Failed to update autobilling: $e')),
+                                    );
+                                  }
+                                },
+                                activeColor: Colors.green,
                               ),
                             ],
                           ),
                         ),
-                      ),
-                    ),
-                    // Theme Toggle Row
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16.0,
-                        vertical: 12.0,
-                      ),
-                      child: Row(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(4.0),
-                            child: Icon(
-                              Icons.dark_mode_outlined,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                              size: 24,
-                            ),
+                        // Theme Toggle Row
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16.0,
+                            vertical: 12.0,
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Dark Mode',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyLarge
-                                  ?.copyWith(
-                                    fontSize: 16,
-                                  ),
-                            ),
+                          child: Row(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.all(4.0),
+                                child: Icon(
+                                  Icons.dark_mode_outlined,
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  size: 24,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Dark Mode',
+                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                        fontSize: 16,
+                                      ),
+                                ),
+                              ),
+                              Switch(
+                                value: themeProvider.themeMode == ThemeMode.dark,
+                                onChanged: (value) {
+                                  themeProvider.toggleTheme(value);
+                                },
+                                activeColor: Colors.green,
+                              ),
+                            ],
                           ),
-                          Switch(
-                            value: themeProvider.themeMode == ThemeMode.dark,
-                            onChanged: (value) {
-                              themeProvider.toggleTheme(value);
-                            },
-                            activeColor: Colors.green,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Logout Button
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12.0),
-                    ),
-                    elevation: 4,
-                    shadowColor: Colors.grey.withOpacity(0.3),
-                    padding: const EdgeInsets.symmetric(vertical: 12.0),
-                    minimumSize: const Size(double.infinity, 48),
-                  ),
-                  onPressed: () async {
-                    try {
-                      await FirebaseAuth.instance.signOut();
-                      if (kDebugMode) {
-                        print('User signed out');
-                      }
-                      await FirebaseAuth.instance.signInAnonymously();
-                    } catch (e) {
-                      if (kDebugMode) {
-                        print('Error signing out: $e');
-                      }
-                      showDialog(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12.0),
-                          ),
-                          title: const Text('Error'),
-                          content: Text('Failed to sign out: $e'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: const Text('OK'),
-                            ),
-                          ],
                         ),
-                      );
-                    }
-                  },
-                  child: Text(
-                    'Log Out',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          fontSize: 16,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      ],
+                    ),
                   ),
-                ),
+                  // Logout Button
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12.0),
+                        ),
+                        elevation: 4,
+                        shadowColor: Colors.grey.withOpacity(0.3),
+                        padding: const EdgeInsets.symmetric(vertical: 12.0),
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                      onPressed: () async {
+                        try {
+                          await FirebaseAuth.instance.signOut();
+                          if (kDebugMode) {
+                            print('User signed out');
+                          }
+                          await FirebaseAuth.instance.signInAnonymously();
+                        } catch (e) {
+                          if (kDebugMode) {
+                            print('Error signing out: $e');
+                          }
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12.0),
+                              ),
+                              title: const Text('Error'),
+                              content: Text('Failed to sign out: $e'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.of(context).pop(),
+                                  child: const Text('OK'),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                      },
+                      child: Text(
+                        'Log Out',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              fontSize: 16,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
   }
 
+  Widget _buildDetailRow(BuildContext context, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w500,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              value,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditUserDetailsDialog(BuildContext context, String currentName, String currentPhone) {
+    final nameController = TextEditingController(text: currentName);
+    final phoneController = TextEditingController(text: currentPhone);
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.0),
+        ),
+        title: const Text('Edit User Details'),
+        content: Form(
+          key: formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: 'Name'),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Name is required';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: phoneController,
+                  decoration: const InputDecoration(labelText: 'Phone'),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Phone is required';
+                    }
+                    if (!RegExp(r'^[+\d\s\-\(\)]{8,15}$').hasMatch(value)) {
+                      return 'Invalid phone number';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              if (formKey.currentState!.validate()) {
+                try {
+                  final user = FirebaseAuth.instance.currentUser;
+                  if (user != null) {
+                    await FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(user.uid)
+                        .update({
+                      'name': nameController.text.trim(),
+                      'phone': phoneController.text.trim(),
+                    });
+                    if (kDebugMode) {
+                      print('User details updated: ${nameController.text}, ${phoneController.text}');
+                    }
+                    Navigator.of(context).pop();
+                  }
+                } catch (e) {
+                  if (kDebugMode) {
+                    print('Error updating user details: $e');
+                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to update details: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
   Widget _buildQuotesScreen() {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
