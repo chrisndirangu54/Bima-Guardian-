@@ -351,6 +351,7 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
   final _healthConditionController = TextEditingController();
   final _travelDestinationController = TextEditingController();
   final _employeeCountController = TextEditingController();
+  final Map<String, TextEditingController> _genericControllers = {}; // <-- Add this line
   File? _logbookFile;
   File? _previousPolicyFile;
   String? _selectedCompany;
@@ -381,10 +382,22 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
     if (widget.extractedData != null) {
       _autofillFields(widget.extractedData!);
     }
+    _initializeGenericControllers();
 
     _initializeIds();
   }
 
+  void _initializeGenericControllers() {
+    widget.fields.forEach((key, value) {
+      _genericControllers[key] = TextEditingController(
+        text: value.expectedType == ExpectedType.text
+            ? ''
+            : value.expectedType == ExpectedType.number
+                ? '0'
+                : '',
+      );
+    });
+  }
 
   Future<void> _initializeIds() async {
     try {
@@ -806,24 +819,21 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                         },
                   ),
                 ],
-                if (widget.type != 'motor' && widget.type != 'medical' || widget.type != 'property' || widget.type != 'travel' || widget.type != 'wiba') ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    '${widget.type} Details',
-                    style: GoogleFonts.roboto(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  ...widget.fields.entries.map((entry) {
-                    return TextFormField(
-                      controller: TextEditingController(text: entry.value.expectedType == ExpectedType.text
-                          ? ''
-                          : entry.value.expectedType == ExpectedType.number
-                              ? '0'
-                              : ''),
-                      decoration: InputDecoration(labelText: entry.key),
-                      validator: entry.value.validator,
-                    );
-                  }),
-                ],
+    // In the generic fields section:
+    if (!['motor', 'medical', 'travel', 'property', 'wiba'].contains(widget.type)) ...[
+      const SizedBox(height: 16),
+      Text(
+        '${widget.type} Details',
+        style: GoogleFonts.roboto(fontSize: 18, fontWeight: FontWeight.bold),
+      ),
+      ...widget.fields.entries.map((entry) {
+        return TextFormField(
+          controller: _genericControllers[entry.key],
+          decoration: InputDecoration(labelText: entry.key),
+          validator: entry.value.validator,
+        );
+      }).toList(),
+    ],
 
                 const SizedBox(height: 16),
                 ElevatedButton(
@@ -860,6 +870,8 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                       if (widget.type == 'travel') 'travel_destination': _travelDestinationController.text,
                       if (widget.type == 'property') 'property_value': _propertyValueController.text,
                       if (widget.type == 'wiba') 'employee_count': _employeeCountController.text,
+      // Include generic fields from widget.fields
+      ..._genericControllers.map((key, controller) => MapEntry(key, controller.text.trim())),                    
                     };
 
                     try {
