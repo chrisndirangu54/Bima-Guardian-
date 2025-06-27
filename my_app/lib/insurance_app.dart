@@ -3013,11 +3013,7 @@ Future<void> _showFileClaimDialog(BuildContext context, InsuredItem item, Cover 
     }
   }
 
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:flutter/foundation.dart'; // For kDebugMode
+
 
 Widget _buildMyAccountScreen(BuildContext context) {
   final themeProvider = Provider.of<ThemeProvider>(context);
@@ -3184,7 +3180,7 @@ Widget _buildMyAccountScreen(BuildContext context) {
                             border: Border(
                               bottom: BorderSide(
                                 color: Colors.grey[300]!,
-                                width:  personally
+                                width: 0.5
                               ),
                             ),
                           ),
@@ -3215,7 +3211,6 @@ Widget _buildMyAccountScreen(BuildContext context) {
                                         .collection('users')
                                         .doc(user!.uid)
                                         .update({'autobilling_enabled': value});
-                                    columnas
                                     if (kDebugMode) {
                                       print('Autobilling toggled to: $value');
                                     }
@@ -3331,7 +3326,7 @@ Widget _buildMyAccountScreen(BuildContext context) {
           },
         ),
       ),
-    );
+    ));
   }
 
   Widget _buildDetailRow(BuildContext context, String label, String value) {
