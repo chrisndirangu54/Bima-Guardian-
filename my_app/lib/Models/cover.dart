@@ -1,7 +1,8 @@
 import 'package:my_app/insurance_app.dart';
 import 'package:my_app/Models/policy.dart';
 
-
+// Temporary ClaimStatus enum definition. Replace or adjust as needed.
+enum ClaimStatus { none, pending, approved, rejected }
 
 class Cover {
   final String id;
@@ -21,6 +22,7 @@ class Cover {
   final DateTime startDate;
   final DateTime? endDate;
   final int extensionCount; // New field to track extensions
+  final ClaimStatus claimStatus;
 
   Cover({
     required this.id,
@@ -40,7 +42,9 @@ class Cover {
     required this.startDate,
     this.endDate,
     this.extensionCount = 0, // Default to 0
-  }) : assert(extensionCount >= 0 && extensionCount <= 2, 'Extension count must be 0, 1, or 2');
+    this.claimStatus = ClaimStatus.none, // Default to none
+  }) : assert(extensionCount >= 0 && extensionCount <= 2,
+            'Extension count must be 0, 1, or 2');
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -68,8 +72,10 @@ class Cover {
         insuredItemId: json['insuredItemId'] as String? ?? '',
         companyId: json['companyId'] as String? ?? '',
         type: PolicyType.fromJson(json['type'] as Map<String, dynamic>? ?? {}),
-        subtype: PolicySubtype.fromJson(json['subtype'] as Map<String, dynamic>? ?? {}),
-        coverageType: CoverageType.fromJson(json['coverageType'] as Map<String, dynamic>? ?? {}),
+        subtype: PolicySubtype.fromJson(
+            json['subtype'] as Map<String, dynamic>? ?? {}),
+        coverageType: CoverageType.fromJson(
+            json['coverageType'] as Map<String, dynamic>? ?? {}),
         status: CoverStatus.values.firstWhere(
           (e) => e.name == (json['status'] as String? ?? ''),
           orElse: () => CoverStatus.active,
@@ -82,8 +88,11 @@ class Cover {
         premium: json['premium'] as double?,
         billingFrequency: json['billingFrequency'] as String?,
         formData: json['formData'] as Map<String, dynamic>?,
-        startDate: DateTime.parse(json['startDate'] as String? ?? DateTime.now().toIso8601String()),
-        endDate: json['endDate'] != null ? DateTime.parse(json['endDate'] as String) : null,
+        startDate: DateTime.parse(
+            json['startDate'] as String? ?? DateTime.now().toIso8601String()),
+        endDate: json['endDate'] != null
+            ? DateTime.parse(json['endDate'] as String)
+            : null,
         extensionCount: json['extensionCount'] as int? ?? 0,
       );
 
@@ -113,8 +122,10 @@ class Cover {
         insuredItemId: map['insuredItemId'] as String? ?? '',
         companyId: map['companyId'] as String? ?? '',
         type: PolicyType.fromMap(map['type'] as Map<String, dynamic>? ?? {}),
-        subtype: PolicySubtype.fromMap(map['subtype'] as Map<String, dynamic>? ?? {}),
-        coverageType: CoverageType.fromMap(map['coverageType'] as Map<String, dynamic>? ?? {}),
+        subtype: PolicySubtype.fromMap(
+            map['subtype'] as Map<String, dynamic>? ?? {}),
+        coverageType: CoverageType.fromMap(
+            map['coverageType'] as Map<String, dynamic>? ?? {}),
         status: CoverStatus.values.firstWhere(
           (e) => e.name == (map['status'] as String? ?? ''),
           orElse: () => CoverStatus.active,
@@ -127,8 +138,11 @@ class Cover {
         premium: map['premium'] as double?,
         billingFrequency: map['billingFrequency'] as String?,
         formData: map['formData'] as Map<String, dynamic>?,
-        startDate: DateTime.parse(map['startDate'] as String? ?? DateTime.now().toIso8601String()),
-        endDate: map['endDate'] != null ? DateTime.parse(map['endDate'] as String) : null,
+        startDate: DateTime.parse(
+            map['startDate'] as String? ?? DateTime.now().toIso8601String()),
+        endDate: map['endDate'] != null
+            ? DateTime.parse(map['endDate'] as String)
+            : null,
         extensionCount: map['extensionCount'] as int? ?? 0,
       );
 
@@ -182,7 +196,8 @@ class Cover {
     }
     return copyWith(
       status: CoverStatus.extended,
-      expirationDate: expirationDate!.add(Duration(days: 30)), // One-month extension
+      expirationDate:
+          expirationDate!.add(Duration(days: 30)), // One-month extension
       extensionCount: extensionCount + 1,
     );
   }

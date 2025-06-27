@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:async/async.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:my_app/Screens/admin_panel.dart';
+import 'package:my_app/Screens/webview_page.dart';
+import 'package:my_app/Services/email_analyzer.dart';
 import 'package:web/web.dart' as web; // Use this instead of dart:html
 
 // Remove this import; see below for correct usage.
@@ -368,6 +370,8 @@ class InsuranceHomeScreen extends StatefulWidget {
 }
 
 class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
+  // Map to hold generic controllers for dynamic form fields
+  final Map<String, TextEditingController> _genericControllers = {};
   List<InsuredItem> insuredItems = [];
   List<Cover> covers = [];
   List<Quote> quotes = [];
@@ -408,7 +412,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
   final List<String> _selectedUnderwriters = [];
   File? _logbookFile;
   File? _previousPolicyFile;
-  List<String> trendingTopics = [];
+  List<dynamic> trendingTopics = [];
   List<String> blogPosts = [];
   late bool _isDialogOpening = false;
   bool _isOcrLoading = false;
@@ -1205,59 +1209,268 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     }
   }
 
-Future<void> handleCoverSubmission(
-  BuildContext context,
-  PolicyType type,
-  PolicySubtype subtype,
-  CoverageType coverageType,
-  String companyId,
-  String pdfTemplateKey,
-  Map<String, String> details,
-) async {
-  try {
-    // Check for claim or extension flags
-    final isClaim = details['isClaim'] == 'true';
-    final isExtension = details['isExtension'] == 'true';
+  Future<void> handleCoverSubmission(
+    BuildContext context,
+    PolicyType type,
+    PolicySubtype subtype,
+    CoverageType coverageType,
+    String companyId,
+    String pdfTemplateKey,
+    Map<String, String> details,
+  ) async {
+    try {
+      // Check for claim or extension flags
+      final isClaim = details['isClaim'] == 'true';
+      final isExtension = details['isExtension'] == 'true';
 
-    // Create or select InsuredItem
-    InsuredItem insuredItem;
-    if (details['insured_item_id']?.isNotEmpty ?? false) {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('insured_items')
-          .doc(details['insured_item_id'])
-          .get();
-      if (!snapshot.exists) {
-        throw Exception('Insured item not found');
+      // Create or select InsuredItem
+      InsuredItem insuredItem;
+      if (details['insured_item_id']?.isNotEmpty ?? false) {
+        final snapshot = await FirebaseFirestore.instance
+            .collection('insured_items')
+            .doc(details['insured_item_id'])
+            .get();
+        if (!snapshot.exists) {
+          throw Exception('Insured item not found');
+        }
+        insuredItem = InsuredItem.fromJson(snapshot.data()!);
+      } else {
+        insuredItem = InsuredItem(
+          id: Uuid().v4(),
+          name: details['name'] ?? '',
+          email: details['email'] ?? '',
+          contact: details['phone'] ?? '',
+          type: type,
+          subtype: subtype,
+          coverageType: coverageType,
+          details: details,
+          kraPin: type.name == 'motor' ? (details['kra_pin'] ?? '') : '',
+          logbookPath: type.name == 'motor' ? details['logbook_path'] : null,
+          previousPolicyPath:
+              type.name == 'motor' ? details['previous_policy_path'] : null,
+        );
+        // Save to Firestore
+        await FirebaseFirestore.instance
+            .collection('insured_items')
+            .doc(insuredItem.id)
+            .set(insuredItem.toJson());
+        insuredItems.add(insuredItem); // Update global list
       }
-      insuredItem = InsuredItem.fromJson(snapshot.data()!);
-    } else {
-      insuredItem = InsuredItem(
+
+      if (isClaim) {
+        // Handle claim: skip premium and payment, send email
+        if (kDebugMode) print('Processing claim for ${type.name}');
+        File? pdfFile;
+        if (cachedPdfTemplates.isNotEmpty &&
+            cachedPdfTemplates.containsKey(pdfTemplateKey)) {
+          pdfFile = await _fillPdfTemplate(
+              pdfTemplateKey, details, type.name, context);
+          if (pdfFile != null && await _previewPdf(pdfFile)) {
+            await _sendEmail(
+              companyId,
+              type.name,
+              subtype.name,
+              details,
+              pdfFile,
+              details['regno'] ?? '',
+              details['vehicle_type'] ?? '',
+              '', // No coverId available in claim branch
+            );
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Claim email sent successfully.')),
+              );
+            }
+          } else {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                    content:
+                        Text('Claim PDF preview failed or was not approved.')),
+              );
+            }
+          }
+        } else {
+          pdfFile =
+              await _generateFallbackPdf(type.name, subtype.name, details);
+          if (pdfFile != null) {
+            await _sendEmail(
+              companyId,
+              type.name,
+              subtype.name,
+              details,
+              pdfFile,
+              details['regno'] ?? '',
+              details['vehicle_type'] ?? '',
+              '', // No coverId available in claim branch
+            );
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                    content: Text('Claim email sent with fallback PDF.')),
+              );
+            }
+          } else {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Failed to generate claim PDF.')),
+              );
+            }
+          }
+        }
+        // Update chatbot state for claim
+        currentState = 'claim_process';
+        chatMessages.add({
+          'sender': 'bot',
+          'text':
+              'Your ${type.name.toUpperCase()} claim ($subtype) has been submitted.',
+        });
+        return;
+      }
+
+      // Calculate premium for non-claims
+      double premium =
+          await _calculatePremium(type.name, subtype.name, details);
+
+      // Ask user whether to generate a quote or proceed with payment
+      bool? proceedWithPayment;
+      if (context.mounted) {
+        proceedWithPayment = await showDialog<bool>(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text('Choose an Option'),
+              content: const Text(
+                'Would you like to generate a quote or proceed with payment?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () =>
+                      Navigator.pop(context, false), // Generate quote
+                  child: const Text('Generate Quote'),
+                ),
+                TextButton(
+                  onPressed: () =>
+                      Navigator.pop(context, true), // Proceed with payment
+                  child: const Text('Proceed with Payment'),
+                ),
+              ],
+            );
+          },
+        );
+      }
+
+      if (proceedWithPayment == null) {
+        // User dismissed the dialog
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Action canceled.')),
+          );
+        }
+        return;
+      }
+
+      if (!proceedWithPayment) {
+        // Generate and save quote
+        final quote = Quote(
+          id: Uuid().v4(),
+          type: type.name,
+          subtype: subtype.name,
+          company: companyId,
+          premium: premium,
+          generatedAt: DateTime.now(),
+          formData: details,
+        );
+
+        // Save quote to Firestore
+        await FirebaseFirestore.instance
+            .collection('quotes')
+            .doc(quote.id)
+            .set(quote.toJson());
+
+        // Generate quote PDF
+        final pdfFile = await _generateQuotePdf(quote);
+        if (pdfFile != null && context.mounted) {
+          // Optionally preview the quote PDF
+          if (await _previewPdf(pdfFile)) {
+            await _sendEmail(
+              companyId,
+              type.name,
+              subtype.name,
+              details,
+              pdfFile,
+              details['regno'] ?? '',
+              details['vehicle_type'] ?? '',
+              '', // Pass an empty string or appropriate coverId if available
+            );
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Quote generated and sent.')),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                  content:
+                      Text('Quote PDF preview failed or was not approved.')),
+            );
+          }
+        } else {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Failed to generate quote PDF.')),
+            );
+          }
+        }
+
+        // Update chatbot state for quote
+        currentState = 'quote_process';
+        chatMessages.add({
+          'sender': 'bot',
+          'text':
+              'Your ${type.name.toUpperCase()} quote ($subtype) has been generated.',
+        });
+        return;
+      }
+
+      // Proceed with payment for cover or extension
+      final cover = Cover(
         id: Uuid().v4(),
-        name: details['name'] ?? '',
-        email: details['email'] ?? '',
-        contact: details['phone'] ?? '',
+        insuredItemId: insuredItem.id,
+        companyId: companyId,
         type: type,
         subtype: subtype,
-        coverageType: coverageType,
-        details: details,
-        kraPin: type.name == 'motor' ? (details['kra_pin'] ?? '') : '',
-        logbookPath: type.name == 'motor' ? details['logbook_path'] : null,
-        previousPolicyPath: type.name == 'motor' ? details['previous_policy_path'] : null,
+        coverageType: CoverageType(
+          id: coverageType.name,
+          name: coverageType.name,
+          description: '',
+        ),
+        status: CoverStatus.pending,
+        expirationDate: isExtension
+            ? DateTime.now()
+                .add(const Duration(days: 30)) // 1 month for extensions
+            : DateTime.now()
+                .add(const Duration(days: 365)), // 1 year for others
+        pdfTemplateKey: pdfTemplateKey,
+        paymentStatus: 'pending',
+        startDate: DateTime.now(),
+        formData: details,
+        premium: premium,
+        billingFrequency: 'annual',
+        name: '',
       );
-      // Save to Firestore
-      await FirebaseFirestore.instance
-          .collection('insured_items')
-          .doc(insuredItem.id)
-          .set(insuredItem.toJson());
-      insuredItems.add(insuredItem); // Update global list
-    }
 
-    if (isClaim) {
-      // Handle claim: skip premium and payment, send email
-      if (kDebugMode) print('Processing claim for ${type.name}');
+      // Save cover to Firestore
+      await FirebaseFirestore.instance
+          .collection('covers')
+          .doc(cover.id)
+          .set(cover.toJson());
+      covers.add(cover);
+
+      // Handle PDF generation
       File? pdfFile;
-      if (cachedPdfTemplates.isNotEmpty && cachedPdfTemplates.containsKey(pdfTemplateKey)) {
-        pdfFile = await _fillPdfTemplate(pdfTemplateKey, details, type.name, context);
+      if (cachedPdfTemplates.isNotEmpty &&
+          cachedPdfTemplates.containsKey(pdfTemplateKey)) {
+        pdfFile =
+            await _fillPdfTemplate(pdfTemplateKey, details, type.name, context);
         if (pdfFile != null && await _previewPdf(pdfFile)) {
           await _sendEmail(
             companyId,
@@ -1267,20 +1480,24 @@ Future<void> handleCoverSubmission(
             pdfFile,
             details['regno'] ?? '',
             details['vehicle_type'] ?? '',
+            cover.id, // No coverId available in claim branch
           );
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Claim email sent successfully.')),
-            );
-          }
         } else {
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Claim PDF preview failed or was not approved.')),
+              const SnackBar(
+                  content: Text('PDF preview failed or was not approved.')),
             );
           }
         }
       } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text(
+                    'No PDF templates available. Proceeding without PDF.')),
+          );
+        }
         pdfFile = await _generateFallbackPdf(type.name, subtype.name, details);
         if (pdfFile != null) {
           await _sendEmail(
@@ -1291,259 +1508,78 @@ Future<void> handleCoverSubmission(
             pdfFile,
             details['regno'] ?? '',
             details['vehicle_type'] ?? '',
+            cover.id, // Pass coverId for payment processing
           );
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Claim email sent with fallback PDF.')),
-            );
-          }
-        } else {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Failed to generate claim PDF.')),
-            );
-          }
         }
       }
-      // Update chatbot state for claim
-      currentState = 'claim_process';
-      chatMessages.add({
-        'sender': 'bot',
-        'text': 'Your ${type.name.toUpperCase()} claim ($subtype) has been submitted.',
-      });
-      return;
-    }
 
-    // Calculate premium for non-claims
-    double premium = await _calculatePremium(type.name, subtype.name, details);
-
-    // Ask user whether to generate a quote or proceed with payment
-    bool? proceedWithPayment;
-    if (context.mounted) {
-      proceedWithPayment = await showDialog<bool>(
+      // Initialize payment
+      final paymentStatus = await _initializePayment(
+        cover.id,
+        premium.toString(),
+        '', // Provide the payment method as needed, e.g., 'mpesa' or 'paystack'
         context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: const Text('Choose an Option'),
-            content: const Text(
-              'Would you like to generate a quote or proceed with payment?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false), // Generate quote
-                child: const Text('Generate Quote'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true), // Proceed with payment
-                child: const Text('Proceed with Payment'),
-              ),
-            ],
-          );
-        },
-      );
-    }
-
-    if (proceedWithPayment == null) {
-      // User dismissed the dialog
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Action canceled.')),
-        );
-      }
-      return;
-    }
-
-    if (!proceedWithPayment) {
-      // Generate and save quote
-      final quote = Quote(
-        id: Uuid().v4(),
-        type: type.name,
-        subtype: subtype.name,
-        company: companyId,
-        premium: premium,
-        generatedAt: DateTime.now(),
-        formData: details,
       );
 
-      // Save quote to Firestore
+      // Update cover status in Firestore
       await FirebaseFirestore.instance
-          .collection('quotes')
-          .doc(quote.id)
-          .set(quote.toJson());
+          .collection('covers')
+          .doc(cover.id)
+          .update({
+        'status': paymentStatus == 'completed'
+            ? CoverStatus.active.toString()
+            : CoverStatus.pending.toString(),
+        'paymentStatus': paymentStatus,
+      });
 
-      // Generate quote PDF
-      final pdfFile = await _generateQuotePdf(quote);
-      if (pdfFile != null && context.mounted) {
-        // Optionally preview the quote PDF
-        if (await _previewPdf(pdfFile)) {
-          await _sendEmail(
-            companyId,
-            type.name,
-            subtype.name,
-            details,
-            pdfFile,
-            details['regno'] ?? '',
-            details['vehicle_type'] ?? '',
-          );
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Quote generated and sent.')),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Quote PDF preview failed or was not approved.')),
-          );
-        }
-      } else {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to generate quote PDF.')),
-          );
-        }
+      final updatedCover = cover.copyWith(
+        status: paymentStatus == 'completed'
+            ? CoverStatus.active
+            : CoverStatus.pending,
+        paymentStatus: paymentStatus,
+      );
+      final index = covers.indexWhere((c) => c.id == cover.id);
+      if (index != -1) {
+        covers[index] = updatedCover;
       }
 
-      // Update chatbot state for quote
-      currentState = 'quote_process';
+      // Update chatbot state and UI
+      currentState = type.name == 'medical' ? 'health_process' : 'pdf_process';
       chatMessages.add({
         'sender': 'bot',
-        'text': 'Your ${type.name.toUpperCase()} quote ($subtype) has been generated.',
+        'text':
+            'Your ${type.name.toUpperCase()} ${isExtension ? 'extension' : 'cover'} ($subtype) has been created. Payment status: $paymentStatus.',
       });
-      return;
-    }
 
-    // Proceed with payment for cover or extension
-    final cover = Cover(
-      id: Uuid().v4(),
-      insuredItemId: insuredItem.id,
-      companyId: companyId,
-      type: type,
-      subtype: subtype,
-      coverageType: CoverageType(
-        id: coverageType.name,
-        name: coverageType.name,
-        description: '',
-      ),
-      status: CoverStatus.pending,
-      expirationDate: isExtension
-          ? DateTime.now().add(const Duration(days: 30)) // 1 month for extensions
-          : DateTime.now().add(const Duration(days: 365)), // 1 year for others
-      pdfTemplateKey: pdfTemplateKey,
-      paymentStatus: 'pending',
-      startDate: DateTime.now(),
-      formData: details,
-      premium: premium,
-      billingFrequency: 'annual',
-      name: '',
-    );
-
-    // Save cover to Firestore
-    await FirebaseFirestore.instance
-        .collection('covers')
-        .doc(cover.id)
-        .set(cover.toJson());
-    covers.add(cover);
-
-    // Handle PDF generation
-    File? pdfFile;
-    if (cachedPdfTemplates.isNotEmpty && cachedPdfTemplates.containsKey(pdfTemplateKey)) {
-      pdfFile = await _fillPdfTemplate(pdfTemplateKey, details, type.name, context);
-      if (pdfFile != null && await _previewPdf(pdfFile)) {
-        await _sendEmail(
-          companyId,
-          type.name,
-          subtype.name,
-          details,
-          pdfFile,
-          details['regno'] ?? '',
-          details['vehicle_type'] ?? '',
-        );
-      } else {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('PDF preview failed or was not approved.')),
-          );
-        }
-      }
-    } else {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No PDF templates available. Proceeding without PDF.')),
+          SnackBar(
+            content: Text(
+                'Cover created, payment $paymentStatus${pdfFile == null ? ', no PDF generated' : ''}'),
+          ),
         );
-      }
-      pdfFile = await _generateFallbackPdf(type.name, subtype.name, details);
-      if (pdfFile != null) {
-        await _sendEmail(
-          companyId,
+        // Show completion dialog
+        _showCompletionDialog(
+          context,
           type.name,
-          subtype.name,
-          details,
-          pdfFile,
-          details['regno'] ?? '',
-          details['vehicle_type'] ?? '',
+          await Policy.fromCover(updatedCover),
+          pdfTemplateKey,
+          (context, type, subtype, coverageType, [String? extra]) {
+            if (kDebugMode) {
+              print('Final submission: $type, $subtype, $coverageType');
+            }
+          },
         );
       }
-    }
-
-    // Initialize payment
-    final paymentStatus = await _initializePayment(
-      cover.id,
-      premium.toString(),
-      '', // Provide the payment method as needed, e.g., 'mpesa' or 'paystack'
-      context: context,
-    );
-
-    // Update cover status in Firestore
-    await FirebaseFirestore.instance
-        .collection('covers')
-        .doc(cover.id)
-        .update({
-      'status': paymentStatus == 'completed' ? CoverStatus.active.toString() : CoverStatus.pending.toString(),
-      'paymentStatus': paymentStatus,
-    });
-
-    final updatedCover = cover.copyWith(
-      status: paymentStatus == 'completed' ? CoverStatus.active : CoverStatus.pending,
-      paymentStatus: paymentStatus,
-    );
-    final index = covers.indexWhere((c) => c.id == cover.id);
-    if (index != -1) {
-      covers[index] = updatedCover;
-    }
-
-    // Update chatbot state and UI
-    currentState = type.name == 'medical' ? 'health_process' : 'pdf_process';
-    chatMessages.add({
-      'sender': 'bot',
-      'text': 'Your ${type.name.toUpperCase()} ${isExtension ? 'extension' : 'cover'} ($subtype) has been created. Payment status: $paymentStatus.',
-    });
-
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Cover created, payment $paymentStatus${pdfFile == null ? ', no PDF generated' : ''}'),
-        ),
-      );
-      // Show completion dialog
-      _showCompletionDialog(
-        context,
-        type.name,
-        await Policy.fromCover(updatedCover),
-        pdfTemplateKey,
-        (context, type, subtype, coverageType, [String? extra]) {
-          if (kDebugMode) {
-            print('Final submission: $type, $subtype, $coverageType');
-          }
-        },
-      );
-    }
-  } catch (e) {
-    if (kDebugMode) print('Error in handleCoverSubmission: $e');
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to process action: $e')),
-      );
+    } catch (e) {
+      if (kDebugMode) print('Error in handleCoverSubmission: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to process action: $e')),
+        );
+      }
     }
   }
-}
 
 // Assuming _generateQuotePdf remains the same as provided
   Future<File?> _generateQuotePdf(Quote quote) async {
@@ -1840,14 +1876,14 @@ Future<void> handleCoverSubmission(
     File filledPdf,
     String registrationNumber,
     String vehicleType,
+    String coverId, // Add coverId to identify the Cover document
   ) async {
     if (insuranceType == 'motor') {
-      // Trigger the autofill method when insurance type is motor
       await _autofillDMVICWebsiteForMotorInsurance(
           registrationNumber, vehicleType, context);
     }
 
-    // Step 8: Send email logic (this part remains unchanged)
+    // Existing email sending logic
     final smtpServer = gmail(
       'your-email@gmail.com',
       'your-app-specific-password',
@@ -1880,13 +1916,23 @@ Future<void> handleCoverSubmission(
       _logAction(
         'Email sent to $company for $insuranceSubtype ($insuranceType)',
       );
+
+      // Trigger email analysis after a delay to allow for replies
+      Future.delayed(Duration(minutes: 5), () async {
+        final analyzer = EmailAnalyzer();
+        await analyzer.analyzeAndUpdateClaimStatus(
+          coverId: coverId,
+          query:
+              'from:${policyCalculators[insuranceType]![insuranceSubtype]!['companyA']!['email']}',
+        );
+      });
     } catch (e) {
       if (kDebugMode) {
         print('Error sending email: $e');
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Failed to send email')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to send email')),
+      );
       _logAction('Email failed: $e');
     }
   }
@@ -2397,65 +2443,155 @@ Future<void> handleCoverSubmission(
     );
   }
 
-// Dialog for filing a claim using the cover's companyId
-Future<void> _showFileClaimDialog(BuildContext context, InsuredItem item, Cover cover) async {
-  if (!context.mounted) {
-    if (kDebugMode) print('FileClaimDialog: context not mounted');
-    return;
-  }
-
-  try {
-    // Fetch the company with cover.companyId and check isClaim == true
-    final companySnapshot = await FirebaseFirestore.instance
-        .collection('companies')
-        .doc(cover.companyId)
-        .get();
-
-    if (!companySnapshot.exists) {
-      if (kDebugMode) print('Company not found: ${cover.companyId}');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Company not found for filing claims.')),
-      );
-      return;
-    }
-
-    final companyData = companySnapshot.data() as Map<String, dynamic>;
-    if (companyData['isClaim'] != true) {
-      if (kDebugMode) print('Company does not support claims: ${cover.companyId}');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Selected company does not support claims.')),
-      );
-      return;
-    }
-
+  // Dialog for filing a claim using the cover's companyId
+  Future<void> _showFileClaimDialog(
+      BuildContext context, InsuredItem item, Cover cover) async {
     if (!context.mounted) {
-      if (kDebugMode) print('FileClaimDialog: context not mounted after fetching company');
+      if (kDebugMode) print('FileClaimDialog: context not mounted');
       return;
     }
 
-    // Get pdfTemplateKey from company or default to 'default_template'
-    final pdfTemplateKey = companyData['pdfTemplateKey'] as String? ?? 'default_template';
+    try {
+      // Fetch the company with cover.companyId and check isClaim == true
+      final companySnapshot = await FirebaseFirestore.instance
+          .collection('companies')
+          .doc(cover.companyId)
+          .get();
 
-    if (kDebugMode) print('Filing claim with company: ${cover.companyId}');
-    
-    // Call handleCoverSubmission with existing details
-    await handleCoverSubmission(
-      context,
-      item.type,
-      item.subtype,
-      item.coverageType,
-      cover.companyId,
-      pdfTemplateKey,
-      Map<String, String>.from(item.details),
-    );
-  } catch (e) {
-    if (kDebugMode) print('Error in FileClaimDialog: $e');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Failed to process claim: $e')),
-    );
+      if (!companySnapshot.exists) {
+        if (kDebugMode) print('Company not found: ${cover.companyId}');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Company not found for filing claims.')),
+        );
+        return;
+      }
+
+      final companyData = companySnapshot.data() as Map<String, dynamic>;
+      if (companyData['isClaim'] != true) {
+        if (kDebugMode)
+          print('Company does not support claims: ${cover.companyId}');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Selected company does not support claims.')),
+        );
+        return;
+      }
+
+      if (!context.mounted) {
+        if (kDebugMode)
+          print('FileClaimDialog: context not mounted after fetching company');
+        return;
+      }
+
+      // Get pdfTemplateKey from company or default to 'default_template'
+      final pdfTemplateKey =
+          companyData['pdfTemplateKey'] as String? ?? 'default_template';
+
+      // Fetch PDF template fields
+      Map<String, FieldDefinition> fields = {}; // Fallback to widget.fields
+      if (pdfTemplateKey != null) {
+        final pdfTemplate =
+            await InsuranceHomeScreen.getPDFTemplate(pdfTemplateKey);
+        if (pdfTemplate != null) {
+          // Use the fields property of the PDFTemplate object directly
+          fields = pdfTemplate.fields;
+        }
+      }
+
+      if (kDebugMode)
+        print(
+            'Filing claim with company: ${cover.companyId}, Fields: ${fields.keys}');
+
+      // Update controllers with new fields
+      fields.forEach((key, _) {
+        if (!_genericControllers.containsKey(key)) {
+          _genericControllers[key] = TextEditingController();
+        }
+      });
+
+      // Show dialog with generic fields
+      if (fields.isNotEmpty) {
+        final formKey = GlobalKey<FormState>();
+        if (!context.mounted) return;
+
+        final result = await showDialog<bool>(
+          context: context,
+          builder: (BuildContext dialogContext) {
+            return AlertDialog(
+              title: Text(
+                '${item.type.name.toUpperCase()} Claim Details',
+                style: GoogleFonts.roboto(
+                    fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              content: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ...fields.entries.map((entry) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 16.0),
+                          child: TextFormField(
+                            controller: _genericControllers[entry.key],
+                            decoration: InputDecoration(labelText: entry.key),
+                            validator: entry.value.validator,
+                          ),
+                        );
+                      }).toList(),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (formKey.currentState!.validate()) {
+                      Navigator.of(dialogContext).pop(true);
+                    }
+                  },
+                  child: const Text('Submit'),
+                ),
+              ],
+            );
+          },
+        );
+
+        if (result != true) {
+          if (kDebugMode) print('Claim filing cancelled');
+          return;
+        }
+      }
+
+      // Collect generic fields data from controllers
+      final details = {
+        ..._genericControllers
+            .map((key, controller) => MapEntry(key, controller.text.trim())),
+      };
+
+      // Call handleCoverSubmission with details and fields
+      await handleCoverSubmission(
+        context,
+        item.type,
+        item.subtype,
+        item.coverageType,
+        cover.companyId,
+        pdfTemplateKey,
+        details,
+      );
+    } catch (e) {
+      if (kDebugMode) print('Error in FileClaimDialog: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to process claim: $e')),
+        );
+      }
+    }
   }
-}
-  
 
   Widget _buildHomeScreen(
     BuildContext context,
@@ -3013,119 +3149,185 @@ Future<void> _showFileClaimDialog(BuildContext context, InsuredItem item, Cover 
     }
   }
 
+  Widget _buildMyAccountScreen(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final user = FirebaseAuth.instance.currentUser;
 
+    return Scaffold(
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        appBar: AppBar(
+          title: const Text('My Account'),
+          elevation: 4,
+          shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          actionsPadding: const EdgeInsets.only(right: 16.0),
+        ),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: StreamBuilder<DocumentSnapshot>(
+              stream: user != null
+                  ? FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(user.uid)
+                      .snapshots()
+                  : null,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Center(child: Text('Error: ${snapshot.error}'));
+                }
+                if (!snapshot.hasData || !snapshot.data!.exists) {
+                  return const Center(child: Text('User data not found'));
+                }
 
-Widget _buildMyAccountScreen(BuildContext context) {
-  final themeProvider = Provider.of<ThemeProvider>(context);
-  final user = FirebaseAuth.instance.currentUser;
+                final userData = snapshot.data!.data() as Map<String, dynamic>;
+                final String name = userData['name'] ?? 'N/A';
+                final String email = user?.email ?? 'N/A';
+                final String phone = userData['phone'] ?? 'N/A';
+                final bool autobillingEnabled =
+                    userData['autobilling_enabled'] ?? false;
 
-  return Scaffold(
-    backgroundColor: Theme.of(context).colorScheme.surface,
-    appBar: AppBar(
-      title: const Text('My Account'),
-      elevation: 4,
-      shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      actionsPadding: const EdgeInsets.only(right: 16.0),
-    ),
-    body: SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8.0),
-        child: StreamBuilder<DocumentSnapshot>(
-          stream: user != null
-              ? FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(user.uid)
-                  .snapshots()
-              : null,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snapshot.hasError) {
-              return Center(child: Text('Error: ${snapshot.error}'));
-            }
-            if (!snapshot.hasData || !snapshot.data!.exists) {
-              return const Center(child: Text('User data not found'));
-            }
-
-            final userData = snapshot.data!.data() as Map<String, dynamic>;
-            final String name = userData['name'] ?? 'N/A';
-            final String email = user?.email ?? 'N/A';
-            final String phone = userData['phone'] ?? 'N/A';
-            final bool autobillingEnabled = userData['autobilling_enabled'] ?? false;
-
-            return SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // User Details Section
-                  Card(
-                    elevation: 4,
-                    shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12.0),
-                    ),
-                    margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'User Details',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                          ),
-                          const SizedBox(height: 12),
-                          _buildDetailRow(context, 'Name', name),
-                          _buildDetailRow(context, 'Email', email),
-                          _buildDetailRow(context, 'Phone', phone),
-                          const SizedBox(height: 12),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton(
-                              onPressed: () {
-                                _showEditUserDetailsDialog(context, name, phone);
-                              },
-                              child: Text(
-                                'Edit Details',
-                                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                      color: Theme.of(context).colorScheme.primary,
-                                      fontWeight: FontWeight.w600,
+                return SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // User Details Section
+                      Card(
+                        elevation: 4,
+                        shadowColor:
+                            ThemeData().colorScheme.shadow.withOpacity(0.5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12.0),
+                        ),
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 16.0, vertical: 8.0),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'User Details',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
                                     ),
                               ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  // Settings Section
-                  Card(
-                    elevation: 4,
-                    shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12.0),
-                    ),
-                    margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                    child: Column(
-                      children: [
-                        // Policy Reports Row
-                        Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(12.0),
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (context) => const CoverReportScreen(),
+                              const SizedBox(height: 12),
+                              _buildDetailRow(context, 'Name', name),
+                              _buildDetailRow(context, 'Email', email),
+                              _buildDetailRow(context, 'Phone', phone),
+                              const SizedBox(height: 12),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: () {
+                                    _showEditUserDetailsDialog(
+                                        context, name, phone);
+                                  },
+                                  child: Text(
+                                    'Edit Details',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelLarge
+                                        ?.copyWith(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .primary,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                  ),
                                 ),
-                              );
-                            },
-                            child: Container(
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      // Settings Section
+                      Card(
+                        elevation: 4,
+                        shadowColor:
+                            ThemeData().colorScheme.shadow.withOpacity(0.5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12.0),
+                        ),
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 16.0, vertical: 8.0),
+                        child: Column(
+                          children: [
+                            // Policy Reports Row
+                            Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(12.0),
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const CoverReportScreen(),
+                                    ),
+                                  );
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16.0,
+                                    vertical: 12.0,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: Colors.grey[300]!,
+                                        width: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.all(4.0),
+                                        child: Icon(
+                                          Icons.description_outlined,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant,
+                                          size: 24,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          'Policy Reports',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyLarge
+                                              ?.copyWith(
+                                                fontSize: 16,
+                                              ),
+                                        ),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.all(4.0),
+                                        child: Icon(
+                                          Icons.arrow_forward_ios,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant,
+                                          size: 18,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            // Autobilling Toggle Row
+                            Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 16.0,
                                 vertical: 12.0,
@@ -3133,9 +3335,7 @@ Widget _buildMyAccountScreen(BuildContext context) {
                               decoration: BoxDecoration(
                                 border: Border(
                                   bottom: BorderSide(
-                                    color: Colors.grey[300]!,
-                                    width: 0.5,
-                                  ),
+                                      color: Colors.grey[300]!, width: 0.5),
                                 ),
                               ),
                               child: Row(
@@ -3143,190 +3343,166 @@ Widget _buildMyAccountScreen(BuildContext context) {
                                   Padding(
                                     padding: const EdgeInsets.all(4.0),
                                     child: Icon(
-                                      Icons.description_outlined,
-                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                      Icons.payment_outlined,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
                                       size: 24,
                                     ),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Text(
-                                      'Policy Reports',
-                                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                      'Autobilling',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyLarge
+                                          ?.copyWith(
                                             fontSize: 16,
                                           ),
                                     ),
                                   ),
-                                  Padding(
-                                    padding: const EdgeInsets.all(4.0),
-                                    child: Icon(
-                                      Icons.arrow_forward_ios,
-                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                      size: 18,
-                                    ),
+                                  Switch(
+                                    value: autobillingEnabled,
+                                    onChanged: (value) async {
+                                      try {
+                                        await FirebaseFirestore.instance
+                                            .collection('users')
+                                            .doc(user!.uid)
+                                            .update(
+                                                {'autobilling_enabled': value});
+                                        if (kDebugMode) {
+                                          print(
+                                              'Autobilling toggled to: $value');
+                                        }
+                                      } catch (e) {
+                                        if (kDebugMode) {
+                                          print(
+                                              'Error updating autobilling: $e');
+                                        }
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                              content: Text(
+                                                  'Failed to update autobilling: $e')),
+                                        );
+                                      }
+                                    },
+                                    activeColor: Colors.green,
                                   ),
                                 ],
                               ),
                             ),
-                          ),
-                        ),
-                        // Autobilling Toggle Row
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16.0,
-                            vertical: 12.0,
-                          ),
-                          decoration: BoxDecoration(
-                            border: Border(
-                              bottom: BorderSide(
-                                color: Colors.grey[300]!,
-                                width: 0.5
+                            // Theme Toggle Row
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16.0,
+                                vertical: 12.0,
+                              ),
+                              child: Row(
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.all(4.0),
+                                    child: Icon(
+                                      Icons.dark_mode_outlined,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                      size: 24,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      'Dark Mode',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyLarge
+                                          ?.copyWith(
+                                            fontSize: 16,
+                                          ),
+                                    ),
+                                  ),
+                                  Switch(
+                                    value: themeProvider.themeMode ==
+                                        ThemeMode.dark,
+                                    onChanged: (value) {
+                                      themeProvider.toggleTheme(value);
+                                    },
+                                    activeColor: Colors.green,
+                                  ),
+                                ],
                               ),
                             ),
-                          ),
-                          child: Row(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.all(4.0),
-                                child: Icon(
-                                  Icons.payment_outlined,
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                  size: 24,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  'Autobilling',
-                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                        fontSize: 16,
-                                      ),
-                                ),
-                              ),
-                              Switch(
-                                value: autobillingEnabled,
-                                onChanged: (value) async {
-                                  try {
-                                    await FirebaseFirestore.instance
-                                        .collection('users')
-                                        .doc(user!.uid)
-                                        .update({'autobilling_enabled': value});
-                                    if (kDebugMode) {
-                                      print('Autobilling toggled to: $value');
-                                    }
-                                  } catch (e) {
-                                    if (kDebugMode) {
-                                      print('Error updating autobilling: $e');
-                                    }
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Failed to update autobilling: $e')),
-                                    );
-                                  }
-                                },
-                                activeColor: Colors.green,
-                              ),
-                            ],
-                          ),
+                          ],
                         ),
-                        // Theme Toggle Row
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16.0,
-                            vertical: 12.0,
-                          ),
-                          child: Row(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.all(4.0),
-                                child: Icon(
-                                  Icons.dark_mode_outlined,
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                  size: 24,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  'Dark Mode',
-                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                        fontSize: 16,
-                                      ),
-                                ),
-                              ),
-                              Switch(
-                                value: themeProvider.themeMode == ThemeMode.dark,
-                                onChanged: (value) {
-                                  themeProvider.toggleTheme(value);
-                                },
-                                activeColor: Colors.green,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Logout Button
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12.0),
-                        ),
-                        elevation: 4,
-                        shadowColor: Colors.grey.withOpacity(0.3),
-                        padding: const EdgeInsets.symmetric(vertical: 12.0),
-                        minimumSize: const Size(double.infinity, 48),
                       ),
-                      onPressed: () async {
-                        try {
-                          await FirebaseAuth.instance.signOut();
-                          if (kDebugMode) {
-                            print('User signed out');
-                          }
-                          await FirebaseAuth.instance.signInAnonymously();
-                        } catch (e) {
-                          if (kDebugMode) {
-                            print('Error signing out: $e');
-                          }
-                          showDialog(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12.0),
-                              ),
-                              title: const Text('Error'),
-                              content: Text('Failed to sign out: $e'),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.of(context).pop(),
-                                  child: const Text('OK'),
+                      // Logout Button
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16.0, vertical: 8.0),
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12.0),
+                            ),
+                            elevation: 4,
+                            shadowColor: Colors.grey.withOpacity(0.3),
+                            padding: const EdgeInsets.symmetric(vertical: 12.0),
+                            minimumSize: const Size(double.infinity, 48),
+                          ),
+                          onPressed: () async {
+                            try {
+                              await FirebaseAuth.instance.signOut();
+                              if (kDebugMode) {
+                                print('User signed out');
+                              }
+                              await FirebaseAuth.instance.signInAnonymously();
+                            } catch (e) {
+                              if (kDebugMode) {
+                                print('Error signing out: $e');
+                              }
+                              showDialog(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12.0),
+                                  ),
+                                  title: const Text('Error'),
+                                  content: Text('Failed to sign out: $e'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(),
+                                      child: const Text('OK'),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          );
-                        }
-                      },
-                      child: Text(
-                        'Log Out',
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              fontSize: 16,
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
+                              );
+                            }
+                          },
+                          child: Text(
+                            'Log Out',
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelLarge
+                                ?.copyWith(
+                                  fontSize: 16,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
-    ));
+                );
+              },
+            ),
+          ),
+        ));
   }
 
   Widget _buildDetailRow(BuildContext context, String label, String value) {
@@ -3356,7 +3532,8 @@ Widget _buildMyAccountScreen(BuildContext context) {
     );
   }
 
-  void _showEditUserDetailsDialog(BuildContext context, String currentName, String currentPhone) {
+  void _showEditUserDetailsDialog(
+      BuildContext context, String currentName, String currentPhone) {
     final nameController = TextEditingController(text: currentName);
     final phoneController = TextEditingController(text: currentPhone);
     final formKey = GlobalKey<FormState>();
@@ -3421,7 +3598,8 @@ Widget _buildMyAccountScreen(BuildContext context) {
                       'phone': phoneController.text.trim(),
                     });
                     if (kDebugMode) {
-                      print('User details updated: ${nameController.text}, ${phoneController.text}');
+                      print(
+                          'User details updated: ${nameController.text}, ${phoneController.text}');
                     }
                     Navigator.of(context).pop();
                   }
@@ -3441,6 +3619,7 @@ Widget _buildMyAccountScreen(BuildContext context) {
       ),
     );
   }
+
   Widget _buildQuotesScreen() {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
@@ -3684,23 +3863,52 @@ Widget _buildMyAccountScreen(BuildContext context) {
   }
 
   Future<void> fetchTrendingTopics() async {
-    setState(() {
-      trendingTopics = [
-        'Insurance in Kenya: The Future',
-        'Top Insurance Companies in Kenya',
-        'Health Insurance in Kenya: Trends and Updates',
-      ];
-    });
+    try {
+      final apiKey = 'YOUR_NEWS_API_KEY'; // Replace with your News API key
+      final url =
+          'https://newsapi.org/v2/everything?q=insurance+Kenya+trending&apiKey=$apiKey';
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final articles = jsonDecode(response.body)['articles'] as List<dynamic>;
+        setState(() {
+          trendingTopics = articles; // Store entire article objects
+        });
+      } else {
+        throw Exception(
+            'Failed to fetch trending topics: ${response.statusCode}');
+      }
+    } catch (e) {
+      setState(() {
+        trendingTopics = []; // Fallback to empty list on error
+      });
+      print('Error fetching trending topics: $e');
+    }
   }
 
   Future<void> fetchBlogPosts() async {
-    setState(() {
-      blogPosts = [
-        '5 Tips for Choosing the Right Health Insurance in Kenya',
-        'How to Save on Car Insurance Premiums in Kenya',
-        'The Importance of Life Insurance in Kenya: A Growing Need',
-      ];
-    });
+    try {
+      final apiKey = 'YOUR_NEWS_API_KEY'; // Replace with your News API key
+      final url =
+          'https://newsapi.org/v2/everything?q=insurance+Kenya+blog&apiKey=$apiKey';
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final articles = jsonDecode(response.body)['articles'] as List<dynamic>;
+        setState(() {
+          blogPosts = articles
+              .map<String>((article) => article['title']?.toString() ?? '')
+              .toList();
+        });
+      } else {
+        throw Exception('Failed to fetch blog posts: ${response.statusCode}');
+      }
+    } catch (e) {
+      setState(() {
+        blogPosts = []; // Fallback to empty list on error
+      });
+      print('Error fetching blog posts: $e');
+    }
   }
 
 // Add this method inside _InsuranceHomeScreenState
@@ -4023,15 +4231,35 @@ Widget _buildMyAccountScreen(BuildContext context) {
                                                 borderRadius:
                                                     BorderRadius.circular(12),
                                               ),
-                                              child: ListTile(
-                                                title: Text(
-                                                  trendingTopics[index]
-                                                      .toString()
-                                                      .split('.')
-                                                      .last,
+                                              child: ActionChip(
+                                                label: Text(
+                                                  trendingTopics[index].title ??
+                                                      trendingTopics[index]
+                                                          .toString()
+                                                          .split('.')
+                                                          .last,
                                                   style: Theme.of(context)
                                                       .textTheme
                                                       .bodyMedium,
+                                                ),
+                                                onPressed: () {
+                                                  Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (context) =>
+                                                          WebViewPage(
+                                                        url: trendingTopics[
+                                                                    index]
+                                                                .url ??
+                                                            'https://newsapi.org',
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
+                                                elevation: 4,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
                                                 ),
                                               ),
                                             ),
@@ -4068,15 +4296,33 @@ Widget _buildMyAccountScreen(BuildContext context) {
                                                 borderRadius:
                                                     BorderRadius.circular(12),
                                               ),
-                                              child: ListTile(
-                                                title: Text(
-                                                  blogPosts[index]
-                                                      .toString()
-                                                      .split('.')
-                                                      .last,
+                                              child: ActionChip(
+                                                label: Text(
+                                                  blogPosts[index]['title'] ??
+                                                      blogPosts[index]
+                                                          .toString()
+                                                          .split('.')
+                                                          .last,
                                                   style: Theme.of(context)
                                                       .textTheme
                                                       .bodyMedium,
+                                                ),
+                                                onPressed: () {
+                                                  Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (context) =>
+                                                          WebViewPage(
+                                                        url: blogPosts[index] ??
+                                                            'https://newsapi.org',
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
+                                                elevation: 4,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
                                                 ),
                                               ),
                                             ),
@@ -5441,218 +5687,241 @@ Widget _buildMyAccountScreen(BuildContext context) {
     }
   }
 
-
-
 // Function to show the payment dialog
-Future<void> showPaymentDialog(BuildContext context) async {
-  String _paymentMethod = 'mpesa';
-  String _phoneNumber = '';
-  String _amount = '';
-  bool _autoBilling = false;
-  final _formKey = GlobalKey<FormState>();
-  final secureStorage = const FlutterSecureStorage();
+  Future<void> showPaymentDialog(BuildContext context) async {
+    String _paymentMethod = 'mpesa';
+    String _phoneNumber = '';
+    String _amount = '';
+    bool _autoBilling = false;
+    final _formKey = GlobalKey<FormState>();
+    final secureStorage = const FlutterSecureStorage();
 
-  await showDialog(
-    context: context,
-    builder: (dialogContext) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
-        title: const Text('Make a Payment'),
-        content: SingleChildScrollView(
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  decoration: const InputDecoration(labelText: 'Amount (KES)'),
-                  keyboardType: TextInputType.number,
-                  validator: (value) => double.tryParse(value ?? '') == null ? 'Enter a valid amount' : null,
-                  onSaved: (value) => _amount = value!,
-                ),
-                const SizedBox(height: 16),
-                const Text('Select Payment Method', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisSpacing: 8,
-                  mainAxisSpacing: 8,
-                  childAspectRatio: 1.5,
-                  children: [
-                    GridTile(
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() => _paymentMethod = 'mpesa');
-                        },
-                        child: Card(
-                          color: _paymentMethod == 'mpesa' ? Colors.blue.shade100 : Colors.white,
-                          elevation: _paymentMethod == 'mpesa' ? 8 : 2,
-                          child: const Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.phone, size: 40, color: Colors.green),
-                                SizedBox(height: 8),
-                                Text('M-Pesa', style: TextStyle(fontSize: 16)),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    GridTile(
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() => _paymentMethod = 'paystack');
-                        },
-                        child: Card(
-                          color: _paymentMethod == 'paystack' ? Colors.blue.shade100 : Colors.white,
-                          elevation: _paymentMethod == 'paystack' ? 8 : 2,
-                          child: const Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.credit_card, size: 40, color: Colors.blue),
-                                SizedBox(height: 8),
-                                Text('Paystack', style: TextStyle(fontSize: 16)),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (_paymentMethod == 'paystack')
-                  CheckboxListTile(
-                    title: const Text('Enable Auto-Billing'),
-                    value: _autoBilling,
-                    onChanged: (value) {
-                      setState(() => _autoBilling = value!);
-                    },
-                  ),
-                if (_paymentMethod == 'mpesa')
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Make a Payment'),
+          content: SingleChildScrollView(
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
                   TextFormField(
-                    decoration: const InputDecoration(labelText: 'Phone Number'),
-                    keyboardType: TextInputType.phone,
-                    validator: (value) => value!.startsWith('254') && value.length == 12 ? null : 'Enter a valid phone number (e.g., 254712345678)',
-                    onSaved: (value) => _phoneNumber = value!,
+                    decoration:
+                        const InputDecoration(labelText: 'Amount (KES)'),
+                    keyboardType: TextInputType.number,
+                    validator: (value) => double.tryParse(value ?? '') == null
+                        ? 'Enter a valid amount'
+                        : null,
+                    onSaved: (value) => _amount = value!,
                   ),
-              ],
+                  const SizedBox(height: 16),
+                  const Text('Select Payment Method',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                    childAspectRatio: 1.5,
+                    children: [
+                      GridTile(
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() => _paymentMethod = 'mpesa');
+                          },
+                          child: Card(
+                            color: _paymentMethod == 'mpesa'
+                                ? Colors.blue.shade100
+                                : Colors.white,
+                            elevation: _paymentMethod == 'mpesa' ? 8 : 2,
+                            child: const Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.phone,
+                                      size: 40, color: Colors.green),
+                                  SizedBox(height: 8),
+                                  Text('M-Pesa',
+                                      style: TextStyle(fontSize: 16)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      GridTile(
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() => _paymentMethod = 'paystack');
+                          },
+                          child: Card(
+                            color: _paymentMethod == 'paystack'
+                                ? Colors.blue.shade100
+                                : Colors.white,
+                            elevation: _paymentMethod == 'paystack' ? 8 : 2,
+                            child: const Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.credit_card,
+                                      size: 40, color: Colors.blue),
+                                  SizedBox(height: 8),
+                                  Text('Paystack',
+                                      style: TextStyle(fontSize: 16)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_paymentMethod == 'paystack')
+                    CheckboxListTile(
+                      title: const Text('Enable Auto-Billing'),
+                      value: _autoBilling,
+                      onChanged: (value) {
+                        setState(() => _autoBilling = value!);
+                      },
+                    ),
+                  if (_paymentMethod == 'mpesa')
+                    TextFormField(
+                      decoration:
+                          const InputDecoration(labelText: 'Phone Number'),
+                      keyboardType: TextInputType.phone,
+                      validator: (value) => value!.startsWith('254') &&
+                              value.length == 12
+                          ? null
+                          : 'Enter a valid phone number (e.g., 254712345678)',
+                      onSaved: (value) => _phoneNumber = value!,
+                    ),
+                ],
+              ),
             ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                if (_formKey.currentState!.validate()) {
+                  _formKey.currentState!.save();
+                  final result = await _initializePayment(
+                    'cover123',
+                    _amount,
+                    _paymentMethod,
+                    phoneNumber: _phoneNumber,
+                    autoBilling: _autoBilling,
+                    context: dialogContext,
+                  );
+                  Navigator.pop(dialogContext); // Close dialog
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                        content: Text(result == 'completed'
+                            ? 'Payment successful'
+                            : 'Payment failed')),
+                  );
+                }
+              },
+              child: const Text('Pay'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () async {
-              if (_formKey.currentState!.validate()) {
-                _formKey.currentState!.save();
-                final result = await _initializePayment(
-                  'cover123',
-                  _amount,
-                  _paymentMethod,
-                  phoneNumber: _phoneNumber,
-                  autoBilling: _autoBilling,
-                  context: dialogContext,
-                );
-                Navigator.pop(dialogContext); // Close dialog
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(result == 'completed' ? 'Payment successful' : 'Payment failed')),
-                );
-              }
-            },
-            child: const Text('Pay'),
-          ),
-        ],
       ),
-    ),
-  );
-}
+    );
+  }
 
 // Payment initialization function
-Future<String> _initializePayment(
-  String coverId,
-  String amount,
-  String paymentMethod, {
-  String? phoneNumber,
-  bool autoBilling = false,
-  required BuildContext context,
-}) async {
-  try {
-    final parsedAmount = double.tryParse(amount);
-    if (parsedAmount == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid amount')),
-      );
-      return 'failed';
-    }
-
-    if (paymentMethod == 'mpesa') {
-      if (phoneNumber == null || !phoneNumber.startsWith('254') || phoneNumber.length != 12) {
+  Future<String> _initializePayment(
+    String coverId,
+    String amount,
+    String paymentMethod, {
+    String? phoneNumber,
+    bool autoBilling = false,
+    required BuildContext context,
+  }) async {
+    try {
+      final parsedAmount = double.tryParse(amount);
+      if (parsedAmount == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invalid phone number')),
+          const SnackBar(content: Text('Invalid amount')),
         );
         return 'failed';
       }
-      final success = await _initiateMpesaPayment(phoneNumber, parsedAmount);
-      return success ? 'completed' : 'failed';
-    } else if (paymentMethod == 'paystack') {
-      final success = await _initiatePaystackPayment(parsedAmount, autoBilling);
-      if (success && autoBilling) {
-        final cover = Cover(
-          id: coverId,
-          premium: parsedAmount,
-          billingFrequency: 'monthly',
-          formData: {'email': userDetails['email'] ?? '', 'name': 'User Name'},
-          name: '',
-          insuredItemId: '',
-          companyId: '',
-          type: PolicyType(id: '', name: '', description: ''),
-          subtype: PolicySubtype(id: '', name: '', policyTypeId: '', description: ''),
-          coverageType: CoverageType(id: '', name: '', description: ''),
-          status: CoverStatus.pending,
-          pdfTemplateKey: '',
-          paymentStatus: '',
-          startDate: DateTime.now(),
+
+      if (paymentMethod == 'mpesa') {
+        if (phoneNumber == null ||
+            !phoneNumber.startsWith('254') ||
+            phoneNumber.length != 12) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Invalid phone number')),
+          );
+          return 'failed';
+        }
+        final success = await _initiateMpesaPayment(phoneNumber, parsedAmount);
+        return success ? 'completed' : 'failed';
+      } else if (paymentMethod == 'paystack') {
+        final success =
+            await _initiatePaystackPayment(parsedAmount, autoBilling);
+        if (success && autoBilling) {
+          final cover = Cover(
+            id: coverId,
+            premium: parsedAmount,
+            billingFrequency: 'monthly',
+            formData: {
+              'email': userDetails['email'] ?? '',
+              'name': 'User Name'
+            },
+            name: '',
+            insuredItemId: '',
+            companyId: '',
+            type: PolicyType(id: '', name: '', description: ''),
+            subtype: PolicySubtype(
+                id: '', name: '', policyTypeId: '', description: ''),
+            coverageType: CoverageType(id: '', name: '', description: ''),
+            status: CoverStatus.pending,
+            pdfTemplateKey: '',
+            paymentStatus: '',
+            startDate: DateTime.now(),
+          );
+          await _schedulePaystackAutoBilling(cover);
+        }
+        return success ? 'completed' : 'failed';
+      } else {
+        final response = await http.post(
+          Uri.parse('https://api.payment-gateway.com/v1/payments'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer your-payment-api-key',
+          },
+          body: jsonEncode({
+            'coverId': coverId,
+            'amount': parsedAmount,
+            'currency': 'KES',
+            'description': 'Insurance cover payment',
+          }),
         );
-        await _schedulePaystackAutoBilling(cover);
+
+        return response.statusCode == 200 ? 'completed' : 'failed';
       }
-      return success ? 'completed' : 'failed';
-    } else {
-      final response = await http.post(
-        Uri.parse('https://api.payment-gateway.com/v1/payments'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer your-payment-api-key',
-        },
-        body: jsonEncode({
-          'coverId': coverId,
-          'amount': parsedAmount,
-          'currency': 'KES',
-          'description': 'Insurance cover payment',
-        }),
+    } catch (e) {
+      if (kDebugMode) {
+        print('Payment initialization error: $e');
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Payment initialization error: $e')),
       );
-
-      return response.statusCode == 200 ? 'completed' : 'failed';
+      return 'failed';
     }
-  } catch (e) {
-    if (kDebugMode) {
-      print('Payment initialization error: $e');
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Payment initialization error: $e')),
-    );
-    return 'failed';
   }
-}
-
-
 
   Future<void> _loadCachedPdfTemplates() async {
     try {
