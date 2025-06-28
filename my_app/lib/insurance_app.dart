@@ -3118,6 +3118,36 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                         },
                       ),
                       const SizedBox(height: 24),
+                      // mult-layered companies we work with logo carousel
+                      Container(
+                        child: CompaniesCarousel(
+                          companies: [
+                            company_models.Company(
+                              id: '1',
+                              name: 'Company A',
+                              logoUrl: 'logos/company_a.png',
+                              pdfTemplateKey: ['template_a'],
+                            ),
+                            company_models.Company(
+                              id: '2',
+                              name: 'Company B',
+                              logoUrl: 'logos/company_b.png',
+                              pdfTemplateKey: ['template_b'],
+                            ),
+                            company_models.Company(
+                              id: '3',
+                              name: 'Company C',
+                              logoUrl: 'logos/company_c.png',
+                              pdfTemplateKey: ['template_c'],
+                            ),
+                          ],
+                          onCompanySelected: (company) {
+                            // Handle company selection here if needed
+                          },
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
                       ElevatedButton(
                         onPressed: _isOcrLoading || _isLoadingItems
                             ? null
@@ -6431,6 +6461,73 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     }
     return {};
   }
+}
+
+class CompaniesCarousel {
+  // mult-layer carousel for companies that moves horizontally in different layers add directions
+
+  final List<company_models.Company> companies;
+  final Function(company_models.Company) onCompanySelected;
+  final double itemWidth;
+
+  CompaniesCarousel({
+    required this.companies,
+    required this.onCompanySelected,
+    this.itemWidth = 150.0,
+  });
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 200,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: companies.length,
+        itemBuilder: (context, index) {
+          final company = companies[index];
+          return GestureDetector(
+            onTap: () => onCompanySelected(company),
+            child: Container(
+              width: itemWidth,
+              margin: const EdgeInsets.symmetric(horizontal: 8.0),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12.0),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 4.0,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircleAvatar(
+                    radius: 40,
+                    backgroundImage:
+                        NetworkImage(company.logoUrl ?? 'https://via.placeholder.com/80'),
+                  ),
+                  const SizedBox(height: 8.0),
+                  Text(
+                    company.name,
+                    style: GoogleFonts.lora(
+                      fontSize: 16.0,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF1B263B),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+
+
 }
 
 // Color provider

@@ -41,6 +41,7 @@ class Company {
     // Add more as needed
   ];
   final String? icon; // Optional icon field
+  final String? logoUrl; // URL for the company logo
 
   Company({
     required this.id,
@@ -48,7 +49,8 @@ class Company {
     required this.pdfTemplateKey,
     this.coverageType,
     this.policySubtype,
-    this.icon,
+    this.icon, 
+    this.logoUrl,
   });
   Map<String, dynamic> toJson() => {
         'id': id,

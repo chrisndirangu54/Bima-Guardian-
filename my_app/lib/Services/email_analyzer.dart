@@ -1,11 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:googleapis/gmail/v1.dart' as gmail;
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:http/http.dart' as http;
 import 'package:my_app/Models/cover.dart';
 import 'dart:convert';
-import 'package:my_app/insurance_app.dart';
-import 'package:my_app/Models/policy.dart';
 
 // Assuming Cover class and ClaimStatus enum are defined as provided
 
@@ -132,7 +131,9 @@ class EmailAnalyzer {
         }
       }
     } catch (e) {
-      print('Error processing emails: $e');
+      if (kDebugMode) {
+        print('Error processing emails: $e');
+      }
     }
   }
 }
