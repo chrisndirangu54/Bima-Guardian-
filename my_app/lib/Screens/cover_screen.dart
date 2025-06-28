@@ -877,9 +877,9 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
                     try {
                       final companies = await InsuranceHomeScreen.getCompanies();
                       final company = companies.firstWhere(
-                        (c) => c.name == _selectedCompany,
+                        (c) => (c as Company).name == _selectedCompany,
                         orElse: () => throw Exception('Company not found'),
-                      );
+                      ) as Company;
                       final cachedPdfTemplates = await InsuranceHomeScreen.getCachedPdfTemplates();
                       final pdfTemplateKey = company.pdfTemplateKey.firstWhere(
                         (key) => cachedPdfTemplates.containsKey(key),

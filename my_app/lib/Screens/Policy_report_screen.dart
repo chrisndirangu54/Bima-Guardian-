@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:encrypt/encrypt.dart' as encrypt;
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -28,42 +29,44 @@ class _CoverReportScreenState extends State<CoverReportScreen> {
     _loadCovers();
   }
 
-  Future<void> _loadCovers() async {
-    String? data = await secureStorage.read(key: 'policies');
-    final key = encrypt.Key.fromLength(32);
-    final iv = encrypt.IV.fromLength(16);
-    final encrypter = encrypt.Encrypter(encrypt.AES(key));
-    final decrypted = encrypter.decrypt64(data!, iv: iv);
+Future<void> _loadCovers() async {
+  try {
+    // Reference to the Firestore collection
+    final QuerySnapshot snapshot = await FirebaseFirestore.instance
+        .collection('covers')
+        .get();
+
     setState(() {
-      covers =
-          (jsonDecode(decrypted) as List)
-              .map(
-                (item) => Cover(
-                  id: item['id'],
-                  name: item['name'], // Added the required 'name' parameter
-                  type: item['type'],
-                  subtype: item['subtype'],
-                  companyId: item['company'],
-                  status: CoverStatus.values[item['status']],
-                  startDate: DateTime.parse(item['startDate']),
-
-                  formData: Map<String, String>.from(item['formData']),
-                  premium: item['premium'].toDouble(),
-                  billingFrequency: item['billingFrequency'],
-                  coverageType: item['coverageType'],
-                  insuredItemId: item['insuredItemId'],
-                  pdfTemplateKey: item['pdfTemplateKey'],
-                  expirationDate:
-                      item['endDate'] != null
-                          ? DateTime.parse(item['endDate'])
-                          : null,
-                  paymentStatus: '',
-                ),
-              )
-              .toList();
+      covers = snapshot.docs
+          .map((doc) {
+            final item = doc.data() as Map<String, dynamic>;
+            return Cover(
+              id: doc.id,
+              name: item['name'],
+              type: item['type'],
+              subtype: item['subtype'],
+              companyId: item['company'],
+              status: CoverStatus.values[item['status']],
+              startDate: DateTime.parse(item['startDate']),
+              formData: Map<String, String>.from(item['formData']),
+              premium: item['premium'].toDouble(),
+              billingFrequency: item['billingFrequency'],
+              coverageType: item['coverageType'],
+              insuredItemId: item['insuredItemId'],
+              pdfTemplateKey: item['pdfTemplateKey'],
+              expirationDate: item['endDate'] != null
+                  ? DateTime.parse(item['endDate'])
+                  : null,
+              paymentStatus: '',
+            );
+          })
+          .toList();
     });
+  } catch (e) {
+    print('Error loading covers: $e');
+    // Handle error appropriately
   }
-
+}
   Future<void> _exportAllPolicies() async {
     final pdf = pw.Document();
     for (var cover in covers) {
@@ -159,7 +162,7 @@ class _CoverReportScreenState extends State<CoverReportScreen> {
                                 ),
                               ),
                               pw.SizedBox(height: 20),
-                              pw.Text('Policy ID: ${cover.id}'),
+                              pw.Text('Cover ID: ${cover.id}'),
                               pw.Text('Type: ${cover.type}'),
                               pw.Text('Subtype: ${cover.subtype}'),
                               pw.Text('Company: ${cover.companyId}'),
@@ -191,7 +194,7 @@ class _CoverReportScreenState extends State<CoverReportScreen> {
                   await file.writeAsBytes(await pdf.save());
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Policy ${cover.id} exported as PDF'),
+                      content: Text('Cover ${cover.id} exported as PDF'),
                     ),
                   );
                 },

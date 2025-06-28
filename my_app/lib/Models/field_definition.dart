@@ -7,6 +7,8 @@ enum ExpectedType {
   custom,
   name,
   list,
+  upload,
+  grid, checkbox
 }
 
 class FieldDefinition {

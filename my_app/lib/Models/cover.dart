@@ -23,6 +23,7 @@ class Cover {
   final DateTime? endDate;
   final int extensionCount; // New field to track extensions
   final ClaimStatus claimStatus;
+  int claimCount = 0; // Default to 0, can be updated later  
 
   Cover({
     required this.id,

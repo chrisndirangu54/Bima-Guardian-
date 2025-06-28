@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:async/async.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:my_app/Screens/admin_panel.dart';
 import 'package:my_app/Screens/webview_page.dart';
 import 'package:my_app/Services/email_analyzer.dart';
@@ -352,7 +353,7 @@ class InsuranceHomeScreen extends StatefulWidget {
           id: '3',
           name: 'UnitedHealth',
           pdfTemplateKey: const [],
-        )
+        ),
       ];
     } catch (e) {
       if (kDebugMode) {
@@ -1216,7 +1217,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     CoverageType coverageType,
     String companyId,
     String pdfTemplateKey,
-    Map<String, String> details,
+    Map<String, String> details, [dynamic coverId = '']
   ) async {
     try {
       // Check for claim or extension flags
@@ -1274,7 +1275,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
               pdfFile,
               details['regno'] ?? '',
               details['vehicle_type'] ?? '',
-              '', // No coverId available in claim branch
+              coverId, // No coverId available in claim branch
             );
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -1302,7 +1303,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
               pdfFile,
               details['regno'] ?? '',
               details['vehicle_type'] ?? '',
-              '', // No coverId available in claim branch
+              coverId, // No coverId available in claim branch
             );
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -1393,16 +1394,16 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         if (pdfFile != null && context.mounted) {
           // Optionally preview the quote PDF
           if (await _previewPdf(pdfFile)) {
-            await _sendEmail(
-              companyId,
-              type.name,
-              subtype.name,
-              details,
-              pdfFile,
-              details['regno'] ?? '',
-              details['vehicle_type'] ?? '',
-              '', // Pass an empty string or appropriate coverId if available
-            );
+            //await _sendEmail(
+              //companyId,
+              //type.name,
+              //subtype.name,
+              //details,
+              //pdfFile,
+              //details['regno'] ?? '',
+              //details['vehicle_type'] ?? '',
+              //coverId, // Pass an empty string or appropriate coverId if available
+            //);
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Quote generated and sent.')),
             );
@@ -1998,6 +1999,11 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
         backgroundColor: Theme.of(context).colorScheme.surface,
         actionsPadding: const EdgeInsets.only(right: 16.0),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            bottom: Radius.circular(12.0),
+          ),
+        ),
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream:
@@ -2064,6 +2070,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                             'No active cover',
                             style: TextStyle(fontSize: 14, color: Colors.grey),
                           ),
+                    
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -2078,6 +2085,35 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                               size: 24,
                             ),
                           ),
+
+                        const SizedBox(width: 8),
+                        if (cover != null)
+                          Text(
+                            cover.claimCount > 0
+                                ? '${cover.claimCount} Claim(s)'
+                                : 'No Claims',
+                          ),
+                          const SizedBox(width: 8),
+                        if (cover != null)
+                          Text(
+                            cover.claimStatus == ClaimStatus.pending
+                                ? 'Claim Pending'
+                                : cover.claimStatus == ClaimStatus.approved
+                                    ? 'Claim Approved'
+                                    : cover.claimStatus == ClaimStatus.rejected
+                                        ? 'Claim Rejected'
+                                        : 'No Claims',
+                          ),
+                        const SizedBox(width: 8),
+                        if (cover != null)
+                          Text(
+                            cover.extensionCount > 0
+                                ? '${cover.extensionCount} Extension(s)'
+                                : 'No Extensions',
+                          ),
+
+
+                        
                         const SizedBox(width: 8),
                         Padding(
                           padding: const EdgeInsets.all(4.0),
@@ -2091,6 +2127,8 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                       ],
                     ),
                     onTap: () => _showCoverActionsDialog(context, item),
+
+                    
                   ),
                 ),
               );
@@ -2211,7 +2249,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     PolicySubtype? selectedSubtype = item.subtype;
     CoverageType? selectedCoverageType = item.coverageType;
     final details = Map<String, String>.from(item.details);
-
+    final cover = item.cover!;
     await showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -2228,9 +2266,9 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                   decoration:
                       const InputDecoration(labelText: 'Insurance Company'),
                   items: companies
-                      .map((company) => DropdownMenuItem(
-                            value: company['id'] as String,
-                            child: Text(company['name'] as String),
+                      .map((company) => DropdownMenuItem<String>(
+                            value: company['id'],
+                            child: Text(company['name']),
                           ))
                       .toList(),
                   onChanged: (value) {
@@ -2293,7 +2331,11 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                 // Get pdfTemplateKey from selected company
                 final selectedCompany = companies.firstWhere(
                   (company) => company['id'] == selectedCompanyId,
-                  orElse: () => {'pdfTemplateKey': 'default_template'},
+                  orElse: () => {
+                    'id': 'default',
+                    'name': 'Default Company',
+                    'pdfTemplateKey': 'default_template',
+                  },
                 );
                 final pdfTemplateKey =
                     selectedCompany['pdfTemplateKey'] ?? 'default_template';
@@ -2306,6 +2348,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                   selectedCompanyId!,
                   pdfTemplateKey,
                   details,
+                  cover.id
                 );
               },
             ),
@@ -2318,23 +2361,13 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
 // Dialog for renewing a cover with options to change company, subtype, or coverage type
   Future<void> _showRenewDialog(BuildContext context, InsuredItem item) async {
     // Same company list as extend
-    final companies = [
-      {
-        'id': 'COMP001',
-        'name': 'Insurer A',
-        'pdfTemplateKey': 'motor_template'
-      },
-      {
-        'id': 'COMP002',
-        'name': 'Insurer B',
-        'pdfTemplateKey': 'default_template'
-      },
-    ];
+    final companies = await InsuranceHomeScreen.getCompanies(
+    );
     final subtypes = await InsuranceHomeScreen.getPolicySubtypes(item.type.id);
     final coverageTypes =
         await InsuranceHomeScreen.getCoverageTypes(item.type.id);
 
-    String? selectedCompanyId = item.cover?.companyId ?? companies[0]['id'];
+    String? selectedCompanyId = item.cover?.companyId ?? companies[0].id;
     PolicySubtype? selectedSubtype = item.subtype;
     CoverageType? selectedCoverageType = item.coverageType;
     final details = Map<String, String>.from(item.details);
@@ -2356,8 +2389,8 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                       const InputDecoration(labelText: 'Insurance Company'),
                   items: companies
                       .map((company) => DropdownMenuItem(
-                            value: company['id'] as String,
-                            child: Text(company['name'] as String),
+                            value: company.id,
+                            child: Text(company.name),
                           ))
                       .toList(),
                   onChanged: (value) {
@@ -2419,12 +2452,17 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                 Navigator.pop(context);
                 // Get pdfTemplateKey from selected company
                 final selectedCompany = companies.firstWhere(
-                  (company) => company['id'] == selectedCompanyId,
-                  orElse: () => {'pdfTemplateKey': 'default_template'},
+                  (company) => company.id == selectedCompanyId,
+                  orElse: () => company_models.Company(
+                    id: 'default',
+                    name: 'Default Company',
+                    pdfTemplateKey: ['default_template'],
+                  ),
                 );
                 final pdfTemplateKey =
-                    selectedCompany['pdfTemplateKey'] as String? ??
-                        'default_template';
+                    (selectedCompany.pdfTemplateKey.isNotEmpty
+                        ? selectedCompany.pdfTemplateKey.first
+                        : 'default_template');
 
                 await handleCoverSubmission(
                   context,
@@ -2583,6 +2621,12 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         pdfTemplateKey,
         details,
       );
+      // Clear controllers after submission
+      _genericControllers.forEach((key, controller) {
+        controller.clear();
+      });
+      // increment claim count
+      cover.claimCount++;
     } catch (e) {
       if (kDebugMode) print('Error in FileClaimDialog: $e');
       if (context.mounted) {
@@ -2721,8 +2765,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                     shadowColor:
                         Theme.of(context).colorScheme.shadow.withOpacity(0.3),
                     shape: const RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.vertical(bottom: Radius.circular(16)),
+                      borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
                     ),
                     actions: [
                       if (userRole == UserRole.admin)
@@ -2819,7 +2862,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                 SliverToBoxAdapter(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                  children: [
                       BannerCarousel(
                         banners: [
                           BannerModel(
@@ -3161,6 +3204,10 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
           shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
           backgroundColor: Theme.of(context).colorScheme.surface,
           actionsPadding: const EdgeInsets.only(right: 16.0),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+        ),
+        // Removed the invalid 'bottom' property here
         ),
         body: SafeArea(
           child: Padding(
@@ -3501,8 +3548,8 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                 );
               },
             ),
-          ),
-        ));
+          )),);
+      
   }
 
   Widget _buildDetailRow(BuildContext context, String label, String value) {
@@ -3628,6 +3675,9 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         elevation: 4,
         shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
         backgroundColor: Theme.of(context).colorScheme.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+        ),
         actionsPadding: const EdgeInsets.only(right: 16.0),
         actions: [
           IconButton(
@@ -3724,26 +3774,15 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                     ),
                   ],
                 ),
-                onTap: () {
-                  showDialog(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12.0),
-                      ),
-                      title: Text('${quote.type} - ${quote.subtype}'),
-                      content: Text(
-                        'Premium: KES ${quote.premium.toStringAsFixed(2)}\nGenerated: ${quote.generatedAt.day}/${quote.generatedAt.month}/${quote.generatedAt.year}',
-                      ),
-                      actions: [
-                        TextButton(
-                          child: const Text('Close'),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+                onTap: () => handleCoverSubmission(
+                  context,
+                  PolicyType(id: '', name: quote.type, description: ''),
+                  PolicySubtype(id: '', name: quote.subtype, description: '', policyTypeId: ''),
+                  CoverageType(id: '', name: '', description: ''),
+                  quote.company,
+                  '', // pdfTemplateKey placeholder
+                  quote.formData,
+                ),
               ),
             ),
           );
@@ -3753,10 +3792,10 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
   }
 
   Widget _buildUpcomingScreen() {
-    final upcomingPolicies = policies.where((policy) {
-      if (policy.endDate == null) return false;
+    final upcomingPolicies = covers.where((cover) {
+      if (cover.endDate == null) return false;
       final daysUntilExpiration =
-          policy.endDate!.difference(DateTime.now()).inDays;
+          cover.endDate!.difference(DateTime.now()).inDays;
       return daysUntilExpiration <= 30 && daysUntilExpiration > 0;
     }).toList();
 
@@ -3767,15 +3806,19 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         elevation: 4,
         shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
         backgroundColor: Theme.of(context).colorScheme.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+        ),
         actionsPadding: const EdgeInsets.only(right: 16.0),
+        
       ),
       body: ListView.builder(
         padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
         itemCount: upcomingPolicies.length,
         itemBuilder: (context, index) {
-          final policy = upcomingPolicies[index];
+          final cover = upcomingPolicies[index];
           final daysUntilExpiration =
-              policy.endDate!.difference(DateTime.now()).inDays;
+              cover.endDate!.difference(DateTime.now()).inDays;
           return Padding(
             padding: const EdgeInsets.only(bottom: 8.0),
             child: Card(
@@ -3787,7 +3830,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
               child: ListTile(
                 contentPadding: const EdgeInsets.all(16.0),
                 title: Text(
-                  '${policy.type} - ${policy.subtype}',
+                  '${cover.type} - ${cover.subtype}',
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 16,
@@ -3833,7 +3876,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12.0),
                       ),
-                      title: Text('${policy.type} - ${policy.subtype}'),
+                      title: Text('${cover.type} - ${cover.subtype}'),
                       content: Text('Expires in $daysUntilExpiration days'),
                       actions: [
                         TextButton(
@@ -3843,10 +3886,22 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                         TextButton(
                           child: const Text('Renew'),
                           onPressed: () {
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text('Renewal initiated')),
+                            final insuredItem = insuredItems.firstWhere(
+                              (item) => item.id == cover.insuredItemId,
+                              orElse: () => InsuredItem(
+                                id: cover.insuredItemId,
+                                name: '',
+                                email: '',
+                                contact: '',
+                                type: cover.type,
+                                subtype: cover.subtype,
+                                coverageType: cover.coverageType,
+                                details: {}, kraPin: '',
+                              ),
+                            );
+                            _showCoverActionsDialog(
+                              context,
+                              insuredItem,
                             );
                           },
                         ),
@@ -3880,7 +3935,11 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       }
     } catch (e) {
       setState(() {
-        trendingTopics = []; // Fallback to empty list on error
+        trendingTopics = [
+          'Insurance trends in Kenya: What you need to know',
+          'Top insurance companies in Kenya for 2025',
+          'How technology is transforming insurance in Kenya',
+        ]; // Fallback to empty list on error
       });
       print('Error fetching trending topics: $e');
     }
@@ -3905,7 +3964,11 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       }
     } catch (e) {
       setState(() {
-        blogPosts = []; // Fallback to empty list on error
+        blogPosts = [
+          'Understanding Insurance Policies in Kenya',
+          'How to Choose the Right Insurance Provider',
+          'The Future of Insurance in Kenya: Trends and Predictions',
+        ]; // Fallback to empty list on error
       });
       print('Error fetching blog posts: $e');
     }
@@ -3973,7 +4036,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                   shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
                   shape: const RoundedRectangleBorder(
                     borderRadius:
-                        BorderRadius.vertical(bottom: Radius.circular(12)),
+                        BorderRadius.vertical(top: Radius.circular(12)),
                   ),
                   actions:
                       isDesktop ? [_buildNotificationButton(context)] : null,
@@ -4298,7 +4361,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                                               ),
                                               child: ActionChip(
                                                 label: Text(
-                                                  blogPosts[index]['title'] ??
+                                                  blogPosts[index] ??
                                                       blogPosts[index]
                                                           .toString()
                                                           .split('.')
@@ -6776,7 +6839,7 @@ class FieldConfig {
   static Future<FieldConfig> fromFieldDefinition(
       FieldDefinition fieldDef, String label,
       {String? fieldKey}) async {
-    String type;
+    String type = 'text'; // Provide a default value
     TextInputType? keyboardType;
     String? Function(String?)? validator;
     List<String>? options;
@@ -6861,6 +6924,42 @@ class FieldConfig {
           }
           return null;
         };
+        break;
+
+case ExpectedType.upload:
+  type = 'upload';
+  keyboardType = null;
+  validator = (value) => fieldDef.validator?.call(value ?? '');
+  // Add a controller or variable to hold the file URL or path
+
+  break;
+      case ExpectedType.checkbox:
+        type = 'checkbox';
+        keyboardType = null;
+        validator = (value) => fieldDef.validator?.call(value ?? '');
+        break;
+      case ExpectedType.grid:
+        type = 'grid';  
+        keyboardType = null;
+        // For grid, provide default options or handle dynamically as needed
+        options = ['Option 1', 'Option 2', 'Option 3'];
+
+        validator = (value) {
+          if (value == null || value.isEmpty) {
+            return fieldDef.isSuggested ? null : 'Selection required';
+          }
+          if (fieldDef.validator != null) {
+            final result = fieldDef.validator!.call(value);
+            if (result != null) return 'Invalid selection: $result';
+          }
+          return null;
+        };
+        break;
+
+      default:
+        type = 'text'; // Default to text for unsupported types
+        keyboardType = TextInputType.text;
+        validator = (value) => fieldDef.validator?.call(value ?? '');
         break;
     }
 
@@ -7038,6 +7137,81 @@ class FormFieldWidget extends StatelessWidget {
           onChanged: onChanged,
           initialValue: value,
           style: GoogleFonts.roboto(color: const Color(0xFF1B263B)),
+        );
+      case 'grid':
+        final options = config.options ?? [];
+        final icons = config.icons ?? [];
+        return Wrap(
+          spacing: 8.0,
+          runSpacing: 8.0,
+          children: List.generate(options.length, (index) {
+            final option = options[index];
+            final icon = icons.isNotEmpty ? icons[index] : '❓';
+            return ChoiceChip(
+              label: Row(
+                children: [
+                  if (icon.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4.0),
+                      child: Text(icon, style: const TextStyle(fontSize: 16)),
+                    ),
+                  Text(option.replaceAll('_', ' ').toUpperCase()),
+                ],
+              ),
+              selected: value == option,
+              onSelected: (selected) {
+                if (selected) {
+                  onChanged(option);
+                  logger.i('Grid ${config.key} changed to: $option');
+                }
+              },
+              selectedColor: colorProvider.color,
+              backgroundColor: const Color(0xFFD3D3D3),
+            );
+          }),
+        );
+      case 'upload':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              config.label,
+              style: GoogleFonts.roboto(color: const Color(0xFFD3D3D3)),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.upload_file),
+              label: const Text('Upload File'),
+              onPressed: () async {
+                FilePickerResult? result = await FilePicker.platform.pickFiles(
+                  type: FileType.custom,
+                  allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+                );
+                if (result != null && result.files.single.path != null) {
+                  final file = File(result.files.single.path!);
+                  final fileName = result.files.single.name;
+                  final storageRef = FirebaseStorage.instance
+                      .ref()
+                      .child('uploads/$fileName');
+                  final uploadTask = storageRef.putFile(file);
+                  final snapshot = await uploadTask.whenComplete(() {});
+                  final downloadUrl = await snapshot.ref.getDownloadURL();
+                  onChanged(downloadUrl);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('File uploaded successfully!')),
+                  );
+                }
+              },
+            ),
+            if (value != null && value!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: Text(
+                  'Uploaded file URL: $value',
+                  style: GoogleFonts.roboto(color: const Color(0xFF1B263B)),
+                ),
+              ),
+          ],
         );
       default:
         return TextFormField(

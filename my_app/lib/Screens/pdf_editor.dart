@@ -393,8 +393,37 @@ String? Function(String?) _getValidator(ExpectedType type, {ExpectedType? listIt
             if (result != null) return 'Invalid list item: $item';
           }
         }
-
         return null;
+      };
+
+    case ExpectedType.upload:
+      return (String? value) {
+        if (value == null || value.isEmpty) return null;
+        // Assuming upload validation is just checking if a file path is provided
+        return File(value).existsSync() ? null : 'File does not exist';
+      };
+    case ExpectedType.grid:
+      return (String? value) {
+        if (value == null || value.isEmpty) return null;
+        // Assuming grid validation is just checking if a grid structure is provided
+        try {
+          final grid = jsonDecode(value);
+          if (grid is List && grid.isNotEmpty) {
+            return null; // Valid grid structure
+          } else {
+            return 'Invalid grid structure';
+          }
+        } catch (e) {
+          return 'Invalid JSON format for grid';
+        }
+      };
+    case ExpectedType.checkbox:
+      return (String? value) {
+        if (value == null || value.isEmpty) return null;
+        // Assuming checkbox validation is just checking if a boolean value is provided
+        return (value.toLowerCase() == 'true' || value.toLowerCase() == 'false')
+            ? null
+            : 'Invalid checkbox value (must be true or false)';
       };
   }
 }
