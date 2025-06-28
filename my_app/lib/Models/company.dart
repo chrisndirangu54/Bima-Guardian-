@@ -8,6 +8,7 @@ class Company {
   final PolicySubtype? policySubtype; // Added missing field
   final bool? isClaim = false; // Added isClaim field
   final bool? isExtention = false; // Added isExtension field
+  final bool? isCancellation = false; // Added isCancellation field
 
   /// Static lists of all coverage types and policy subtypes
   static final List<CoverageType> allCoverageTypes = [

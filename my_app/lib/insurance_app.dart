@@ -1223,6 +1223,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       // Check for claim or extension flags
       final isClaim = details['isClaim'] == 'true';
       final isExtension = details['isExtension'] == 'true';
+      final isCancellation = details['isCancellation'] == 'true';
 
       // Create or select InsuredItem
       InsuredItem insuredItem;
@@ -1258,7 +1259,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         insuredItems.add(insuredItem); // Update global list
       }
 
-      if (isClaim) {
+      if (isClaim || isCancellation) {
         // Handle claim: skip premium and payment, send email
         if (kDebugMode) print('Processing claim for ${type.name}');
         File? pdfFile;
@@ -1278,9 +1279,16 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
               coverId, // No coverId available in claim branch
             );
             if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Claim email sent successfully.')),
-              );
+              if (isClaim) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Claim sent successfully.')),
+                );
+              } else if (isCancellation) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Cancellation sent successfully.')),
+                );
+              }
+
             }
           } else {
             if (context.mounted) {
@@ -2207,11 +2215,144 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
 // Cancel a cover by updating its status to inactive
   Future<void> _cancelCover(BuildContext context, Cover cover) async {
     try {
+    final companiesSnapshot = await FirebaseFirestore.instance
+        .collection('company')
+        .where('isCancellation', isEqualTo: true)
+        .get();
+    final companies = companiesSnapshot.docs
+        .map((doc) => doc.data() as Map<String, dynamic>)
+        .toList();
+
+    if (companies.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('No companies available for this action.')),
+      );
+      return;
+    }
       final updatedCover = cover.copyWith(status: CoverStatus.inactive);
       await FirebaseFirestore.instance
           .collection('covers')
           .doc(cover.id)
           .update(updatedCover.toJson());
+      final index = covers.indexWhere((c) => c.id == cover.id);
+      if (index != -1) {
+        covers[index] = updatedCover;
+      }
+     // Update the cover status to inactive
+      cover.status = CoverStatus.inactive; 
+      cover.expirationDate = DateTime.now(); // Set expiration date to now
+      cover.paymentStatus = 'canceled'; // Update payment status to canceled
+
+     // details for cancellation
+      // Get pdfTemplateKey from the first company in the companies list or default to 'default_template'
+      final pdfTemplateKey =
+          (companies.isNotEmpty && companies[0]['pdfTemplateKey'] != null)
+              ? companies[0]['pdfTemplateKey'] as String
+              : 'default_template';
+
+      // Fetch PDF template fields
+      Map<String, FieldDefinition> fields = {}; // Fallback to widget.fields
+      if (pdfTemplateKey != null) {
+        final pdfTemplate =
+            await InsuranceHomeScreen.getPDFTemplate(pdfTemplateKey);
+        if (pdfTemplate != null) {
+          // Use the fields property of the PDFTemplate object directly
+          fields = pdfTemplate.fields;
+        }
+      }
+
+      if (kDebugMode) {
+        print(
+            'Filing a cancellation with company: ${cover.companyId}, Fields: ${fields.keys}');
+      }
+
+      // Update controllers with new fields
+      fields.forEach((key, _) {
+        if (!_genericControllers.containsKey(key)) {
+          _genericControllers[key] = TextEditingController();
+        }
+      });
+
+      // Show dialog with generic fields
+      if (fields.isNotEmpty) {
+        final formKey = GlobalKey<FormState>();
+        if (!context.mounted) return;
+
+        final result = await showDialog<bool>(
+          context: context,
+          builder: (BuildContext dialogContext) {
+            return AlertDialog(
+              title: Text(
+                '${cover.type.name.toUpperCase()} Cancellation Details',
+                style: GoogleFonts.roboto(
+                    fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              content: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ...fields.entries.map((entry) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 16.0),
+                          child: TextFormField(
+                            controller: _genericControllers[entry.key],
+                            decoration: InputDecoration(labelText: entry.key),
+                            validator: entry.value.validator,
+                          ),
+                        );
+                      }).toList(),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (formKey.currentState!.validate()) {
+                      Navigator.of(dialogContext).pop(true);
+                    }
+                  },
+                  child: const Text('Submit'),
+                ),
+              ],
+            );
+          },
+        );
+
+        if (result != true) {
+          if (kDebugMode) print('Claim filing cancelled');
+          return;
+        }
+      }
+
+      // Collect generic fields data from controllers
+      final details = {
+        ..._genericControllers
+            .map((key, controller) => MapEntry(key, controller.text.trim())),
+      };
+
+      // Update the cover in the local list
+      setState(() {});
+      await _saveCovers();
+      if (context.mounted) {
+        await handleCoverSubmission(
+          context,
+          cover.type,
+          cover.subtype,
+          cover.coverageType,
+          cover.companyId,
+          cover.pdfTemplateKey,
+          details,
+          cover.id, // Pass the cover ID for cancellation
+        );
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Cover canceled successfully.')),
       );
@@ -2248,8 +2389,94 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     String? selectedCompanyId = item.cover?.companyId ?? companies[0]['id'];
     PolicySubtype? selectedSubtype = item.subtype;
     CoverageType? selectedCoverageType = item.coverageType;
-    final details = Map<String, String>.from(item.details);
-    final cover = item.cover!;
+    final cover = item.cover!; // Ensure cover is assigned before use
+
+      // Fetch PDF template fields
+      Map<String, FieldDefinition> fields = {}; // Fallback to widget.fields
+      if (pdfTemplateKey != null) {
+        final pdfTemplate =
+            await InsuranceHomeScreen.getPDFTemplate(pdfTemplateKey);
+        if (pdfTemplate != null) {
+          // Use the fields property of the PDFTemplate object directly
+          fields = pdfTemplate.fields;
+        }
+      }
+
+      if (kDebugMode) {
+        print(
+            'Filing an Extension with company: ${cover.companyId}, Fields: ${fields.keys}');
+      }
+
+      // Update controllers with new fields
+      fields.forEach((key, _) {
+        if (!_genericControllers.containsKey(key)) {
+          _genericControllers[key] = TextEditingController();
+        }
+      });
+
+      // Show dialog with generic fields
+      if (fields.isNotEmpty) {
+        final formKey = GlobalKey<FormState>();
+        if (!context.mounted) return;
+
+        final result = await showDialog<bool>(
+          context: context,
+          builder: (BuildContext dialogContext) {
+            return AlertDialog(
+              title: Text(
+                '${item.type.name.toUpperCase()} Extension Details',
+                style: GoogleFonts.roboto(
+                    fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              content: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ...fields.entries.map((entry) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 16.0),
+                          child: TextFormField(
+                            controller: _genericControllers[entry.key],
+                            decoration: InputDecoration(labelText: entry.key),
+                            validator: entry.value.validator,
+                          ),
+                        );
+                      }).toList(),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (formKey.currentState!.validate()) {
+                      Navigator.of(dialogContext).pop(true);
+                    }
+                  },
+                  child: const Text('Submit'),
+                ),
+              ],
+            );
+          },
+        );
+
+        if (result != true) {
+          if (kDebugMode) print('Extension filing cancelled');
+          return;
+        }
+      }
+
+      // Collect generic fields data from controllers
+      final details = {
+        ..._genericControllers
+            .map((key, controller) => MapEntry(key, controller.text.trim())),
+      };
     await showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -2492,7 +2719,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     try {
       // Fetch the company with cover.companyId and check isClaim == true
       final companySnapshot = await FirebaseFirestore.instance
-          .collection('companies')
+          .collection('company')
           .doc(cover.companyId)
           .get();
 
@@ -2506,8 +2733,9 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
 
       final companyData = companySnapshot.data() as Map<String, dynamic>;
       if (companyData['isClaim'] != true) {
-        if (kDebugMode)
+        if (kDebugMode) {
           print('Company does not support claims: ${cover.companyId}');
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
               content: Text('Selected company does not support claims.')),
@@ -2516,8 +2744,9 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       }
 
       if (!context.mounted) {
-        if (kDebugMode)
+        if (kDebugMode) {
           print('FileClaimDialog: context not mounted after fetching company');
+        }
         return;
       }
 
@@ -2536,9 +2765,10 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         }
       }
 
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
             'Filing claim with company: ${cover.companyId}, Fields: ${fields.keys}');
+      }
 
       // Update controllers with new fields
       fields.forEach((key, _) {

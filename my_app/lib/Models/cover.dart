@@ -12,10 +12,10 @@ class Cover {
   final PolicyType type;
   final PolicySubtype subtype;
   final CoverageType coverageType;
-  final CoverStatus status;
-  final DateTime? expirationDate;
+  CoverStatus status;
+  DateTime? expirationDate;
   final String pdfTemplateKey;
-  final String paymentStatus;
+  String paymentStatus;
   final double? premium;
   final String? billingFrequency;
   final Map<String, dynamic>? formData;
