@@ -19,10 +19,7 @@ import 'package:webview_flutter_web/webview_flutter_web.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env");
-  if (kIsWeb) {
-    WebViewPlatform.instance = WebWebViewPlatform();
-  }
+
   // Initialize Firebase
   try {
     await Firebase.initializeApp(
@@ -85,6 +82,9 @@ try {
     }
   }
 
+  if (kIsWeb) {
+    WebViewPlatform.instance = WebWebViewPlatform();
+  }
   // Initialize Stripe
   if (!kIsWeb) {
     try {
