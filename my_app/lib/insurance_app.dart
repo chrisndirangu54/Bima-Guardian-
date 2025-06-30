@@ -1211,14 +1211,14 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
   }
 
   Future<void> handleCoverSubmission(
-    BuildContext context,
-    PolicyType type,
-    PolicySubtype subtype,
-    CoverageType coverageType,
-    String companyId,
-    String pdfTemplateKey,
-    Map<String, String> details, [dynamic coverId = '']
-  ) async {
+      BuildContext context,
+      PolicyType type,
+      PolicySubtype subtype,
+      CoverageType coverageType,
+      String companyId,
+      String pdfTemplateKey,
+      Map<String, String> details,
+      [dynamic coverId = '']) async {
     try {
       // Check for claim or extension flags
       final isClaim = details['isClaim'] == 'true';
@@ -1285,10 +1285,10 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                 );
               } else if (isCancellation) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Cancellation sent successfully.')),
+                  const SnackBar(
+                      content: Text('Cancellation sent successfully.')),
                 );
               }
-
             }
           } else {
             if (context.mounted) {
@@ -1403,14 +1403,14 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
           // Optionally preview the quote PDF
           if (await _previewPdf(pdfFile)) {
             //await _sendEmail(
-              //companyId,
-              //type.name,
-              //subtype.name,
-              //details,
-              //pdfFile,
-              //details['regno'] ?? '',
-              //details['vehicle_type'] ?? '',
-              //coverId, // Pass an empty string or appropriate coverId if available
+            //companyId,
+            //type.name,
+            //subtype.name,
+            //details,
+            //pdfFile,
+            //details['regno'] ?? '',
+            //details['vehicle_type'] ?? '',
+            //coverId, // Pass an empty string or appropriate coverId if available
             //);
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Quote generated and sent.')),
@@ -2007,7 +2007,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
         backgroundColor: Theme.of(context).colorScheme.surface,
         actionsPadding: const EdgeInsets.only(right: 16.0),
-        shape: RoundedRectangleBorder(
+        shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(
             bottom: Radius.circular(12.0),
           ),
@@ -2025,8 +2025,18 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
           }
 
           final insuredItems = snapshot.data!.docs
-              .map((doc) =>
-                  InsuredItem.fromJson(doc.data() as Map<String, dynamic>))
+              .map((doc) {
+                try {
+                  return InsuredItem.fromJson(
+                      doc.data() as Map<String, dynamic>);
+                } catch (e) {
+                  if (kDebugMode) {
+                    print('Error parsing insured item ${doc.id}: $e');
+                  }
+                  return null;
+                }
+              })
+              .whereType<InsuredItem>()
               .toList();
 
           if (insuredItems.isEmpty) {
@@ -2039,7 +2049,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
             itemCount: insuredItems.length,
             itemBuilder: (context, index) {
               final item = insuredItems[index];
-              final cover = item.cover!;
+              final cover = item.cover;
               final daysUntilExpiration = cover?.expirationDate != null
                   ? cover!.expirationDate!.difference(DateTime.now()).inDays
                   : null;
@@ -2078,65 +2088,59 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                             'No active cover',
                             style: TextStyle(fontSize: 14, color: Colors.grey),
                           ),
-                    
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (cover != null && daysUntilExpiration != null)
-                          Padding(
-                            padding: const EdgeInsets.all(4.0),
-                            child: Icon(
-                              Icons.warning_amber_rounded,
-                              color: daysUntilExpiration <= 7
-                                  ? Colors.red
-                                  : Colors.amber,
-                              size: 24,
-                            ),
-                          ),
-
-                        const SizedBox(width: 8),
-                        if (cover != null)
-                          Text(
-                            cover.claimCount > 0
-                                ? '${cover.claimCount} Claim(s)'
-                                : 'No Claims',
-                          ),
-                          const SizedBox(width: 8),
-                        if (cover != null)
-                          Text(
-                            cover.claimStatus == ClaimStatus.pending
-                                ? 'Claim Pending'
-                                : cover.claimStatus == ClaimStatus.approved
-                                    ? 'Claim Approved'
-                                    : cover.claimStatus == ClaimStatus.rejected
-                                        ? 'Claim Rejected'
-                                        : 'No Claims',
-                          ),
-                        const SizedBox(width: 8),
-                        if (cover != null)
-                          Text(
-                            cover.extensionCount > 0
-                                ? '${cover.extensionCount} Extension(s)'
-                                : 'No Extensions',
-                          ),
-
-
-                        
-                        const SizedBox(width: 8),
-                        Padding(
-                          padding: const EdgeInsets.all(4.0),
-                          child: Icon(
-                            Icons.arrow_forward_ios,
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                            size: 20,
-                          ),
-                        ),
-                      ],
-                    ),
+                    trailing: cover != null
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (daysUntilExpiration != null)
+                                Padding(
+                                  padding: const EdgeInsets.all(4.0),
+                                  child: Icon(
+                                    Icons.warning_amber_rounded,
+                                    color: daysUntilExpiration <= 7
+                                        ? Colors.red
+                                        : Colors.amber,
+                                    size: 24,
+                                  ),
+                                ),
+                              const SizedBox(width: 8),
+                              Text(
+                                cover.claimCount > 0
+                                    ? '${cover.claimCount} Claim(s)'
+                                    : 'No Claims',
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                cover.claimStatus == ClaimStatus.pending
+                                    ? 'Claim Pending'
+                                    : cover.claimStatus == ClaimStatus.approved
+                                        ? 'Claim Approved'
+                                        : cover.claimStatus ==
+                                                ClaimStatus.rejected
+                                            ? 'Claim Rejected'
+                                            : 'No Claims',
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                cover.extensionCount > 0
+                                    ? '${cover.extensionCount} Extension(s)'
+                                    : 'No Extensions',
+                              ),
+                              const SizedBox(width: 8),
+                              Padding(
+                                padding: const EdgeInsets.all(4.0),
+                                child: Icon(
+                                  Icons.arrow_forward_ios,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                  size: 20,
+                                ),
+                              ),
+                            ],
+                          )
+                        : null,
                     onTap: () => _showCoverActionsDialog(context, item),
-
-                    
                   ),
                 ),
               );
@@ -2215,21 +2219,21 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
 // Cancel a cover by updating its status to inactive
   Future<void> _cancelCover(BuildContext context, Cover cover) async {
     try {
-    final companiesSnapshot = await FirebaseFirestore.instance
-        .collection('company')
-        .where('isCancellation', isEqualTo: true)
-        .get();
-    final companies = companiesSnapshot.docs
-        .map((doc) => doc.data() as Map<String, dynamic>)
-        .toList();
+      final companiesSnapshot = await FirebaseFirestore.instance
+          .collection('company')
+          .where('isCancellation', isEqualTo: true)
+          .get();
+      final companies = companiesSnapshot.docs
+          .map((doc) => doc.data() as Map<String, dynamic>)
+          .toList();
 
-    if (companies.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('No companies available for this action.')),
-      );
-      return;
-    }
+      if (companies.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('No companies available for this action.')),
+        );
+        return;
+      }
       final updatedCover = cover.copyWith(status: CoverStatus.inactive);
       await FirebaseFirestore.instance
           .collection('covers')
@@ -2239,12 +2243,12 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       if (index != -1) {
         covers[index] = updatedCover;
       }
-     // Update the cover status to inactive
-      cover.status = CoverStatus.inactive; 
+      // Update the cover status to inactive
+      cover.status = CoverStatus.inactive;
       cover.expirationDate = DateTime.now(); // Set expiration date to now
       cover.paymentStatus = 'canceled'; // Update payment status to canceled
 
-     // details for cancellation
+      // details for cancellation
       // Get pdfTemplateKey from the first company in the companies list or default to 'default_template'
       final pdfTemplateKey =
           (companies.isNotEmpty && companies[0]['pdfTemplateKey'] != null)
@@ -2391,92 +2395,92 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     CoverageType? selectedCoverageType = item.coverageType;
     final cover = item.cover!; // Ensure cover is assigned before use
 
-      // Fetch PDF template fields
-      Map<String, FieldDefinition> fields = {}; // Fallback to widget.fields
-      if (pdfTemplateKey != null) {
-        final pdfTemplate =
-            await InsuranceHomeScreen.getPDFTemplate(pdfTemplateKey);
-        if (pdfTemplate != null) {
-          // Use the fields property of the PDFTemplate object directly
-          fields = pdfTemplate.fields;
-        }
+    // Fetch PDF template fields
+    Map<String, FieldDefinition> fields = {}; // Fallback to widget.fields
+    if (pdfTemplateKey != null) {
+      final pdfTemplate =
+          await InsuranceHomeScreen.getPDFTemplate(pdfTemplateKey);
+      if (pdfTemplate != null) {
+        // Use the fields property of the PDFTemplate object directly
+        fields = pdfTemplate.fields;
       }
+    }
 
-      if (kDebugMode) {
-        print(
-            'Filing an Extension with company: ${cover.companyId}, Fields: ${fields.keys}');
+    if (kDebugMode) {
+      print(
+          'Filing an Extension with company: ${cover.companyId}, Fields: ${fields.keys}');
+    }
+
+    // Update controllers with new fields
+    fields.forEach((key, _) {
+      if (!_genericControllers.containsKey(key)) {
+        _genericControllers[key] = TextEditingController();
       }
+    });
 
-      // Update controllers with new fields
-      fields.forEach((key, _) {
-        if (!_genericControllers.containsKey(key)) {
-          _genericControllers[key] = TextEditingController();
-        }
-      });
+    // Show dialog with generic fields
+    if (fields.isNotEmpty) {
+      final formKey = GlobalKey<FormState>();
+      if (!context.mounted) return;
 
-      // Show dialog with generic fields
-      if (fields.isNotEmpty) {
-        final formKey = GlobalKey<FormState>();
-        if (!context.mounted) return;
-
-        final result = await showDialog<bool>(
-          context: context,
-          builder: (BuildContext dialogContext) {
-            return AlertDialog(
-              title: Text(
-                '${item.type.name.toUpperCase()} Extension Details',
-                style: GoogleFonts.roboto(
-                    fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              content: SingleChildScrollView(
-                child: Form(
-                  key: formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ...fields.entries.map((entry) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 16.0),
-                          child: TextFormField(
-                            controller: _genericControllers[entry.key],
-                            decoration: InputDecoration(labelText: entry.key),
-                            validator: entry.value.validator,
-                          ),
-                        );
-                      }).toList(),
-                    ],
-                  ),
+      final result = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext dialogContext) {
+          return AlertDialog(
+            title: Text(
+              '${item.type.name.toUpperCase()} Extension Details',
+              style:
+                  GoogleFonts.roboto(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            content: SingleChildScrollView(
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ...fields.entries.map((entry) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16.0),
+                        child: TextFormField(
+                          controller: _genericControllers[entry.key],
+                          decoration: InputDecoration(labelText: entry.key),
+                          validator: entry.value.validator,
+                        ),
+                      );
+                    }).toList(),
+                  ],
                 ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    if (formKey.currentState!.validate()) {
-                      Navigator.of(dialogContext).pop(true);
-                    }
-                  },
-                  child: const Text('Submit'),
-                ),
-              ],
-            );
-          },
-        );
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  if (formKey.currentState!.validate()) {
+                    Navigator.of(dialogContext).pop(true);
+                  }
+                },
+                child: const Text('Submit'),
+              ),
+            ],
+          );
+        },
+      );
 
-        if (result != true) {
-          if (kDebugMode) print('Extension filing cancelled');
-          return;
-        }
+      if (result != true) {
+        if (kDebugMode) print('Extension filing cancelled');
+        return;
       }
+    }
 
-      // Collect generic fields data from controllers
-      final details = {
-        ..._genericControllers
-            .map((key, controller) => MapEntry(key, controller.text.trim())),
-      };
+    // Collect generic fields data from controllers
+    final details = {
+      ..._genericControllers
+          .map((key, controller) => MapEntry(key, controller.text.trim())),
+    };
     await showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -2568,15 +2572,14 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                     selectedCompany['pdfTemplateKey'] ?? 'default_template';
 
                 await handleCoverSubmission(
-                  context,
-                  item.type,
-                  selectedSubtype!,
-                  selectedCoverageType!,
-                  selectedCompanyId!,
-                  pdfTemplateKey,
-                  details,
-                  cover.id
-                );
+                    context,
+                    item.type,
+                    selectedSubtype!,
+                    selectedCoverageType!,
+                    selectedCompanyId!,
+                    pdfTemplateKey,
+                    details,
+                    cover.id);
               },
             ),
           ],
@@ -2588,8 +2591,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
 // Dialog for renewing a cover with options to change company, subtype, or coverage type
   Future<void> _showRenewDialog(BuildContext context, InsuredItem item) async {
     // Same company list as extend
-    final companies = await InsuranceHomeScreen.getCompanies(
-    );
+    final companies = await InsuranceHomeScreen.getCompanies();
     final subtypes = await InsuranceHomeScreen.getPolicySubtypes(item.type.id);
     final coverageTypes =
         await InsuranceHomeScreen.getCoverageTypes(item.type.id);
@@ -2995,7 +2997,8 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                     shadowColor:
                         Theme.of(context).colorScheme.shadow.withOpacity(0.3),
                     shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+                      borderRadius:
+                          BorderRadius.vertical(bottom: Radius.circular(16)),
                     ),
                     actions: [
                       if (userRole == UserRole.admin)
@@ -3092,60 +3095,38 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                 SliverToBoxAdapter(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                      BannerCarousel(
-                        banners: [
-                          BannerModel(
-                            imagePath: 'banners/promo1.jpg',
-                            title: 'Promo 1',
-                            createdAt: DateTime.now(),
-                          ),
-                          BannerModel(
-                            imagePath: 'banners/promo2.jpg',
-                            title: 'Promo 2',
-                            createdAt: DateTime.now(),
-                          ),
-                          BannerModel(
-                            imagePath: 'banners/promo3.jpg',
-                            title: 'Promo 3',
-                            createdAt: DateTime.now(),
-                          ),
-                        ],
-                        onUpload: (File file) {
-                          if (kDebugMode) {
-                            print('New banner uploaded: ${file.path}');
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 24),
-                      // mult-layered companies we work with logo carousel
-                      Container(
-                        child: CompaniesCarousel(
-                          companies: [
-                            company_models.Company(
-                              id: '1',
-                              name: 'Company A',
-                              logoUrl: 'logos/company_a.png',
-                              pdfTemplateKey: ['template_a'],
+                    children: [
+                      SizedBox(
+                        height: 200, // Adjust height as needed
+                        child: BannerCarousel(
+                          banners: [
+                            BannerModel(
+                              imagePath: 'banners/promo1.jpg',
+                              title: 'Promo 1',
+                              createdAt: DateTime.now(),
                             ),
-                            company_models.Company(
-                              id: '2',
-                              name: 'Company B',
-                              logoUrl: 'logos/company_b.png',
-                              pdfTemplateKey: ['template_b'],
+                            BannerModel(
+                              imagePath: 'banners/promo2.jpg',
+                              title: 'Promo 2',
+                              createdAt: DateTime.now(),
                             ),
-                            company_models.Company(
-                              id: '3',
-                              name: 'Company C',
-                              logoUrl: 'logos/company_c.png',
-                              pdfTemplateKey: ['template_c'],
+                            BannerModel(
+                              imagePath: 'banners/promo3.jpg',
+                              title: 'Promo 3',
+                              createdAt: DateTime.now(),
                             ),
                           ],
-                          onCompanySelected: (company) {
-                            // Handle company selection here if needed
+                          onUpload: (File file) {
+                            if (kDebugMode) {
+                              print('New banner uploaded: ${file.path}');
+                            }
                           },
                         ),
                       ),
+
+                      const SizedBox(height: 24),
+                      // 3-layered companies we work with logo carousel
+
 
                       const SizedBox(height: 24),
                       ElevatedButton(
@@ -3187,6 +3168,9 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
+
+                      if (_selectedInsuredItem != null)
+
                       ElevatedButton(
                         onPressed: () {
                           navigateToCoverDetailScreen(
@@ -3457,184 +3441,130 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      appBar: AppBar(
+        title: const Text('My Account'),
+        elevation: 4,
+        shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
         backgroundColor: Theme.of(context).colorScheme.surface,
-        appBar: AppBar(
-          title: const Text('My Account'),
-          elevation: 4,
-          shadowColor: ThemeData().colorScheme.shadow.withOpacity(0.5),
-          backgroundColor: Theme.of(context).colorScheme.surface,
-          actionsPadding: const EdgeInsets.only(right: 16.0),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+        actionsPadding: const EdgeInsets.only(right: 16.0),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
         ),
         // Removed the invalid 'bottom' property here
-        ),
-        body: SafeArea(
+      ),
+      body: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: StreamBuilder<DocumentSnapshot>(
-              stream: user != null
-                  ? FirebaseFirestore.instance
-                      .collection('users')
-                      .doc(user.uid)
-                      .snapshots()
-                  : null,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
-                }
-                if (!snapshot.hasData || !snapshot.data!.exists) {
-                  return const Center(child: Text('User data not found'));
-                }
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: StreamBuilder<DocumentSnapshot>(
+          stream: user != null
+              ? FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(user.uid)
+                  .snapshots()
+              : null,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return Center(child: Text('Error: ${snapshot.error}'));
+            }
+            if (!snapshot.hasData || !snapshot.data!.exists) {
+              return const Center(child: Text('User data not found'));
+            }
 
-                final userData = snapshot.data!.data() as Map<String, dynamic>;
-                final String name = userData['name'] ?? 'N/A';
-                final String email = user?.email ?? 'N/A';
-                final String phone = userData['phone'] ?? 'N/A';
-                final bool autobillingEnabled =
-                    userData['autobilling_enabled'] ?? false;
+            final userData = snapshot.data!.data() as Map<String, dynamic>;
+            final String name = userData['name'] ?? 'N/A';
+            final String email = user?.email ?? 'N/A';
+            final String phone = userData['phone'] ?? 'N/A';
+            final bool autobillingEnabled =
+                userData['autobilling_enabled'] ?? false;
 
-                return SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // User Details Section
-                      Card(
-                        elevation: 4,
-                        shadowColor:
-                            ThemeData().colorScheme.shadow.withOpacity(0.5),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12.0),
-                        ),
-                        margin: const EdgeInsets.symmetric(
-                            horizontal: 16.0, vertical: 8.0),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'User Details',
+            return SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // User Details Section
+                  Card(
+                    elevation: 4,
+                    shadowColor:
+                        ThemeData().colorScheme.shadow.withOpacity(0.5),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.0),
+                    ),
+                    margin: const EdgeInsets.symmetric(
+                        horizontal: 16.0, vertical: 8.0),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'User Details',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                          const SizedBox(height: 12),
+                          _buildDetailRow(context, 'Name', name),
+                          _buildDetailRow(context, 'Email', email),
+                          _buildDetailRow(context, 'Phone', phone),
+                          const SizedBox(height: 12),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: () {
+                                _showEditUserDetailsDialog(
+                                    context, name, phone);
+                              },
+                              child: Text(
+                                'Edit Details',
                                 style: Theme.of(context)
                                     .textTheme
-                                    .titleMedium
+                                    .labelLarge
                                     ?.copyWith(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                      fontWeight: FontWeight.w600,
                                     ),
-                              ),
-                              const SizedBox(height: 12),
-                              _buildDetailRow(context, 'Name', name),
-                              _buildDetailRow(context, 'Email', email),
-                              _buildDetailRow(context, 'Phone', phone),
-                              const SizedBox(height: 12),
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton(
-                                  onPressed: () {
-                                    _showEditUserDetailsDialog(
-                                        context, name, phone);
-                                  },
-                                  child: Text(
-                                    'Edit Details',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelLarge
-                                        ?.copyWith(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .primary,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      // Settings Section
-                      Card(
-                        elevation: 4,
-                        shadowColor:
-                            ThemeData().colorScheme.shadow.withOpacity(0.5),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12.0),
-                        ),
-                        margin: const EdgeInsets.symmetric(
-                            horizontal: 16.0, vertical: 8.0),
-                        child: Column(
-                          children: [
-                            // Policy Reports Row
-                            Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(12.0),
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const CoverReportScreen(),
-                                    ),
-                                  );
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16.0,
-                                    vertical: 12.0,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    border: Border(
-                                      bottom: BorderSide(
-                                        color: Colors.grey[300]!,
-                                        width: 0.5,
-                                      ),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.all(4.0),
-                                        child: Icon(
-                                          Icons.description_outlined,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSurfaceVariant,
-                                          size: 24,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text(
-                                          'Policy Reports',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyLarge
-                                              ?.copyWith(
-                                                fontSize: 16,
-                                              ),
-                                        ),
-                                      ),
-                                      Padding(
-                                        padding: const EdgeInsets.all(4.0),
-                                        child: Icon(
-                                          Icons.arrow_forward_ios,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSurfaceVariant,
-                                          size: 18,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
                               ),
                             ),
-                            // Autobilling Toggle Row
-                            Container(
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Settings Section
+                  Card(
+                    elevation: 4,
+                    shadowColor:
+                        ThemeData().colorScheme.shadow.withOpacity(0.5),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.0),
+                    ),
+                    margin: const EdgeInsets.symmetric(
+                        horizontal: 16.0, vertical: 8.0),
+                    child: Column(
+                      children: [
+                        // Policy Reports Row
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12.0),
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const CoverReportScreen(),
+                                ),
+                              );
+                            },
+                            child: Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 16.0,
                                 vertical: 12.0,
@@ -3642,7 +3572,9 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                               decoration: BoxDecoration(
                                 border: Border(
                                   bottom: BorderSide(
-                                      color: Colors.grey[300]!, width: 0.5),
+                                    color: Colors.grey[300]!,
+                                    width: 0.5,
+                                  ),
                                 ),
                               ),
                               child: Row(
@@ -3650,7 +3582,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                                   Padding(
                                     padding: const EdgeInsets.all(4.0),
                                     child: Icon(
-                                      Icons.payment_outlined,
+                                      Icons.description_outlined,
                                       color: Theme.of(context)
                                           .colorScheme
                                           .onSurfaceVariant,
@@ -3660,7 +3592,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Text(
-                                      'Autobilling',
+                                      'Policy Reports',
                                       style: Theme.of(context)
                                           .textTheme
                                           .bodyLarge
@@ -3669,147 +3601,190 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                                           ),
                                     ),
                                   ),
-                                  Switch(
-                                    value: autobillingEnabled,
-                                    onChanged: (value) async {
-                                      try {
-                                        await FirebaseFirestore.instance
-                                            .collection('users')
-                                            .doc(user!.uid)
-                                            .update(
-                                                {'autobilling_enabled': value});
-                                        if (kDebugMode) {
-                                          print(
-                                              'Autobilling toggled to: $value');
-                                        }
-                                      } catch (e) {
-                                        if (kDebugMode) {
-                                          print(
-                                              'Error updating autobilling: $e');
-                                        }
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          SnackBar(
-                                              content: Text(
-                                                  'Failed to update autobilling: $e')),
-                                        );
-                                      }
-                                    },
-                                    activeColor: Colors.green,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            // Theme Toggle Row
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16.0,
-                                vertical: 12.0,
-                              ),
-                              child: Row(
-                                children: [
                                   Padding(
                                     padding: const EdgeInsets.all(4.0),
                                     child: Icon(
-                                      Icons.dark_mode_outlined,
+                                      Icons.arrow_forward_ios,
                                       color: Theme.of(context)
                                           .colorScheme
                                           .onSurfaceVariant,
-                                      size: 24,
+                                      size: 18,
                                     ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      'Dark Mode',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyLarge
-                                          ?.copyWith(
-                                            fontSize: 16,
-                                          ),
-                                    ),
-                                  ),
-                                  Switch(
-                                    value: themeProvider.themeMode ==
-                                        ThemeMode.dark,
-                                    onChanged: (value) {
-                                      themeProvider.toggleTheme(value);
-                                    },
-                                    activeColor: Colors.green,
                                   ),
                                 ],
                               ),
                             ),
-                          ],
+                          ),
                         ),
-                      ),
-                      // Logout Button
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16.0, vertical: 8.0),
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12.0),
+                        // Autobilling Toggle Row
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16.0,
+                            vertical: 12.0,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                  color: Colors.grey[300]!, width: 0.5),
                             ),
-                            elevation: 4,
-                            shadowColor: Colors.grey.withOpacity(0.3),
-                            padding: const EdgeInsets.symmetric(vertical: 12.0),
-                            minimumSize: const Size(double.infinity, 48),
                           ),
-                          onPressed: () async {
-                            try {
-                              await FirebaseAuth.instance.signOut();
-                              if (kDebugMode) {
-                                print('User signed out');
-                              }
-                              await FirebaseAuth.instance.signInAnonymously();
-                            } catch (e) {
-                              if (kDebugMode) {
-                                print('Error signing out: $e');
-                              }
-                              showDialog(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12.0),
-                                  ),
-                                  title: const Text('Error'),
-                                  content: Text('Failed to sign out: $e'),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.of(context).pop(),
-                                      child: const Text('OK'),
-                                    ),
-                                  ],
+                          child: Row(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.all(4.0),
+                                child: Icon(
+                                  Icons.payment_outlined,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                  size: 24,
                                 ),
-                              );
-                            }
-                          },
-                          child: Text(
-                            'Log Out',
-                            style: Theme.of(context)
-                                .textTheme
-                                .labelLarge
-                                ?.copyWith(
-                                  fontSize: 16,
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Autobilling',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyLarge
+                                      ?.copyWith(
+                                        fontSize: 16,
+                                      ),
                                 ),
+                              ),
+                              Switch(
+                                value: autobillingEnabled,
+                                onChanged: (value) async {
+                                  try {
+                                    await FirebaseFirestore.instance
+                                        .collection('users')
+                                        .doc(user!.uid)
+                                        .update({'autobilling_enabled': value});
+                                    if (kDebugMode) {
+                                      print('Autobilling toggled to: $value');
+                                    }
+                                  } catch (e) {
+                                    if (kDebugMode) {
+                                      print('Error updating autobilling: $e');
+                                    }
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                          content: Text(
+                                              'Failed to update autobilling: $e')),
+                                    );
+                                  }
+                                },
+                                activeColor: Colors.green,
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                    ],
+                        // Theme Toggle Row
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16.0,
+                            vertical: 12.0,
+                          ),
+                          child: Row(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.all(4.0),
+                                child: Icon(
+                                  Icons.dark_mode_outlined,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                  size: 24,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Dark Mode',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyLarge
+                                      ?.copyWith(
+                                        fontSize: 16,
+                                      ),
+                                ),
+                              ),
+                              Switch(
+                                value:
+                                    themeProvider.themeMode == ThemeMode.dark,
+                                onChanged: (value) {
+                                  themeProvider.toggleTheme(value);
+                                },
+                                activeColor: Colors.green,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                );
-              },
-            ),
-          )),);
-      
+                  // Logout Button
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0, vertical: 8.0),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12.0),
+                        ),
+                        elevation: 4,
+                        shadowColor: Colors.grey.withOpacity(0.3),
+                        padding: const EdgeInsets.symmetric(vertical: 12.0),
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                      onPressed: () async {
+                        try {
+                          await FirebaseAuth.instance.signOut();
+                          if (kDebugMode) {
+                            print('User signed out');
+                          }
+                          await FirebaseAuth.instance.signInAnonymously();
+                        } catch (e) {
+                          if (kDebugMode) {
+                            print('Error signing out: $e');
+                          }
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12.0),
+                              ),
+                              title: const Text('Error'),
+                              content: Text('Failed to sign out: $e'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.of(context).pop(),
+                                  child: const Text('OK'),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                      },
+                      child: Text(
+                        'Log Out',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              fontSize: 16,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      )),
+    );
   }
 
   Widget _buildDetailRow(BuildContext context, String label, String value) {
@@ -4037,7 +4012,11 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                 onTap: () => handleCoverSubmission(
                   context,
                   PolicyType(id: '', name: quote.type, description: ''),
-                  PolicySubtype(id: '', name: quote.subtype, description: '', policyTypeId: ''),
+                  PolicySubtype(
+                      id: '',
+                      name: quote.subtype,
+                      description: '',
+                      policyTypeId: ''),
                   CoverageType(id: '', name: '', description: ''),
                   quote.company,
                   '', // pdfTemplateKey placeholder
@@ -4070,7 +4049,6 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
           borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
         ),
         actionsPadding: const EdgeInsets.only(right: 16.0),
-        
       ),
       body: ListView.builder(
         padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
@@ -4156,7 +4134,8 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                                 type: cover.type,
                                 subtype: cover.subtype,
                                 coverageType: cover.coverageType,
-                                details: {}, kraPin: '',
+                                details: {},
+                                kraPin: '',
                               ),
                             );
                             _showCoverActionsDialog(
@@ -4177,9 +4156,11 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     );
   }
 
+  // Add your NewsAPI key here
+  static const String apiKey = 'your-newsapi-key-here';
+
   Future<void> fetchTrendingTopics() async {
     try {
-      final apiKey = 'YOUR_NEWS_API_KEY'; // Replace with your News API key
       final url =
           'https://newsapi.org/v2/everything?q=insurance+Kenya+trending&apiKey=$apiKey';
       final response = await http.get(Uri.parse(url));
@@ -4187,27 +4168,41 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       if (response.statusCode == 200) {
         final articles = jsonDecode(response.body)['articles'] as List<dynamic>;
         setState(() {
-          trendingTopics = articles; // Store entire article objects
+          trendingTopics = articles;
         });
       } else {
-        throw Exception(
-            'Failed to fetch trending topics: ${response.statusCode}');
+        throw Exception('Failed to fetch trending topics: ${response.statusCode}');
       }
     } catch (e) {
+      if (kDebugMode) {
+        print('Error fetching trending topics: $e');
+      }
       setState(() {
         trendingTopics = [
-          'Insurance trends in Kenya: What you need to know',
-          'Top insurance companies in Kenya for 2025',
-          'How technology is transforming insurance in Kenya',
-        ]; // Fallback to empty list on error
+          {
+            'title': 'Insurance trends in Kenya: What you need to know',
+            'description': 'Explore the latest insurance trends in Kenya for 2025.',
+          },
+          {
+            'title': 'Top insurance companies in Kenya for 2025',
+            'description': 'Discover the leading insurance providers in Kenya.',
+          },
+          {
+            'title': 'How technology is transforming insurance in Kenya',
+            'description': 'Learn about tech innovations in the insurance sector.',
+          },
+        ];
       });
-      print('Error fetching trending topics: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to fetch trending topics: $e')),
+        );
+      }
     }
   }
 
   Future<void> fetchBlogPosts() async {
     try {
-      final apiKey = 'YOUR_NEWS_API_KEY'; // Replace with your News API key
       final url =
           'https://newsapi.org/v2/everything?q=insurance+Kenya+blog&apiKey=$apiKey';
       final response = await http.get(Uri.parse(url));
@@ -4216,21 +4211,28 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         final articles = jsonDecode(response.body)['articles'] as List<dynamic>;
         setState(() {
           blogPosts = articles
-              .map<String>((article) => article['title']?.toString() ?? '')
+              .map((article) => article['title']?.toString() ?? 'Untitled')
               .toList();
         });
       } else {
         throw Exception('Failed to fetch blog posts: ${response.statusCode}');
       }
     } catch (e) {
+      if (kDebugMode) {
+        print('Error fetching blog posts: $e');
+      }
       setState(() {
         blogPosts = [
           'Understanding Insurance Policies in Kenya',
           'How to Choose the Right Insurance Provider',
           'The Future of Insurance in Kenya: Trends and Predictions',
-        ]; // Fallback to empty list on error
+        ];
       });
-      print('Error fetching blog posts: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to fetch blog posts: $e')),
+        );
+      }
     }
   }
 
@@ -4522,138 +4524,109 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                             ),
                           ],
                         ),
-                        child: SafeArea(
-                          child: SingleChildScrollView(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Trending in Insurance',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleLarge
-                                      ?.copyWith(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                ),
-                                const SizedBox(height: 16),
-                                trendingTopics.isNotEmpty
-                                    ? ListView.builder(
-                                        shrinkWrap: true,
-                                        physics:
-                                            const NeverScrollableScrollPhysics(),
-                                        itemCount: trendingTopics.length,
-                                        itemBuilder: (context, index) {
-                                          return Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                                vertical: 8),
-                                            child: Card(
-                                              elevation: 4,
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                              ),
-                                              child: ActionChip(
-                                                label: Text(
-                                                  trendingTopics[index].title ??
-                                                      trendingTopics[index]
-                                                          .toString()
-                                                          .split('.')
-                                                          .last,
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .bodyMedium,
-                                                ),
-                                                onPressed: () {
-                                                  Navigator.push(
-                                                    context,
-                                                    MaterialPageRoute(
-                                                      builder: (context) =>
-                                                          WebViewPage(
-                                                        url: trendingTopics[
-                                                                    index]
-                                                                .url ??
-                                                            'https://newsapi.org',
-                                                      ),
-                                                    ),
-                                                  );
-                                                },
-                                                elevation: 4,
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                ),
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                      )
-                                    : const Center(
-                                        child: CircularProgressIndicator()),
-                                const SizedBox(height: 24),
-                                Text(
-                                  'Learn more about Insurance',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleLarge
-                                      ?.copyWith(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                ),
-                                const SizedBox(height: 16),
-                                blogPosts.isNotEmpty
-                                    ? ListView.builder(
-                                        shrinkWrap: true,
-                                        physics:
-                                            const NeverScrollableScrollPhysics(),
-                                        itemCount: blogPosts.length,
-                                        itemBuilder: (context, index) {
-                                          return Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                                vertical: 8),
-                                            child: Card(
-                                              elevation: 4,
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                              ),
-                                              child: ActionChip(
-                                                label: Text(
-                                                  blogPosts[index] ??
-                                                      blogPosts[index]
-                                                          .toString()
-                                                          .split('.')
-                                                          .last,
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .bodyMedium,
-                                                ),
-                                                onPressed: () {
-                                                  Navigator.push(
-                                                    context,
-                                                    MaterialPageRoute(
-                                                      builder: (context) =>
-                                                          WebViewPage(
-                                                        url: blogPosts[index] ??
-                                                            'https://newsapi.org',
-                                                      ),
-                                                    ),
-                                                  );
-                                                },
-                                                elevation: 4,
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                ),
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                      )
-                                    : const Center(
-                                        child: CircularProgressIndicator()),
+child: SafeArea(
+  child: SingleChildScrollView(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Trending in Insurance',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+        ),
+        const SizedBox(height: 16),
+        trendingTopics.isNotEmpty
+            ? ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: trendingTopics.length,
+                itemBuilder: (context, index) {
+                  final article = trendingTopics[index] as Map<String, dynamic>?;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Card(
+                      elevation: 4,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: ActionChip(
+                        label: Text(
+                          article?['title']?.toString() ?? 'Untitled',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onPressed: () {
+                          final url = article?['url']?.toString() ?? 'https://newsapi.org';
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => WebViewPage(url: url),
+                            ),
+                          );
+                        },
+                        elevation: 4,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              )
+            : const Center(child: CircularProgressIndicator()),
+        const SizedBox(height: 24),
+        Text(
+          'Learn more about Insurance',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+        ),
+        const SizedBox(height: 16),
+        blogPosts.isNotEmpty
+            ? ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: blogPosts.length,
+                itemBuilder: (context, index) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Card(
+                      elevation: 4,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: ActionChip(
+                        label: Text(
+                          blogPosts[index],
+                          style: Theme.of(context).textTheme.bodyMedium,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onPressed: () {
+                          // Ideally, store URLs in a separate list or fetch from articles
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => WebViewPage(
+                                url: 'https://newsapi.org', // Replace with actual URL if available
+                              ),
+                            ),
+                          );
+                        },
+                        elevation: 4,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              )
+            : const Center(child: CircularProgressIndicator()),
                               ],
                             ),
                           ),
@@ -4661,7 +4634,8 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                       ),
                   ],
                 ),
-                floatingActionButton: FloatingActionButton(
+
+              floatingActionButton: FloatingActionButton(
                   onPressed: () {
                     if (kDebugMode) {
                       print('Chat button pressed');
@@ -6504,8 +6478,8 @@ class CompaniesCarousel {
                 children: [
                   CircleAvatar(
                     radius: 40,
-                    backgroundImage:
-                        NetworkImage(company.logoUrl ?? 'https://via.placeholder.com/80'),
+                    backgroundImage: NetworkImage(
+                        company.logoUrl ?? 'https://via.placeholder.com/80'),
                   ),
                   const SizedBox(height: 8.0),
                   Text(
@@ -6525,9 +6499,6 @@ class CompaniesCarousel {
       ),
     );
   }
-
-
-
 }
 
 // Color provider
@@ -7253,20 +7224,20 @@ class FieldConfig {
         };
         break;
 
-case ExpectedType.upload:
-  type = 'upload';
-  keyboardType = null;
-  validator = (value) => fieldDef.validator?.call(value ?? '');
-  // Add a controller or variable to hold the file URL or path
+      case ExpectedType.upload:
+        type = 'upload';
+        keyboardType = null;
+        validator = (value) => fieldDef.validator?.call(value ?? '');
+        // Add a controller or variable to hold the file URL or path
 
-  break;
+        break;
       case ExpectedType.checkbox:
         type = 'checkbox';
         keyboardType = null;
         validator = (value) => fieldDef.validator?.call(value ?? '');
         break;
       case ExpectedType.grid:
-        type = 'grid';  
+        type = 'grid';
         keyboardType = null;
         // For grid, provide default options or handle dynamically as needed
         options = ['Option 1', 'Option 2', 'Option 3'];
@@ -7517,9 +7488,8 @@ class FormFieldWidget extends StatelessWidget {
                 if (result != null && result.files.single.path != null) {
                   final file = File(result.files.single.path!);
                   final fileName = result.files.single.name;
-                  final storageRef = FirebaseStorage.instance
-                      .ref()
-                      .child('uploads/$fileName');
+                  final storageRef =
+                      FirebaseStorage.instance.ref().child('uploads/$fileName');
                   final uploadTask = storageRef.putFile(file);
                   final snapshot = await uploadTask.whenComplete(() {});
                   final downloadUrl = await snapshot.ref.getDownloadURL();
@@ -7698,19 +7668,28 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
         if (field.key == 'subtype') {
           final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
           final policyType = policyTypes.firstWhere(
-            (t) => t.name.toLowerCase() == widget.insuranceType,
+            (t) => t.name.toLowerCase() == widget.insuranceType.toLowerCase(),
             orElse: () => PolicyType(
                 id: '1', name: widget.insuranceType, description: ''),
           );
           final subtypes =
               await InsuranceHomeScreen.getPolicySubtypes(policyType.id);
           optionsWithIcons = subtypes
-              .map((s) => {'name': s.name, 'icon': s.icon ?? '❓'})
+              .map((s) => {
+                    'name': s.name,
+                    'icon': s.icon ?? '❓'
+                  })
               .toList();
         } else if (field.key == 'coverage_type') {
+          if (widget.dialogState.responses['subtype'] == null) {
+            if (kDebugMode) {
+              print('Skipping coverage_type: subtype not selected');
+            }
+            continue; // Skip coverage_type if subtype is not set
+          }
           final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
           final policyType = policyTypes.firstWhere(
-            (t) => t.name.toLowerCase() == widget.insuranceType,
+            (t) => t.name.toLowerCase() == widget.insuranceType.toLowerCase(),
             orElse: () => PolicyType(
                 id: '1', name: widget.insuranceType, description: ''),
           );
@@ -7730,21 +7709,30 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
           final coverageTypes =
               await InsuranceHomeScreen.getCoverageTypes(subtype.id);
           optionsWithIcons = coverageTypes
-              .map((c) => {'name': c.name, 'icon': c.icon ?? '❓'})
+              .map((c) => {
+                    'name': c.name,
+                    'icon': c.icon ?? '❓'
+                  })
               .toList();
         }
-        fields.add(FieldConfig(
-          key: field.key,
-          label: field.label,
-          type: 'grid',
-          options: optionsWithIcons.map((o) => o['name'] as String).toList(),
-          icons: optionsWithIcons.map((o) => o['icon'] as String).toList(),
-          initialValue: field.initialValue,
-          dependsOnKey: field.dependsOnKey,
-          dependsOnValue: field.dependsOnValue,
-          isRequired: field.isRequired,
-          validator: field.validator,
-        ));
+        if (optionsWithIcons.isNotEmpty) {
+          fields.add(FieldConfig(
+            key: field.key,
+            label: field.label,
+            type: 'grid',
+            options: optionsWithIcons.map((o) => o['name'] as String).toList(),
+            icons: optionsWithIcons.map((o) => o['icon'] as String).toList(),
+            initialValue: field.initialValue,
+            dependsOnKey: field.dependsOnKey,
+            dependsOnValue: field.dependsOnValue,
+            isRequired: field.isRequired,
+            validator: field.validator,
+          ));
+        } else {
+          if (kDebugMode) {
+            print('No options for ${field.key}');
+          }
+        }
       } else if (field.key == 'subtype_summary' ||
           field.key == 'coverage_summary') {
         final responseKey =
@@ -7781,19 +7769,17 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
     final screenWidth = MediaQuery.of(context).size.width;
 
     // Adaptive width logic
-    double dialogWidth;
-    if (screenWidth < 500) {
-      dialogWidth = screenWidth * 0.80; // 80% for small screens
-    } else if (screenWidth < 750) {
-      dialogWidth = screenWidth * 0.70; // 70% for medium screens
-    } else {
-      dialogWidth = 600; // Fixed max for large screens
-    }
-    dialogWidth = dialogWidth.clamp(280, 600); // Min 280px, max 600px
+    double dialogWidth = screenWidth < 500
+        ? screenWidth * 0.80
+        : screenWidth < 750
+            ? screenWidth * 0.70
+            : 600;
+    dialogWidth = dialogWidth.clamp(280, 600);
 
     return ConstrainedBox(
       constraints: BoxConstraints(
         maxWidth: dialogWidth,
+        maxHeight: MediaQuery.of(context).size.height * 0.8,
       ),
       child: FutureBuilder<List<FieldConfig>>(
         future: _fieldsFuture,
@@ -7803,17 +7789,21 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
               print('Policy FutureBuilder: state=ConnectionState.waiting');
             }
             return AlertDialog(
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CircularProgressIndicator(
-                      semanticsLabel: 'Loading fields'),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Loading ${widget.insuranceType} options...',
-                    style: GoogleFonts.roboto(),
-                  ),
-                ],
+              content: SizedBox(
+                width: dialogWidth,
+                height: 100,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(
+                        semanticsLabel: 'Loading fields'),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Loading ${widget.insuranceType} options...',
+                      style: GoogleFonts.roboto(),
+                    ),
+                  ],
+                ),
               ),
             );
           }
@@ -7842,20 +7832,25 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
               content: const Text('No options available for this step.'),
               actions: [
                 TextButton(
-                  onPressed: widget.onCancel,
-                  child: const Text('Cancel'),
-                ),
+  onPressed: () {
+    Navigator.of(context).pop();
+  },
+  child: const Text('Cancel'),
+),
               ],
             );
           }
           if (widget.config.customCallback != null && fields.isEmpty) {
+            if (kDebugMode) {
+              print('Warning: Custom callback present but no fields; rendering empty dialog');
+            }
+            widget.config.customCallback!(context, widget.dialogState);
             return const SizedBox.shrink();
           }
 
           return AlertDialog(
             backgroundColor: Theme.of(context).cardTheme.color,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             title: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -7863,7 +7858,7 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
                   child: Text(
                     widget.config.title,
                     style: GoogleFonts.lora(
-                      color: const Color(0xFF1B263B),
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                     ),
@@ -7906,68 +7901,84 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
                 ),
               ],
             ),
-            content: SingleChildScrollView(
-              child: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: fields.map((field) {
-                    if (field.dependsOnKey != null &&
-                        widget.dialogState.responses[field.dependsOnKey!] !=
-                            field.dependsOnValue) {
-                      return const SizedBox.shrink();
-                    }
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 16.0),
-                      child: field.type == 'grid'
-                          ? GridFieldWidget(
-                              config: field,
-                              value: widget.dialogState.responses[field.key] ??
-                                  field.initialValue,
-                              onChanged: (value) {
-                                widget.dialogState
-                                    .updateResponse(field.key, value ?? '');
-                                if (kDebugMode) {
-                                  print('Field ${field.key} updated: $value');
-                                }
-                                setState(() {});
-                              },
-                              colorProvider: colorProvider,
-                            )
-                          : FormFieldWidget(
-                              config: field,
-                              value: field.key == 'subtype_summary'
-                                  ? widget.dialogState.responses['subtype'] ??
-                                      'Not selected'
-                                  : field.key == 'coverage_summary'
-                                      ? widget.dialogState
-                                              .responses['coverage_type'] ??
-                                          'Not selected'
-                                      : widget.dialogState
-                                              .responses[field.key] ??
-                                          field.initialValue,
-                              onChanged: (value) {
-                                widget.dialogState
-                                    .updateResponse(field.key, value);
-                                if (kDebugMode) {
-                                  print('Field ${field.key} updated: $value');
-                                }
-                                if (field.key == 'has_spouse' &&
-                                    value == 'No') {
+            content: SizedBox(
+              width: dialogWidth,
+              height: fields.length * 150.0, // Adjust based on field count
+              child: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: fields.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final field = entry.value;
+                      if (kDebugMode) {
+                        print(
+                            'Rendering field $index: ${field.key}, type=${field.type}, '
+                            'value=${widget.dialogState.responses[field.key]}, '
+                            'dependsOn=${field.dependsOnKey}:${field.dependsOnValue}');
+                      }
+                      if (field.dependsOnKey != null &&
+                          widget.dialogState.responses[field.dependsOnKey!] !=
+                              field.dependsOnValue) {
+                        if (kDebugMode) {
+                          print(
+                              'Skipping field ${field.key} due to dependency check');
+                        }
+                        return const SizedBox.shrink();
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16.0),
+                        child: field.type == 'grid'
+                            ? GridFieldWidget(
+                                config: field,
+                                value: widget.dialogState.responses[field.key] ??
+                                    field.initialValue,
+                                onChanged: (value) {
                                   widget.dialogState
-                                      .updateResponse('spouse_age', '');
-                                }
-                                if (field.key == 'has_children' &&
-                                    value == 'No') {
+                                      .updateResponse(field.key, value ?? '');
+                                  if (kDebugMode) {
+                                    print('Field ${field.key} updated: $value');
+                                  }
+                                  setState(() {});
+                                },
+                                colorProvider: colorProvider,
+                              )
+                            : FormFieldWidget(
+                                config: field,
+                                value: field.key == 'subtype_summary'
+                                    ? widget.dialogState.responses['subtype'] ??
+                                        'Not selected'
+                                    : field.key == 'coverage_summary'
+                                        ? widget.dialogState
+                                                .responses['coverage_type'] ??
+                                            'Not selected'
+                                        : widget.dialogState
+                                                .responses[field.key] ??
+                                            field.initialValue,
+                                onChanged: (value) {
                                   widget.dialogState
-                                      .updateResponse('children_count', '');
-                                }
-                                setState(() {});
-                              },
-                              colorProvider: colorProvider,
-                            ),
-                    );
-                  }).toList(),
+                                      .updateResponse(field.key, value);
+                                  if (kDebugMode) {
+                                    print('Field ${field.key} updated: $value');
+                                  }
+                                  if (field.key == 'has_spouse' &&
+                                      value == 'No') {
+                                    widget.dialogState
+                                        .updateResponse('spouse_age', '');
+                                  }
+                                  if (field.key == 'has_children' &&
+                                      value == 'No') {
+                                    widget.dialogState
+                                        .updateResponse('children_count', '');
+                                  }
+                                  setState(() {});
+                                },
+                                colorProvider: colorProvider,
+                              ),
+                      );
+                    }).toList(),
+                  ),
                 ),
               ),
             ),
@@ -7977,14 +7988,18 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
                   onPressed: widget.onBack,
                   child: Text(
                     'Back',
-                    style: GoogleFonts.roboto(color: const Color(0xFFD3D3D3)),
+                    style: GoogleFonts.roboto(
+                        color: Theme.of(context).colorScheme.onSurface
+                            .withOpacity(0.6)),
                   ),
                 ),
               TextButton(
                 onPressed: widget.onCancel,
                 child: Text(
                   'Cancel',
-                  style: GoogleFonts.roboto(color: const Color(0xFFD3D3D3)),
+                  style: GoogleFonts.roboto(
+                      color: Theme.of(context).colorScheme.onSurface
+                          .withOpacity(0.6)),
                 ),
               ),
               ElevatedButton(
@@ -8001,7 +8016,8 @@ class _GenericInsuranceDialogState extends State<GenericInsuranceDialog> {
                                 true;
                     if (kDebugMode) {
                       print(
-                          'Required fields check: subtype=${widget.dialogState.responses['subtype']}, coverage=${widget.dialogState.responses['coverage_type']}');
+                          'Required fields check: subtype=${widget.dialogState.responses['subtype']}, '
+                          'coverage=${widget.dialogState.responses['coverage_type']}');
                     }
                     if (allRequiredFieldsFilled &&
                         (widget.config.customValidator == null ||
@@ -8701,13 +8717,43 @@ class GridFieldWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (kDebugMode) {
+      print('Building GridFieldWidget for ${config.key}: '
+          'options=${config.options}, icons=${config.icons}, value=$value');
+    }
     final dialogWidth = MediaQuery.of(context).size.width < 500
         ? MediaQuery.of(context).size.width * 0.80
         : MediaQuery.of(context).size.width < 750
             ? MediaQuery.of(context).size.width * 0.70
             : 600;
-    final crossAxisCount =
-        dialogWidth > 400 ? 3 : 2; // 3 columns if wider, 2 if narrower
+    final crossAxisCount = dialogWidth > 400 ? 3 : 2;
+
+    if (config.options == null || config.options!.isEmpty) {
+      if (kDebugMode) {
+        print('Warning: No options provided for ${config.key}');
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            config.label,
+            style: GoogleFonts.roboto(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'No options available',
+            style: GoogleFonts.roboto(
+              color: Theme.of(context).colorScheme.error,
+              fontSize: 14,
+            ),
+          ),
+        ],
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -8715,70 +8761,92 @@ class GridFieldWidget extends StatelessWidget {
         Text(
           config.label,
           style: GoogleFonts.roboto(
-            color: ThemeData().colorScheme.onSurface,
+            color: Theme.of(context).colorScheme.onSurface,
             fontSize: 16,
             fontWeight: FontWeight.w500,
           ),
         ),
         const SizedBox(height: 8),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-            childAspectRatio: 2,
-          ),
-          itemCount: config.options?.length ?? 0,
-          itemBuilder: (context, index) {
-            final option = config.options![index];
-            final icon = config.icons![index];
-            final isSelected = value == option;
-            return GestureDetector(
-              onTap: () {
-                onChanged(option);
-                if (kDebugMode) print('Selected ${config.key}: $option');
-              },
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? colorProvider.color.withOpacity(0.2)
-                      : Colors.grey[100],
-                  border: Border.all(
-                    color: isSelected ? colorProvider.color : Colors.grey,
+        SizedBox(
+          height: config.options!.length > crossAxisCount
+              ? 200
+              : 100, // Adjust height based on item count
+          child: GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+              childAspectRatio: 2,
+            ),
+            itemCount: config.options!.length,
+            itemBuilder: (context, index) {
+              final option = config.options![index];
+              final icon = (config.icons != null &&
+                      index < config.icons!.length &&
+                      config.icons![index].isNotEmpty)
+                  ? config.icons![index]
+                  : '❓';
+              final isSelected = value == option;
+              if (kDebugMode) {
+                print('Rendering grid item $index: option=$option, icon=$icon, '
+                    'isSelected=$isSelected');
+              }
+              return GestureDetector(
+                onTap: () {
+                  onChanged(option);
+                  if (kDebugMode) print('Selected ${config.key}: $option');
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? colorProvider.color.withOpacity(0.2)
+                        : Theme.of(context).colorScheme.surface,
+                    border: Border.all(
+                      color: isSelected
+                          ? colorProvider.color
+                          : Theme.of(context).colorScheme.outline,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Center(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        icon,
-                        style: const TextStyle(fontSize: 24),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        option,
-                        style: GoogleFonts.roboto(
-                          color: const Color(0xFF1B263B),
-                          fontSize: 14,
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: [
+                        Text(
+                          icon,
+                          style: const TextStyle(fontSize: 24),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            option,
+                            style: GoogleFonts.roboto(
+                              color: Theme.of(context).colorScheme.onSurface,
+                              fontSize: 14,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
         if (config.isRequired && value == null)
           Padding(
             padding: const EdgeInsets.only(top: 8.0),
             child: Text(
               'Please select an option',
-              style: GoogleFonts.roboto(color: Colors.red, fontSize: 12),
+              style: GoogleFonts.roboto(
+                color: Theme.of(context).colorScheme.error,
+                fontSize: 12,
+              ),
             ),
           ),
       ],

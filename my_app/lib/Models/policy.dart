@@ -1,4 +1,3 @@
-
 import 'package:flutter/foundation.dart';
 import 'package:my_app/Models/cover.dart';
 import 'package:my_app/insurance_app.dart';
@@ -80,7 +79,8 @@ class PolicySubtype {
       );
 
   // Added fromFirestore factory method
-  factory PolicySubtype.fromFirestore(Map<String, dynamic> data) => PolicySubtype(
+  factory PolicySubtype.fromFirestore(Map<String, dynamic> data) =>
+      PolicySubtype(
         id: data['id'] ?? '',
         name: data['name'] ?? '',
         policyTypeId: data['policyTypeId'] ?? '',
@@ -146,17 +146,14 @@ class CoverageType {
       };
 
   // Added fromMap factory method
-  factory CoverageType.fromMap(Map<String, dynamic> map) => CoverageType( 
+  factory CoverageType.fromMap(Map<String, dynamic> map) => CoverageType(
         id: map['id'] ?? '',
         name: map['name'] ?? '',
         description: map['description'] ?? '',
       );
 
-
-
- @override
+  @override
   String toString() => name;
-
 }
 
 class Policy {
@@ -241,41 +238,42 @@ class Policy {
       // Fetch PolicyType
       final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
       final policyType = policyTypes.firstWhere(
-        (t) => t.name.toLowerCase() == updatedCover.type.toString().toLowerCase(),
+        (t) => t.id == updatedCover.type.id,
         orElse: () => PolicyType(
-          id: '', // Provide an empty string or generate a unique id if needed
-          name: updatedCover.type.toString(),
-          description: '',
+          id: updatedCover.type.id,
+          name: updatedCover.type.name,
+          description: updatedCover.type.description,
         ),
       );
 
       // Fetch PolicySubtype
-      final subtypes = await InsuranceHomeScreen.getPolicySubtypes(policyType.id);
+      final subtypes =
+          await InsuranceHomeScreen.getPolicySubtypes(policyType.id);
       final policySubtype = subtypes.firstWhere(
-        (s) => s.name.toLowerCase() == updatedCover.subtype.toString().toLowerCase(),
+        (s) => s.id == updatedCover.subtype.id,
         orElse: () => PolicySubtype(
-          id: updatedCover.subtype.toString(),
-          name: updatedCover.subtype.toString(),
+          id: updatedCover.subtype.id,
+          name: updatedCover.subtype.name,
           policyTypeId: policyType.id,
-          description: '',
+          description: updatedCover.subtype.description,
         ),
       );
 
       // Fetch CoverageType
-      final coverageTypes = await InsuranceHomeScreen.getCoverageTypes(policyType.id);
+      final coverageTypes =
+          await InsuranceHomeScreen.getCoverageTypes(policyType.id);
       final coverageType = coverageTypes.firstWhere(
-        (c) => c.name.toLowerCase() == updatedCover.coverageType.toString().toLowerCase(),
+        (c) => c.id == updatedCover.coverageType.id,
         orElse: () => CoverageType(
-          id: updatedCover.coverageType.toString(),
-          name: updatedCover.coverageType.toString(),
-          description: '',
+          id: updatedCover.coverageType.id,
+          name: updatedCover.coverageType.name,
+          description: updatedCover.coverageType.description,
         ),
       );
 
-      // Create Policy
       return Policy(
         id: updatedCover.id,
-        name: updatedCover.name, // Add name from Cover
+        name: updatedCover.name,
         insuredItemId: updatedCover.insuredItemId,
         companyId: updatedCover.companyId,
         type: policyType,

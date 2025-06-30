@@ -13,10 +13,16 @@ import 'package:my_app/Screens/Policy_report_screen.dart';
 import 'package:my_app/Screens/admin_panel.dart';
 import 'package:my_app/insurance_app.dart';
 import 'package:my_app/Screens/signup.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import 'firebase_options.dart';
+import 'package:webview_flutter_web/webview_flutter_web.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
+  await dotenv.load(fileName: ".env");
+  if (kIsWeb) {
+    WebViewPlatform.instance = WebWebViewPlatform();
+  }
   // Initialize Firebase
   try {
     await Firebase.initializeApp(

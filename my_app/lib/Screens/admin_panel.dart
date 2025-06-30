@@ -787,6 +787,10 @@ class _AdminPanelState extends State<AdminPanel> {
 
 
 // Model for Banner data
+
+
+
+
 class BannerModel {
   final String imagePath;
   final String title;
@@ -802,14 +806,14 @@ class BannerModel {
 class BannerCarousel extends StatefulWidget {
   final List<BannerModel> banners;
   final double height;
-  final Function(File)? onUpload; // Callback for handling image upload
+  final Function(File)? onUpload;
 
   const BannerCarousel({
-    Key? key,
+    super.key,
     required this.banners,
     this.height = 180.0,
     this.onUpload,
-  }) : super(key: key);
+  });
 
   @override
   _BannerCarouselState createState() => _BannerCarouselState();
@@ -817,7 +821,7 @@ class BannerCarousel extends StatefulWidget {
 
 class _BannerCarouselState extends State<BannerCarousel> {
   List<BannerModel> _banners = [];
-  
+
   @override
   void initState() {
     super.initState();
@@ -825,62 +829,88 @@ class _BannerCarouselState extends State<BannerCarousel> {
     _checkAndCreateMonthlyBanner();
   }
 
-  // Check if it's end of month and create new banner
   Future<void> _checkAndCreateMonthlyBanner() async {
     final now = DateTime.now();
     final lastDayOfMonth = DateTime(now.year, now.month + 1, 0);
-    
-    // Check if today is within last 3 days of the month
+
     if (now.day >= lastDayOfMonth.day - 3) {
       await _createMonthlyBanner();
     }
   }
 
-  // Create a new banner automatically
   Future<void> _createMonthlyBanner() async {
-    final directory = await getApplicationDocumentsDirectory();
-    final monthYear = DateFormat('MMMMyyyy').format(DateTime.now());
-    final newBannerPath = '${directory.path}/banners/promo_$monthYear.jpg';
-    
-    // Create placeholder image or copy from default template
+    if (kIsWeb) {
+      setState(() {
+        _banners.add(BannerModel(
+          imagePath: '',
+          title: 'Promo ${DateFormat('MMMMyyyy').format(DateTime.now())}',
+          createdAt: DateTime.now(),
+        ));
+      });
+      return;
+    }
+
     try {
+      final directory = await getApplicationDocumentsDirectory();
+      final monthYear = DateFormat('MMMMyyyy').format(DateTime.now());
+      final newBannerPath = '${directory.path}/banners/promo_$monthYear.jpg';
+
       final defaultImage = File('assets/banners/default_template.jpg');
       if (await defaultImage.exists()) {
         await defaultImage.copy(newBannerPath);
-        
+
         setState(() {
           _banners.add(BannerModel(
             imagePath: newBannerPath,
-            title: 'Promo ${monthYear}',
+            title: 'Promo $monthYear',
             createdAt: DateTime.now(),
           ));
         });
       }
     } catch (e) {
-      // Fallback for banner creation failure
       setState(() {
         _banners.add(BannerModel(
-          imagePath: '', // Empty path to trigger fallback
-          title: 'Promo ${monthYear}',
+          imagePath: '',
+          title: 'Promo ${DateFormat('MMMMyyyy').format(DateTime.now())}',
           createdAt: DateTime.now(),
         ));
       });
-      print('Error creating monthly banner: $e');
+      if (kDebugMode) {
+        print('Error creating monthly banner: $e');
+      }
     }
   }
-  // Handle manual banner upload
-  Future<void> _uploadBanner() async {
-    // Note: You'll need to add an image picker package for actual implementation
-    // This is a placeholder for the upload functionality
-    try {
 
+  Future<void> _uploadBanner() async {
+    if (kIsWeb) {
+      try {
+        final result = await FilePicker.platform.pickFiles(type: FileType.image);
+        if (result != null && result.files.single.bytes != null) {
+          setState(() {
+            _banners.add(BannerModel(
+              imagePath: '',
+              title: 'Promo ${DateFormat('MMM yyyy').format(DateTime.now())}',
+              createdAt: DateTime.now(),
+            ));
+          });
+          widget.onUpload?.call(File('web_upload_${result.files.single.name}'));
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print('Error uploading banner on web: $e');
+        }
+      }
+      return;
+    }
+
+    try {
       final ImagePicker picker = ImagePicker();
       final XFile? image = await picker.pickImage(source: ImageSource.gallery);
       if (image != null) {
         final directory = await getApplicationDocumentsDirectory();
         final fileName = 'promo_${DateTime.now().millisecondsSinceEpoch}.jpg';
         final savedImage = await File(image.path).copy('${directory.path}/banners/$fileName');
-        
+
         setState(() {
           _banners.add(BannerModel(
             imagePath: savedImage.path,
@@ -888,115 +918,91 @@ class _BannerCarouselState extends State<BannerCarousel> {
             createdAt: DateTime.now(),
           ));
         });
-        
+
         widget.onUpload?.call(savedImage);
       }
-
     } catch (e) {
-      print('Error uploading banner: $e');
+      if (kDebugMode) {
+        print('Error uploading banner: $e');
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return SliverToBoxAdapter(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CarouselSlider(
-            options: CarouselOptions(
-              height: widget.height,
-              autoPlay: true,
-              autoPlayInterval: const Duration(seconds: 3),
-              enlargeCenterPage: true,
-              viewportFraction: 0.9,
-              aspectRatio: 2.0,
-            ),
-            items: _banners.asMap().entries.map((entry) {
-              final index = entry.key;
-              final banner = entry.value;
-              return Builder(
-                builder: (BuildContext context) {
-                  return Container(
-                    width: MediaQuery.of(context).size.width,
-                    margin: const EdgeInsets.symmetric(horizontal: 8.0),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .shadow
-                              .withOpacity(0.2),
-                          blurRadius: 12,
-                          spreadRadius: 2,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: banner.imagePath.isNotEmpty
-                          ? Image.file(
-                              File(banner.imagePath),
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                // Fallback similar to original code
-                                return Container(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .primary
-                                      .withOpacity(0.2),
-                                  child: Center(
-                                    child: Text(
-                                      banner.title,
-                                      style: GoogleFonts.lora(
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurface,
-                                      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CarouselSlider(
+          options: CarouselOptions(
+            height: widget.height,
+            autoPlay: true,
+            autoPlayInterval: const Duration(seconds: 3),
+            enlargeCenterPage: true,
+            viewportFraction: 0.9,
+            aspectRatio: 2.0,
+          ),
+          items: _banners.asMap().entries.map((entry) {
+            final banner = entry.value;
+            return Builder(
+              builder: (BuildContext context) {
+                return Container(
+                  width: MediaQuery.of(context).size.width,
+                  margin: const EdgeInsets.symmetric(horizontal: 8.0),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Theme.of(context).colorScheme.shadow.withOpacity(0.2),
+                        blurRadius: 12,
+                        spreadRadius: 2,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: banner.imagePath.isNotEmpty && !kIsWeb
+                        ? Image.file(
+                            File(banner.imagePath),
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                                child: Center(
+                                  child: Text(
+                                    banner.title,
+                                    style: GoogleFonts.lora(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                      color: Theme.of(context).colorScheme.onSurface,
                                     ),
                                   ),
-                                );
-                              },
-                            )
-                          : Container(
-                              // Fallback for empty or invalid image path
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .primary
-                                  .withOpacity(0.2),
-                              child: Center(
-                                child: Text(
-                                  banner.title,
-                                  style: GoogleFonts.lora(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.bold,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurface,
-                                  ),
+                                ),
+                              );
+                            },
+                          )
+                        : Container(
+                            color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                            child: Center(
+                              child: Text(
+                                banner.title,
+                                style: GoogleFonts.lora(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).colorScheme.onSurface,
                                 ),
                               ),
                             ),
-                    ),
-                  );
-                },
-              );
-            }).toList(),
-          ),
-          // Optional: Add upload button
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: ElevatedButton(
-              onPressed: _uploadBanner,
-              child: Text('Upload New Banner'),
-            ),
-          ),
-        ],
-      ),
+                          ),
+                  ),
+                );
+              },
+            );
+          }).toList(),
+        ),
+        // Removed the Upload New Banner button
+      ],
     );
   }
 }
