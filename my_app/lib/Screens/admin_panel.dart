@@ -13,6 +13,7 @@ import 'package:my_app/Models/field_definition.dart';
 import 'package:my_app/Models/pdf_template.dart';
 import 'package:my_app/Models/policy.dart';
 import 'package:my_app/Screens/pdf_editor.dart';
+import 'package:my_app/Services/company_config_service.dart';
 import 'package:my_app/insurance_app.dart'; // Import PdfCoordinateEditor
 import 'package:flutter/material.dart';
 import 'package:carousel_slider/carousel_slider.dart';
@@ -32,12 +33,20 @@ class AdminPanel extends StatefulWidget {
 class _AdminPanelState extends State<AdminPanel> {
   List<Policy> policies = [];
   Map<String, PDFTemplate> cachedPdfTemplates = {};
+  final TextEditingController _userSearchController = TextEditingController();
+  String _userSearchTerm = '';
 
   @override
   void initState() {
     super.initState();
     _loadPolicies();
     _loadCachedPdfTemplates();
+  }
+
+  @override
+  void dispose() {
+    _userSearchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadPolicies() async {
@@ -274,6 +283,259 @@ class _AdminPanelState extends State<AdminPanel> {
         );
       }
     }
+  }
+
+  Future<void> _uploadRateCardJson() async {
+    final config = await _showCompanyConfigDialog(
+      title: 'Upload Rate Card Source',
+      helper:
+          'Provide company, insurance type, and subtype. Then upload JSON/CSV/TXT directly, or Office/PDF files for queued conversion.',
+    );
+    if (config == null) return;
+
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: [
+        'json',
+        'csv',
+        'txt',
+        'pdf',
+        'doc',
+        'docx',
+        'ppt',
+        'pptx',
+        'xls',
+        'xlsx',
+      ],
+    );
+
+    if (result == null || result.files.single.path == null) return;
+
+    try {
+      final filePath = result.files.single.path!;
+      final extension = result.files.single.extension?.toLowerCase() ?? '';
+      final fileName = result.files.single.name;
+
+      final storagePath =
+          'company_uploads/rate_cards/${config['companyId']}/${DateTime.now().millisecondsSinceEpoch}_$fileName';
+      final uploadRef = FirebaseStorage.instance.ref(storagePath);
+      await uploadRef.putFile(File(filePath));
+      final sourceUrl = await uploadRef.getDownloadURL();
+
+      if (['json', 'csv', 'txt'].contains(extension)) {
+        final raw = await File(filePath).readAsString();
+        final rateCard = CompanyConfigService.rateCardFromFlexibleInput(
+          companyId: config['companyId']!,
+          insuranceType: config['insuranceType']!,
+          insuranceSubtype: config['insuranceSubtype']!,
+          extension: extension,
+          rawContent: raw,
+        );
+        await CompanyConfigService.upsertRateCard(rateCard);
+        await _markUploadConversion(
+          uploadType: 'rate_card',
+          config: config,
+          sourceUrl: sourceUrl,
+          sourceFileName: fileName,
+          sourceExtension: extension,
+          status: 'converted',
+        );
+      } else {
+        await _markUploadConversion(
+          uploadType: 'rate_card',
+          config: config,
+          sourceUrl: sourceUrl,
+          sourceFileName: fileName,
+          sourceExtension: extension,
+          status: 'queued_for_conversion',
+        );
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              ['json', 'csv', 'txt'].contains(extension)
+                  ? 'Rate card uploaded and converted for ${config['companyId']}'
+                  : 'Rate card source uploaded. Conversion queued for ${config['companyId']}.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to upload rate card JSON: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _uploadQuoteTemplateJson() async {
+    final config = await _showCompanyConfigDialog(
+      title: 'Upload Quote Template Source',
+      helper:
+          'Upload JSON/TXT with placeholders (e.g. {{premium}}), or Office/PDF files for queued conversion.',
+    );
+    if (config == null) return;
+
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: [
+        'json',
+        'txt',
+        'pdf',
+        'doc',
+        'docx',
+        'ppt',
+        'pptx',
+        'xls',
+        'xlsx',
+      ],
+    );
+
+    if (result == null || result.files.single.path == null) return;
+
+    try {
+      final filePath = result.files.single.path!;
+      final extension = result.files.single.extension?.toLowerCase() ?? '';
+      final fileName = result.files.single.name;
+
+      final storagePath =
+          'company_uploads/quote_docs/${config['companyId']}/${DateTime.now().millisecondsSinceEpoch}_$fileName';
+      final uploadRef = FirebaseStorage.instance.ref(storagePath);
+      await uploadRef.putFile(File(filePath));
+      final sourceUrl = await uploadRef.getDownloadURL();
+
+      if (['json', 'txt'].contains(extension)) {
+        final raw = await File(filePath).readAsString();
+        final template = CompanyConfigService.quoteTemplateFromFlexibleInput(
+          companyId: config['companyId']!,
+          insuranceType: config['insuranceType']!,
+          insuranceSubtype: config['insuranceSubtype']!,
+          extension: extension,
+          rawContent: raw,
+        );
+        await CompanyConfigService.upsertQuoteTemplate(template);
+        await _markUploadConversion(
+          uploadType: 'quote_template',
+          config: config,
+          sourceUrl: sourceUrl,
+          sourceFileName: fileName,
+          sourceExtension: extension,
+          status: 'converted',
+        );
+      } else {
+        await _markUploadConversion(
+          uploadType: 'quote_template',
+          config: config,
+          sourceUrl: sourceUrl,
+          sourceFileName: fileName,
+          sourceExtension: extension,
+          status: 'queued_for_conversion',
+        );
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              ['json', 'txt'].contains(extension)
+                  ? 'Quote template uploaded and converted for ${config['companyId']}'
+                  : 'Quote source uploaded. Conversion queued for ${config['companyId']}.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to upload quote template JSON: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _markUploadConversion({
+    required String uploadType,
+    required Map<String, String> config,
+    required String sourceUrl,
+    required String sourceFileName,
+    required String sourceExtension,
+    required String status,
+  }) async {
+    await FirebaseFirestore.instance.collection('company_upload_conversions').add({
+      'uploadType': uploadType,
+      'companyId': config['companyId'],
+      'insuranceType': config['insuranceType'],
+      'insuranceSubtype': config['insuranceSubtype'],
+      'sourceUrl': sourceUrl,
+      'sourceFileName': sourceFileName,
+      'sourceExtension': sourceExtension,
+      'status': status,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<Map<String, String>?> _showCompanyConfigDialog({
+    required String title,
+    required String helper,
+  }) async {
+    final companyController = TextEditingController();
+    final typeController = TextEditingController();
+    final subtypeController = TextEditingController();
+
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(helper, style: const TextStyle(fontSize: 12)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: companyController,
+              decoration: const InputDecoration(labelText: 'Company ID'),
+            ),
+            TextField(
+              controller: typeController,
+              decoration: const InputDecoration(labelText: 'Insurance Type'),
+            ),
+            TextField(
+              controller: subtypeController,
+              decoration: const InputDecoration(labelText: 'Insurance Subtype'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (companyController.text.trim().isEmpty ||
+                  typeController.text.trim().isEmpty ||
+                  subtypeController.text.trim().isEmpty) {
+                return;
+              }
+              Navigator.pop(ctx, {
+                'companyId': companyController.text.trim(),
+                'insuranceType': typeController.text.trim().toLowerCase(),
+                'insuranceSubtype': subtypeController.text.trim().toLowerCase(),
+              });
+            },
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+
+    companyController.dispose();
+    typeController.dispose();
+    subtypeController.dispose();
+    return result;
   }
 
   Future<void> _updatePolicyStatus(Policy policy, CoverStatus newStatus) async {
@@ -543,6 +805,41 @@ class _AdminPanelState extends State<AdminPanel> {
     }).toList();
   }
 
+  bool _matchesUserSearch(Map<String, dynamic> userData) {
+    final term = _userSearchTerm.trim().toLowerCase();
+    if (term.isEmpty) return true;
+
+    final details = (userData['details'] as Map<String, dynamic>?) ?? {};
+    final name = (details['name'] ?? '').toString().toLowerCase();
+    final email = (details['email'] ?? '').toString().toLowerCase();
+    final phone = (details['phone'] ?? '').toString().toLowerCase();
+
+    return name.contains(term) || email.contains(term) || phone.contains(term);
+  }
+
+  Future<void> _setUserAdminStatus({
+    required String userId,
+    required bool isAdmin,
+  }) async {
+    await FirebaseFirestore.instance.collection('users').doc(userId).set({
+      'isAdmin': isAdmin,
+      'role': isAdmin ? 'admin' : 'user',
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isAdmin
+                ? 'User promoted to admin.'
+                : 'User demoted to regular user.',
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -563,21 +860,144 @@ class _AdminPanelState extends State<AdminPanel> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ElevatedButton(
-              onPressed: _uploadPdfTemplate,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Color(0xFF8B0000),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+            Text(
+              'User Access Control',
+              style: GoogleFonts.lora(
+                color: const Color(0xFF1B263B),
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
               ),
-              child: Text(
-                'Upload PDF Template',
-                style: GoogleFonts.roboto(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w500,
-                ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _userSearchController,
+              decoration: const InputDecoration(
+                labelText: 'Search user by name, email, or phone',
+                prefixIcon: Icon(Icons.search),
               ),
+              onChanged: (value) {
+                setState(() => _userSearchTerm = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .limit(200)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const LinearProgressIndicator();
+                }
+
+                final docs = snapshot.data!.docs
+                    .where((doc) => _matchesUserSearch(doc.data()))
+                    .toList();
+
+                if (docs.isEmpty) {
+                  return const Text('No users found for this search.');
+                }
+
+                return SizedBox(
+                  height: 280,
+                  child: ListView.builder(
+                    itemCount: docs.length,
+                    itemBuilder: (context, index) {
+                      final doc = docs[index];
+                      final data = doc.data();
+                      final details =
+                          (data['details'] as Map<String, dynamic>?) ?? {};
+                      final name = (details['name'] ?? 'Unknown').toString();
+                      final email = (details['email'] ?? '').toString();
+                      final phone = (details['phone'] ?? '').toString();
+                      final isAdmin =
+                          data['isAdmin'] == true || data['role'] == 'admin';
+
+                      return Card(
+                        child: ListTile(
+                          title: Text(name),
+                          subtitle: Text(
+                            '${email.isEmpty ? 'No email' : email} • ${phone.isEmpty ? 'No phone' : phone}',
+                          ),
+                          trailing: Wrap(
+                            spacing: 8,
+                            children: [
+                              Chip(
+                                label: Text(isAdmin ? 'Admin' : 'User'),
+                                backgroundColor: isAdmin
+                                    ? Colors.green.shade100
+                                    : Colors.blueGrey.shade100,
+                              ),
+                              ElevatedButton(
+                                onPressed: () => _setUserAdminStatus(
+                                  userId: doc.id,
+                                  isAdmin: !isAdmin,
+                                ),
+                                child: Text(isAdmin ? 'Demote' : 'Promote'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 20),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                ElevatedButton(
+                  onPressed: _uploadPdfTemplate,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF8B0000),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Upload PDF Template',
+                    style: GoogleFonts.roboto(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: _uploadRateCardJson,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1D4E63),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Upload Rate Card JSON',
+                    style: GoogleFonts.roboto(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: _uploadQuoteTemplateJson,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2F6F45),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Upload Quote Template JSON',
+                    style: GoogleFonts.roboto(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 20),
             Text(

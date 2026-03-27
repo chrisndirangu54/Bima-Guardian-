@@ -17,6 +17,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'firebase_options.dart';
 import 'package:webview_flutter_web/webview_flutter_web.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -47,20 +48,6 @@ void main() async {
       print('Error initializing Firebase or Firestore settings: $e');
     }
   }
-
-// Sign in anonymously
-try {
-  await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
-  if (FirebaseAuth.instance.currentUser == null) {
-    final userCredential = await FirebaseAuth.instance.signInAnonymously();
-    if (kDebugMode) print('Signed in anonymously: ${userCredential.user?.uid}');
-    await initializeUserData(userCredential.user!.uid);
-  } else {
-    if (kDebugMode) print('User already authenticated: ${FirebaseAuth.instance.currentUser?.uid}');
-  }
-} catch (e, stackTrace) {
-  if (kDebugMode) print('Error signing in anonymously: $e\n$stackTrace');
-}
 
   // Request Firebase Messaging permissions
   try {
@@ -117,37 +104,6 @@ try {
       child: const MyApp(),
     ),
   );
-}
-
-Future<void> initializeUserData(String userId) async {
-  try {
-    var userDoc = FirebaseFirestore.instance.collection('users').doc(userId);
-    await userDoc.set({
-      'createdAt': FieldValue.serverTimestamp(),
-      'details': {'name': 'Anonymous', 'email': ''},
-    }, SetOptions(merge: true));
-    await userDoc.collection('policies').doc('default').set({
-      'id': 'default',
-      'type': 'Motor',
-      'status': 'pending',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-    await userDoc.collection('quotes').doc('default').set({
-      'id': 'default',
-      'type': 'Motor',
-      'amount': 0,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-    await userDoc.collection('insured_items').doc('default').set({
-      'id': 'default',
-      'type': 'Motor',
-      'name': 'Default Item',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-    if (kDebugMode) print('Initialized default user details for $userId');
-  } catch (e, stackTrace) {
-    if (kDebugMode) print('Error initializing user details: $e\n$stackTrace');
-  }
 }
 
 class MyApp extends StatelessWidget {
@@ -465,12 +421,37 @@ class MyApp extends StatelessWidget {
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
       themeMode: themeProvider.themeMode,
-      home: const InsuranceHomeScreen(),
+      home: const AuthGate(),
       routes: {
+        '/home': (context) => const InsuranceHomeScreen(),
         '/admin': (context) => const AdminPanel(),
         '/policy_report': (context) => const CoverReportScreen(),
         '/login': (context) => const LoginPage(),
         '/signup': (context) => const SignupPage(),
+      },
+    );
+  }
+}
+
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasData) {
+          return const InsuranceHomeScreen();
+        }
+
+        return const LoginPage();
       },
     );
   }
