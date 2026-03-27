@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:collection/collection.dart';
@@ -299,6 +300,9 @@ class _AdminPanelState extends State<AdminPanel> {
         'xls',
         'xlsx',
       ],
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
     );
 
     if (result == null || result.files.single.path == null) return;
@@ -343,6 +347,20 @@ class _AdminPanelState extends State<AdminPanel> {
         );
       }
 
+      final raw = await File(result.files.single.path!).readAsString();
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      final rateCard = CompanyRateCard.fromJson(json);
+
+      if (rateCard.companyId.isEmpty ||
+          rateCard.insuranceType.isEmpty ||
+          rateCard.insuranceSubtype.isEmpty) {
+        throw const FormatException(
+          'Rate card JSON must include companyId, insuranceType, and insuranceSubtype.',
+        );
+      }
+
+      await CompanyConfigService.upsertRateCard(rateCard);
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -350,6 +368,7 @@ class _AdminPanelState extends State<AdminPanel> {
               ['json', 'csv', 'txt'].contains(extension)
                   ? 'Rate card uploaded and converted for ${config['companyId']}'
                   : 'Rate card source uploaded. Conversion queued for ${config['companyId']}.',
+              'Rate card uploaded for ${rateCard.companyId} (${rateCard.insuranceType}/${rateCard.insuranceSubtype})',
             ),
           ),
         );
@@ -384,6 +403,9 @@ class _AdminPanelState extends State<AdminPanel> {
         'xls',
         'xlsx',
       ],
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
     );
 
     if (result == null || result.files.single.path == null) return;
@@ -428,6 +450,20 @@ class _AdminPanelState extends State<AdminPanel> {
         );
       }
 
+      final raw = await File(result.files.single.path!).readAsString();
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      final template = CompanyQuoteTemplate.fromJson(json);
+
+      if (template.companyId.isEmpty ||
+          template.insuranceType.isEmpty ||
+          template.insuranceSubtype.isEmpty) {
+        throw const FormatException(
+          'Quote template JSON must include companyId, insuranceType, and insuranceSubtype.',
+        );
+      }
+
+      await CompanyConfigService.upsertQuoteTemplate(template);
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -435,6 +471,7 @@ class _AdminPanelState extends State<AdminPanel> {
               ['json', 'txt'].contains(extension)
                   ? 'Quote template uploaded and converted for ${config['companyId']}'
                   : 'Quote source uploaded. Conversion queued for ${config['companyId']}.',
+              'Quote template uploaded for ${template.companyId} (${template.insuranceType}/${template.insuranceSubtype})',
             ),
           ),
         );
