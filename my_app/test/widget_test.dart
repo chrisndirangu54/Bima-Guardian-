@@ -7,7 +7,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
 
+import 'package:my_app/Providers/theme_provider.dart';
+import 'package:my_app/insurance_app.dart';
 import 'package:my_app/main.dart';
 
 void main() {
@@ -161,6 +164,15 @@ class Policy {
       status: CoverStatus.values.firstWhere(
         (e) => e.toString() == json['status'],
         orElse: () => CoverStatus.active,
+  testWidgets('MyApp builds with required providers', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => ThemeProvider()),
+          ChangeNotifierProvider(create: (_) => ColorProvider()),
+          ChangeNotifierProvider(create: (_) => DialogState()),
+        ],
+        child: const MyApp(),
       ),
       insuredItemId: json['insuredItemId'] as String? ?? '',
       coverageType: json['coverageType'] as String? ?? '',
@@ -2422,6 +2434,7 @@ PDFTemplate? _getTemplateForPolicy(String? type, String? subtype) {
   }
 }
 Update the field definitions in states to use the template's field definitions:
+    expect(find.byType(MaterialApp), findsOneWidget);
 
 dart
 } else if (currentState == 'quote_filling') {
@@ -2440,6 +2453,8 @@ dart
       'sender': 'bot',
       'text': currentStateData['fields'][0]['prompt'],
     });
+    final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.title, 'Bima Guardian');
   });
 }
 Update the _loadChatbotTemplate function to remove hardcoded fields:
