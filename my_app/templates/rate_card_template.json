@@ -1,0 +1,15 @@
+{
+  "companyId": "company_a",
+  "insuranceType": "motor",
+  "insuranceSubtype": "comprehensive",
+  "currency": "KES",
+  "basePremium": 10000,
+  "minimumPremium": 5000,
+  "fieldRates": {
+    "vehicle_value": 0.01,
+    "coverage_limit": 0.0001
+  },
+  "flatAdjustments": {
+    "processing_fee": 500
+  }
+}

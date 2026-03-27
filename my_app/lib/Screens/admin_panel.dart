@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:collection/collection.dart';
@@ -13,6 +14,7 @@ import 'package:my_app/Models/field_definition.dart';
 import 'package:my_app/Models/pdf_template.dart';
 import 'package:my_app/Models/policy.dart';
 import 'package:my_app/Screens/pdf_editor.dart';
+import 'package:my_app/Services/company_config_service.dart';
 import 'package:my_app/insurance_app.dart'; // Import PdfCoordinateEditor
 import 'package:flutter/material.dart';
 import 'package:carousel_slider/carousel_slider.dart';
@@ -271,6 +273,88 @@ class _AdminPanelState extends State<AdminPanel> {
           SnackBar(
             content: Text('Failed to upload PDF template: $e'),
           ),
+        );
+      }
+    }
+  }
+
+  Future<void> _uploadRateCardJson() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    );
+
+    if (result == null || result.files.single.path == null) return;
+
+    try {
+      final raw = await File(result.files.single.path!).readAsString();
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      final rateCard = CompanyRateCard.fromJson(json);
+
+      if (rateCard.companyId.isEmpty ||
+          rateCard.insuranceType.isEmpty ||
+          rateCard.insuranceSubtype.isEmpty) {
+        throw const FormatException(
+          'Rate card JSON must include companyId, insuranceType, and insuranceSubtype.',
+        );
+      }
+
+      await CompanyConfigService.upsertRateCard(rateCard);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Rate card uploaded for ${rateCard.companyId} (${rateCard.insuranceType}/${rateCard.insuranceSubtype})',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to upload rate card JSON: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _uploadQuoteTemplateJson() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    );
+
+    if (result == null || result.files.single.path == null) return;
+
+    try {
+      final raw = await File(result.files.single.path!).readAsString();
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      final template = CompanyQuoteTemplate.fromJson(json);
+
+      if (template.companyId.isEmpty ||
+          template.insuranceType.isEmpty ||
+          template.insuranceSubtype.isEmpty) {
+        throw const FormatException(
+          'Quote template JSON must include companyId, insuranceType, and insuranceSubtype.',
+        );
+      }
+
+      await CompanyConfigService.upsertQuoteTemplate(template);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Quote template uploaded for ${template.companyId} (${template.insuranceType}/${template.insuranceSubtype})',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to upload quote template JSON: $e')),
         );
       }
     }
@@ -563,21 +647,59 @@ class _AdminPanelState extends State<AdminPanel> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ElevatedButton(
-              onPressed: _uploadPdfTemplate,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Color(0xFF8B0000),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                ElevatedButton(
+                  onPressed: _uploadPdfTemplate,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF8B0000),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Upload PDF Template',
+                    style: GoogleFonts.roboto(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ),
-              ),
-              child: Text(
-                'Upload PDF Template',
-                style: GoogleFonts.roboto(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w500,
+                ElevatedButton(
+                  onPressed: _uploadRateCardJson,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1D4E63),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Upload Rate Card JSON',
+                    style: GoogleFonts.roboto(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ),
-              ),
+                ElevatedButton(
+                  onPressed: _uploadQuoteTemplateJson,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2F6F45),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Upload Quote Template JSON',
+                    style: GoogleFonts.roboto(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 20),
             Text(
