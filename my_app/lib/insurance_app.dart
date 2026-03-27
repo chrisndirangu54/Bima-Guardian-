@@ -8,15 +8,15 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:my_app/Screens/admin_panel.dart';
 import 'package:my_app/Screens/webview_page.dart';
 import 'package:my_app/Services/email_analyzer.dart';
+import 'package:my_app/Services/company_config_service.dart';
 import 'package:web/web.dart' as web; // Use this instead of dart:html
 
-// Remove this import; see below for correct usage.
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:my_app/Models/Insured_item.dart';
+import 'package:my_app/Models/insured_item.dart';
 import 'package:my_app/Models/company.dart' as company_models;
 import 'package:my_app/Models/cover.dart';
 import 'package:my_app/Models/field_definition.dart';
@@ -1110,17 +1110,29 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       // Process each page
       for (int i = 0; i < pdfDoc.pageCount; i++) {
         final page = await pdfDoc.getPage(i + 1);
+        final renderedPage = await page.render(
+          width: page.width.toInt(),
+          height: page.height.toInt(),
+          format: pdf.PdfPageImageFormat.png,
+        );
+        final backgroundBytes = renderedPage?.bytes;
         outputPdf.addPage(
           pw.Page(
             build: (pw.Context context) {
               return pw.Stack(
                 children: [
-                  // Placeholder background (no image on web)
-                  pw.Container(
-                    width: page.width.toDouble(),
-                    height: page.height.toDouble(),
-                    color: PdfColors.white,
-                  ),
+                  if (backgroundBytes != null)
+                    pw.Image(
+                      pw.MemoryImage(backgroundBytes),
+                      width: page.width.toDouble(),
+                      height: page.height.toDouble(),
+                    )
+                  else
+                    pw.Container(
+                      width: page.width.toDouble(),
+                      height: page.height.toDouble(),
+                      color: PdfColors.white,
+                    ),
                   // Render form data fields
                   ...formData.entries.map((entry) {
                     final fieldKey = entry.key;
@@ -1206,6 +1218,98 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
           SnackBar(content: Text('Failed to generate PDF: $e')),
         );
       }
+      return null;
+    }
+  }
+
+  Future<File?> _fillQuotePdfWithOriginalLayout({
+    required String templateKey,
+    required Map<String, String> data,
+  }) async {
+    try {
+      final template = await InsuranceHomeScreen.getPDFTemplate(templateKey);
+      if (template == null) return null;
+
+      final templateFile = await _ensureTemplateFileAvailable(templateKey);
+      if (templateFile == null || !await templateFile.exists()) return null;
+
+      final pdfBytes = await templateFile.readAsBytes();
+      final pdfDoc = await pdf.PdfDocument.openData(pdfBytes);
+      final outputPdf = pw.Document();
+
+      for (int i = 0; i < pdfDoc.pageCount; i++) {
+        final page = await pdfDoc.getPage(i + 1);
+        final renderedPage = await page.render(
+          width: page.width.toInt(),
+          height: page.height.toInt(),
+          format: pdf.PdfPageImageFormat.png,
+        );
+        final backgroundBytes = renderedPage?.bytes;
+
+        outputPdf.addPage(
+          pw.Page(
+            build: (pw.Context context) => pw.Stack(
+              children: [
+                if (backgroundBytes != null)
+                  pw.Image(
+                    pw.MemoryImage(backgroundBytes),
+                    width: page.width.toDouble(),
+                    height: page.height.toDouble(),
+                  ),
+                ...data.entries.map((entry) {
+                  final coord = template.coordinates[entry.key];
+                  if (coord == null || coord['page'] != (i + 1).toDouble()) {
+                    return pw.SizedBox();
+                  }
+                  return pw.Positioned(
+                    left: coord['x']!,
+                    top: coord['y']!,
+                    child: pw.Text(
+                      entry.value,
+                      style: pw.TextStyle(
+                        font: pw.Font.helvetica(),
+                        fontSize: 12,
+                        color: PdfColors.black,
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      }
+      await pdfDoc.dispose();
+
+      final directory = await getApplicationDocumentsDirectory();
+      final reportsDirectory = Directory('${directory.path}/reports');
+      if (!await reportsDirectory.exists()) {
+        await reportsDirectory.create(recursive: true);
+      }
+      final file = File('${reportsDirectory.path}/filled_quote_$templateKey.pdf');
+      await file.writeAsBytes(await outputPdf.save());
+      return file;
+    } catch (e) {
+      if (kDebugMode) print('Error generating original-layout quote PDF: $e');
+      return null;
+    }
+  }
+
+  Future<File?> _ensureTemplateFileAvailable(String templateKey) async {
+    final directory = await getApplicationDocumentsDirectory();
+    final templateDir = Directory('${directory.path}/pdf_templates');
+    if (!await templateDir.exists()) {
+      await templateDir.create(recursive: true);
+    }
+    final file = File('${templateDir.path}/$templateKey.pdf');
+    if (await file.exists()) return file;
+
+    try {
+      final ref = FirebaseStorage.instance.ref('pdf_templates/$templateKey.pdf');
+      await ref.writeToFile(file);
+      return file;
+    } catch (e) {
+      if (kDebugMode) print('Unable to download template $templateKey: $e');
       return null;
     }
   }
@@ -1338,8 +1442,12 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       }
 
       // Calculate premium for non-claims
-      double premium =
-          await _calculatePremium(type.name, subtype.name, details);
+      double premium = await _calculatePremium(
+        companyId: companyId,
+        type: type.name,
+        subtype: subtype.name,
+        formData: details,
+      );
 
       // Ask user whether to generate a quote or proceed with payment
       bool? proceedWithPayment;
@@ -1398,7 +1506,12 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
             .set(quote.toJson());
 
         // Generate quote PDF
-        final pdfFile = await _generateQuotePdf(quote);
+        final pdfFile = await _generateQuotePdf(
+          quote,
+          companyId: companyId,
+          type: type.name,
+          subtype: subtype.name,
+        );
         if (pdfFile != null && context.mounted) {
           // Optionally preview the quote PDF
           if (await _previewPdf(pdfFile)) {
@@ -1590,16 +1703,48 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     }
   }
 
-// Assuming _generateQuotePdf remains the same as provided
-  Future<File?> _generateQuotePdf(Quote quote) async {
+  Future<File?> _generateQuotePdf(
+    Quote quote, {
+    required String companyId,
+    required String type,
+    required String subtype,
+  }) async {
     final pdf = pw.Document();
+    final template = await CompanyConfigService.fetchQuoteTemplate(
+      companyId,
+      type,
+      subtype,
+    );
+    final resolvedValues = <String, String>{
+      'quote_id': quote.id,
+      'policy_type': quote.type,
+      'policy_subtype': quote.subtype,
+      'company': quote.company,
+      'premium': quote.premium.toStringAsFixed(2),
+      'generated_at': quote.generatedAt.toIso8601String(),
+      ...quote.formData,
+    };
+
+    if ((template?.useOriginalLayout ?? false) &&
+        (template?.pdfTemplateKey ?? '').isNotEmpty) {
+      final exactLayoutFile = await _fillQuotePdfWithOriginalLayout(
+        templateKey: template!.pdfTemplateKey!,
+        data: resolvedValues,
+      );
+      if (exactLayoutFile != null) {
+        return exactLayoutFile;
+      }
+    }
+
+    final templateSections = template?.sections ?? const <QuoteTemplateSection>[];
+
     pdf.addPage(
       pw.Page(
         build: (pw.Context context) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Text(
-              'Insurance Quote',
+              template?.title ?? 'Insurance Quote',
               style: pw.TextStyle(
                 fontSize: 24,
                 fontWeight: pw.FontWeight.bold,
@@ -1613,10 +1758,30 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
             pw.Text('Premium: KES ${quote.premium.toStringAsFixed(2)}'),
             pw.Text('Generated: ${quote.generatedAt}'),
             pw.SizedBox(height: 20),
+            if (templateSections.isNotEmpty) ...[
+              pw.Text(
+                'Company Quote Template',
+                style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+              ),
+              pw.SizedBox(height: 8),
+              ...templateSections.map(
+                (section) => pw.Text(
+                  '${section.label}: ${section.prefix}${resolvedValues[section.fieldKey] ?? ''}${section.suffix}',
+                ),
+              ),
+              pw.SizedBox(height: 16),
+            ],
             pw.Text('Details:', style: pw.TextStyle(fontSize: 16)),
             ...quote.formData.entries.map(
               (e) => pw.Text('${e.key}: ${e.value}'),
             ),
+            if ((template?.footer ?? '').isNotEmpty) ...[
+              pw.SizedBox(height: 20),
+              pw.Text(
+                template!.footer,
+                style: pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
+              ),
+            ],
           ],
         ),
       ),
@@ -1628,24 +1793,38 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     return file;
   }
 
-  Future<double> _calculatePremium(
-    String type,
-    String subtype,
-    Map<String, String> formData,
-  ) async {
-    final calculator = policyCalculators[type]?[subtype]?['companyA'];
-    if (calculator == null) return 0.0;
-    double basePremium = calculator['basePremium'].toDouble();
-    double factor = calculator['factor']?.toDouble() ?? 0.01;
+  Future<double> _calculatePremium({
+    required String companyId,
+    required String type,
+    required String subtype,
+    required Map<String, String> formData,
+  }) async {
+    final normalizedType = type.trim().toLowerCase();
+    final normalizedSubtype = subtype.trim().toLowerCase();
+    final rateCard = await CompanyConfigService.fetchRateCard(
+      companyId,
+      normalizedType,
+      normalizedSubtype,
+    );
 
-    switch (type) {
+    if (rateCard != null) {
+      return CompanyConfigService.calculatePremium(rateCard, formData);
+    }
+
+    final calculator = policyCalculators[normalizedType]?[normalizedSubtype]?['companyA'];
+    if (calculator == null) return 0.0;
+    final double basePremium = (calculator['basePremium'] as num).toDouble();
+    final double factor = (calculator['factor'] as num?)?.toDouble() ?? 0.01;
+
+    switch (normalizedType) {
       case 'motor':
         double vehicleValue =
             double.tryParse(formData['vehicle_value'] ?? '0') ?? 0;
         return basePremium + (vehicleValue * factor);
       case 'medical':
         int beneficiaries = int.tryParse(
-              formData['beneficiaries'] ?? (subtype == 'corporate' ? '3' : '1'),
+              formData['beneficiaries'] ??
+                  (normalizedSubtype == 'corporate' ? '3' : '1'),
             ) ??
             1;
         double inpatientFactor = double.tryParse(

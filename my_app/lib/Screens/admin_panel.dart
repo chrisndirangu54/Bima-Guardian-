@@ -13,6 +13,7 @@ import 'package:my_app/Models/field_definition.dart';
 import 'package:my_app/Models/pdf_template.dart';
 import 'package:my_app/Models/policy.dart';
 import 'package:my_app/Screens/pdf_editor.dart';
+import 'package:my_app/Services/company_config_service.dart';
 import 'package:my_app/insurance_app.dart'; // Import PdfCoordinateEditor
 import 'package:flutter/material.dart';
 import 'package:carousel_slider/carousel_slider.dart';
@@ -274,6 +275,259 @@ class _AdminPanelState extends State<AdminPanel> {
         );
       }
     }
+  }
+
+  Future<void> _uploadRateCardJson() async {
+    final config = await _showCompanyConfigDialog(
+      title: 'Upload Rate Card Source',
+      helper:
+          'Provide company, insurance type, and subtype. Then upload JSON/CSV/TXT directly, or Office/PDF files for queued conversion.',
+    );
+    if (config == null) return;
+
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: [
+        'json',
+        'csv',
+        'txt',
+        'pdf',
+        'doc',
+        'docx',
+        'ppt',
+        'pptx',
+        'xls',
+        'xlsx',
+      ],
+    );
+
+    if (result == null || result.files.single.path == null) return;
+
+    try {
+      final filePath = result.files.single.path!;
+      final extension = result.files.single.extension?.toLowerCase() ?? '';
+      final fileName = result.files.single.name;
+
+      final storagePath =
+          'company_uploads/rate_cards/${config['companyId']}/${DateTime.now().millisecondsSinceEpoch}_$fileName';
+      final uploadRef = FirebaseStorage.instance.ref(storagePath);
+      await uploadRef.putFile(File(filePath));
+      final sourceUrl = await uploadRef.getDownloadURL();
+
+      if (['json', 'csv', 'txt'].contains(extension)) {
+        final raw = await File(filePath).readAsString();
+        final rateCard = CompanyConfigService.rateCardFromFlexibleInput(
+          companyId: config['companyId']!,
+          insuranceType: config['insuranceType']!,
+          insuranceSubtype: config['insuranceSubtype']!,
+          extension: extension,
+          rawContent: raw,
+        );
+        await CompanyConfigService.upsertRateCard(rateCard);
+        await _markUploadConversion(
+          uploadType: 'rate_card',
+          config: config,
+          sourceUrl: sourceUrl,
+          sourceFileName: fileName,
+          sourceExtension: extension,
+          status: 'converted',
+        );
+      } else {
+        await _markUploadConversion(
+          uploadType: 'rate_card',
+          config: config,
+          sourceUrl: sourceUrl,
+          sourceFileName: fileName,
+          sourceExtension: extension,
+          status: 'queued_for_conversion',
+        );
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              ['json', 'csv', 'txt'].contains(extension)
+                  ? 'Rate card uploaded and converted for ${config['companyId']}'
+                  : 'Rate card source uploaded. Conversion queued for ${config['companyId']}.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to upload rate card JSON: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _uploadQuoteTemplateJson() async {
+    final config = await _showCompanyConfigDialog(
+      title: 'Upload Quote Template Source',
+      helper:
+          'Upload JSON/TXT with placeholders (e.g. {{premium}}), or Office/PDF files for queued conversion.',
+    );
+    if (config == null) return;
+
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: [
+        'json',
+        'txt',
+        'pdf',
+        'doc',
+        'docx',
+        'ppt',
+        'pptx',
+        'xls',
+        'xlsx',
+      ],
+    );
+
+    if (result == null || result.files.single.path == null) return;
+
+    try {
+      final filePath = result.files.single.path!;
+      final extension = result.files.single.extension?.toLowerCase() ?? '';
+      final fileName = result.files.single.name;
+
+      final storagePath =
+          'company_uploads/quote_docs/${config['companyId']}/${DateTime.now().millisecondsSinceEpoch}_$fileName';
+      final uploadRef = FirebaseStorage.instance.ref(storagePath);
+      await uploadRef.putFile(File(filePath));
+      final sourceUrl = await uploadRef.getDownloadURL();
+
+      if (['json', 'txt'].contains(extension)) {
+        final raw = await File(filePath).readAsString();
+        final template = CompanyConfigService.quoteTemplateFromFlexibleInput(
+          companyId: config['companyId']!,
+          insuranceType: config['insuranceType']!,
+          insuranceSubtype: config['insuranceSubtype']!,
+          extension: extension,
+          rawContent: raw,
+        );
+        await CompanyConfigService.upsertQuoteTemplate(template);
+        await _markUploadConversion(
+          uploadType: 'quote_template',
+          config: config,
+          sourceUrl: sourceUrl,
+          sourceFileName: fileName,
+          sourceExtension: extension,
+          status: 'converted',
+        );
+      } else {
+        await _markUploadConversion(
+          uploadType: 'quote_template',
+          config: config,
+          sourceUrl: sourceUrl,
+          sourceFileName: fileName,
+          sourceExtension: extension,
+          status: 'queued_for_conversion',
+        );
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              ['json', 'txt'].contains(extension)
+                  ? 'Quote template uploaded and converted for ${config['companyId']}'
+                  : 'Quote source uploaded. Conversion queued for ${config['companyId']}.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to upload quote template JSON: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _markUploadConversion({
+    required String uploadType,
+    required Map<String, String> config,
+    required String sourceUrl,
+    required String sourceFileName,
+    required String sourceExtension,
+    required String status,
+  }) async {
+    await FirebaseFirestore.instance.collection('company_upload_conversions').add({
+      'uploadType': uploadType,
+      'companyId': config['companyId'],
+      'insuranceType': config['insuranceType'],
+      'insuranceSubtype': config['insuranceSubtype'],
+      'sourceUrl': sourceUrl,
+      'sourceFileName': sourceFileName,
+      'sourceExtension': sourceExtension,
+      'status': status,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<Map<String, String>?> _showCompanyConfigDialog({
+    required String title,
+    required String helper,
+  }) async {
+    final companyController = TextEditingController();
+    final typeController = TextEditingController();
+    final subtypeController = TextEditingController();
+
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(helper, style: const TextStyle(fontSize: 12)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: companyController,
+              decoration: const InputDecoration(labelText: 'Company ID'),
+            ),
+            TextField(
+              controller: typeController,
+              decoration: const InputDecoration(labelText: 'Insurance Type'),
+            ),
+            TextField(
+              controller: subtypeController,
+              decoration: const InputDecoration(labelText: 'Insurance Subtype'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (companyController.text.trim().isEmpty ||
+                  typeController.text.trim().isEmpty ||
+                  subtypeController.text.trim().isEmpty) {
+                return;
+              }
+              Navigator.pop(ctx, {
+                'companyId': companyController.text.trim(),
+                'insuranceType': typeController.text.trim().toLowerCase(),
+                'insuranceSubtype': subtypeController.text.trim().toLowerCase(),
+              });
+            },
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+
+    companyController.dispose();
+    typeController.dispose();
+    subtypeController.dispose();
+    return result;
   }
 
   Future<void> _updatePolicyStatus(Policy policy, CoverStatus newStatus) async {
@@ -563,21 +817,59 @@ class _AdminPanelState extends State<AdminPanel> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ElevatedButton(
-              onPressed: _uploadPdfTemplate,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Color(0xFF8B0000),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                ElevatedButton(
+                  onPressed: _uploadPdfTemplate,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF8B0000),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Upload PDF Template',
+                    style: GoogleFonts.roboto(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ),
-              ),
-              child: Text(
-                'Upload PDF Template',
-                style: GoogleFonts.roboto(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w500,
+                ElevatedButton(
+                  onPressed: _uploadRateCardJson,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1D4E63),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Upload Rate Card JSON',
+                    style: GoogleFonts.roboto(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ),
-              ),
+                ElevatedButton(
+                  onPressed: _uploadQuoteTemplateJson,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2F6F45),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Upload Quote Template JSON',
+                    style: GoogleFonts.roboto(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 20),
             Text(
