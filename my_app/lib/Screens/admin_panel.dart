@@ -34,12 +34,20 @@ class AdminPanel extends StatefulWidget {
 class _AdminPanelState extends State<AdminPanel> {
   List<Policy> policies = [];
   Map<String, PDFTemplate> cachedPdfTemplates = {};
+  final TextEditingController _userSearchController = TextEditingController();
+  String _userSearchTerm = '';
 
   @override
   void initState() {
     super.initState();
     _loadPolicies();
     _loadCachedPdfTemplates();
+  }
+
+  @override
+  void dispose() {
+    _userSearchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadPolicies() async {
@@ -834,6 +842,41 @@ class _AdminPanelState extends State<AdminPanel> {
     }).toList();
   }
 
+  bool _matchesUserSearch(Map<String, dynamic> userData) {
+    final term = _userSearchTerm.trim().toLowerCase();
+    if (term.isEmpty) return true;
+
+    final details = (userData['details'] as Map<String, dynamic>?) ?? {};
+    final name = (details['name'] ?? '').toString().toLowerCase();
+    final email = (details['email'] ?? '').toString().toLowerCase();
+    final phone = (details['phone'] ?? '').toString().toLowerCase();
+
+    return name.contains(term) || email.contains(term) || phone.contains(term);
+  }
+
+  Future<void> _setUserAdminStatus({
+    required String userId,
+    required bool isAdmin,
+  }) async {
+    await FirebaseFirestore.instance.collection('users').doc(userId).set({
+      'isAdmin': isAdmin,
+      'role': isAdmin ? 'admin' : 'user',
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isAdmin
+                ? 'User promoted to admin.'
+                : 'User demoted to regular user.',
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -854,6 +897,91 @@ class _AdminPanelState extends State<AdminPanel> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text(
+              'User Access Control',
+              style: GoogleFonts.lora(
+                color: const Color(0xFF1B263B),
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _userSearchController,
+              decoration: const InputDecoration(
+                labelText: 'Search user by name, email, or phone',
+                prefixIcon: Icon(Icons.search),
+              ),
+              onChanged: (value) {
+                setState(() => _userSearchTerm = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .limit(200)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const LinearProgressIndicator();
+                }
+
+                final docs = snapshot.data!.docs
+                    .where((doc) => _matchesUserSearch(doc.data()))
+                    .toList();
+
+                if (docs.isEmpty) {
+                  return const Text('No users found for this search.');
+                }
+
+                return SizedBox(
+                  height: 280,
+                  child: ListView.builder(
+                    itemCount: docs.length,
+                    itemBuilder: (context, index) {
+                      final doc = docs[index];
+                      final data = doc.data();
+                      final details =
+                          (data['details'] as Map<String, dynamic>?) ?? {};
+                      final name = (details['name'] ?? 'Unknown').toString();
+                      final email = (details['email'] ?? '').toString();
+                      final phone = (details['phone'] ?? '').toString();
+                      final isAdmin =
+                          data['isAdmin'] == true || data['role'] == 'admin';
+
+                      return Card(
+                        child: ListTile(
+                          title: Text(name),
+                          subtitle: Text(
+                            '${email.isEmpty ? 'No email' : email} • ${phone.isEmpty ? 'No phone' : phone}',
+                          ),
+                          trailing: Wrap(
+                            spacing: 8,
+                            children: [
+                              Chip(
+                                label: Text(isAdmin ? 'Admin' : 'User'),
+                                backgroundColor: isAdmin
+                                    ? Colors.green.shade100
+                                    : Colors.blueGrey.shade100,
+                              ),
+                              ElevatedButton(
+                                onPressed: () => _setUserAdminStatus(
+                                  userId: doc.id,
+                                  isAdmin: !isAdmin,
+                                ),
+                                child: Text(isAdmin ? 'Demote' : 'Promote'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 20),
             Wrap(
               spacing: 12,
               runSpacing: 12,

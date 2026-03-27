@@ -607,10 +607,29 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
   }
 
   Future<void> _checkUserRole() async {
-    String? role = await secureStorage.read(key: 'user_role');
-    setState(() {
-      userRole = role == 'admin' ? UserRole.admin : UserRole.regular;
-    });
+    try {
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId == null) {
+        setState(() => userRole = UserRole.regular);
+        return;
+      }
+
+      final userDoc =
+          await FirebaseFirestore.instance.collection('users').doc(userId).get();
+      final data = userDoc.data() ?? <String, dynamic>{};
+      final bool isAdmin = data['isAdmin'] == true || data['role'] == 'admin';
+      final roleValue = isAdmin ? 'admin' : 'user';
+      await secureStorage.write(key: 'user_role', value: roleValue);
+
+      setState(() {
+        userRole = isAdmin ? UserRole.admin : UserRole.regular;
+      });
+    } catch (_) {
+      final role = await secureStorage.read(key: 'user_role');
+      setState(() {
+        userRole = role == 'admin' ? UserRole.admin : UserRole.regular;
+      });
+    }
   }
 
   void _setupFirebaseMessaging() {

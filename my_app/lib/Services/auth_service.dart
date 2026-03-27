@@ -10,6 +10,12 @@ class AuthService {
     final userDoc = FirebaseFirestore.instance.collection('users').doc(user.uid);
     await userDoc.set({
       'createdAt': FieldValue.serverTimestamp(),
+      'role': 'user',
+      'isAdmin': false,
+      'details': {
+        'name': user.displayName ?? 'Anonymous',
+        'email': user.email ?? '',
+        'phone': user.phoneNumber ?? '',
       'details': {
         'name': user.displayName ?? 'Anonymous',
         'email': user.email ?? '',
