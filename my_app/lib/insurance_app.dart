@@ -1110,17 +1110,29 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       // Process each page
       for (int i = 0; i < pdfDoc.pageCount; i++) {
         final page = await pdfDoc.getPage(i + 1);
+        final renderedPage = await page.render(
+          width: page.width.toInt(),
+          height: page.height.toInt(),
+          format: pdf.PdfPageImageFormat.png,
+        );
+        final backgroundBytes = renderedPage?.bytes;
         outputPdf.addPage(
           pw.Page(
             build: (pw.Context context) {
               return pw.Stack(
                 children: [
-                  // Placeholder background (no image on web)
-                  pw.Container(
-                    width: page.width.toDouble(),
-                    height: page.height.toDouble(),
-                    color: PdfColors.white,
-                  ),
+                  if (backgroundBytes != null)
+                    pw.Image(
+                      pw.MemoryImage(backgroundBytes),
+                      width: page.width.toDouble(),
+                      height: page.height.toDouble(),
+                    )
+                  else
+                    pw.Container(
+                      width: page.width.toDouble(),
+                      height: page.height.toDouble(),
+                      color: PdfColors.white,
+                    ),
                   // Render form data fields
                   ...formData.entries.map((entry) {
                     final fieldKey = entry.key;
@@ -1206,6 +1218,98 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
           SnackBar(content: Text('Failed to generate PDF: $e')),
         );
       }
+      return null;
+    }
+  }
+
+  Future<File?> _fillQuotePdfWithOriginalLayout({
+    required String templateKey,
+    required Map<String, String> data,
+  }) async {
+    try {
+      final template = await InsuranceHomeScreen.getPDFTemplate(templateKey);
+      if (template == null) return null;
+
+      final templateFile = await _ensureTemplateFileAvailable(templateKey);
+      if (templateFile == null || !await templateFile.exists()) return null;
+
+      final pdfBytes = await templateFile.readAsBytes();
+      final pdfDoc = await pdf.PdfDocument.openData(pdfBytes);
+      final outputPdf = pw.Document();
+
+      for (int i = 0; i < pdfDoc.pageCount; i++) {
+        final page = await pdfDoc.getPage(i + 1);
+        final renderedPage = await page.render(
+          width: page.width.toInt(),
+          height: page.height.toInt(),
+          format: pdf.PdfPageImageFormat.png,
+        );
+        final backgroundBytes = renderedPage?.bytes;
+
+        outputPdf.addPage(
+          pw.Page(
+            build: (pw.Context context) => pw.Stack(
+              children: [
+                if (backgroundBytes != null)
+                  pw.Image(
+                    pw.MemoryImage(backgroundBytes),
+                    width: page.width.toDouble(),
+                    height: page.height.toDouble(),
+                  ),
+                ...data.entries.map((entry) {
+                  final coord = template.coordinates[entry.key];
+                  if (coord == null || coord['page'] != (i + 1).toDouble()) {
+                    return pw.SizedBox();
+                  }
+                  return pw.Positioned(
+                    left: coord['x']!,
+                    top: coord['y']!,
+                    child: pw.Text(
+                      entry.value,
+                      style: pw.TextStyle(
+                        font: pw.Font.helvetica(),
+                        fontSize: 12,
+                        color: PdfColors.black,
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      }
+      await pdfDoc.dispose();
+
+      final directory = await getApplicationDocumentsDirectory();
+      final reportsDirectory = Directory('${directory.path}/reports');
+      if (!await reportsDirectory.exists()) {
+        await reportsDirectory.create(recursive: true);
+      }
+      final file = File('${reportsDirectory.path}/filled_quote_$templateKey.pdf');
+      await file.writeAsBytes(await outputPdf.save());
+      return file;
+    } catch (e) {
+      if (kDebugMode) print('Error generating original-layout quote PDF: $e');
+      return null;
+    }
+  }
+
+  Future<File?> _ensureTemplateFileAvailable(String templateKey) async {
+    final directory = await getApplicationDocumentsDirectory();
+    final templateDir = Directory('${directory.path}/pdf_templates');
+    if (!await templateDir.exists()) {
+      await templateDir.create(recursive: true);
+    }
+    final file = File('${templateDir.path}/$templateKey.pdf');
+    if (await file.exists()) return file;
+
+    try {
+      final ref = FirebaseStorage.instance.ref('pdf_templates/$templateKey.pdf');
+      await ref.writeToFile(file);
+      return file;
+    } catch (e) {
+      if (kDebugMode) print('Unable to download template $templateKey: $e');
       return null;
     }
   }
@@ -1622,6 +1726,19 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       'generated_at': quote.generatedAt.toIso8601String(),
       ...quote.formData,
     };
+
+    if ((template?.useOriginalLayout ?? false) &&
+        (template?.pdfTemplateKey ?? '').isNotEmpty) {
+      final exactLayoutFile = await _fillQuotePdfWithOriginalLayout(
+        templateKey: template!.pdfTemplateKey!,
+        data: resolvedValues,
+      );
+      if (exactLayoutFile != null) {
+        return exactLayoutFile;
+      }
+    }
+
+    final templateSections = template?.sections ?? const <QuoteTemplateSection>[];
 
     pdf.addPage(
       pw.Page(
