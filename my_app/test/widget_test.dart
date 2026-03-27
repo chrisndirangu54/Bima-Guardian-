@@ -174,6 +174,9 @@ class Policy {
 
     expect(find.byType(MaterialApp), findsOneWidget);
 
+
+    expect(find.byType(MaterialApp), findsOneWidget);
+
   PDFTemplate({
     required this.fields,
     required this.fieldMappings,
