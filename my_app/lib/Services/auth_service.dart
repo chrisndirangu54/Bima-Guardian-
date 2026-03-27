@@ -16,6 +16,9 @@ class AuthService {
         'name': user.displayName ?? 'Anonymous',
         'email': user.email ?? '',
         'phone': user.phoneNumber ?? '',
+      'details': {
+        'name': user.displayName ?? 'Anonymous',
+        'email': user.email ?? '',
       },
     }, SetOptions(merge: true));
 

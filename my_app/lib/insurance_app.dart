@@ -1734,6 +1734,8 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       type,
       subtype,
     );
+
+    final templateSections = template?.sections ?? const <QuoteTemplateSection>[];
     final resolvedValues = <String, String>{
       'quote_id': quote.id,
       'policy_type': quote.type,
