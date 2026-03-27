@@ -1,190 +1,214 @@
-import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:my_app/Services/auth_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
   @override
-  _LoginPageState createState() => _LoginPageState();
+  State<LoginPage> createState() => _LoginPageState();
 }
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
+      final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
+
+      final user = userCredential.user;
+      if (user != null) {
+        await AuthService.initializeUserData(user);
+      }
+
       if (mounted) Navigator.pushReplacementNamed(context, '/home');
     } catch (e) {
       if (kDebugMode) print('Login error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Login failed: $e')),
-      );
+      _showError('Login failed. Please check your credentials and try again.');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _signInAnonymously() async {
     setState(() => _isLoading = true);
     try {
-      await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+      if (kIsWeb) {
+        await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+      }
+
       final userCredential = await FirebaseAuth.instance.signInAnonymously();
-      await initializeUserData(userCredential.user!.uid);
+      final user = userCredential.user;
+      if (user != null) {
+        await AuthService.initializeUserData(user);
+      }
+
       if (mounted) Navigator.pushReplacementNamed(context, '/home');
     } catch (e) {
       if (kDebugMode) print('Anonymous login error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Anonymous login failed: $e')),
-      );
+      _showError('Guest login failed. Please try again.');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _signInWithGoogle() async {
     setState(() => _isLoading = true);
     try {
-      UserCredential userCredential;
-
-      if (kIsWeb) {
-        // Web-specific Google Sign-In
-        GoogleAuthProvider googleProvider = GoogleAuthProvider();
-        userCredential =
-            await FirebaseAuth.instance.signInWithPopup(googleProvider);
-             
-
+      final userCredential = await AuthService.signInWithGoogle();
       final user = userCredential.user;
       if (user != null) {
-        // Update user profile
         await user.updateDisplayName(user.displayName ?? 'Anonymous');
-        // Initialize user data in Firestore
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .set({
-          'createdAt': FieldValue.serverTimestamp(),
-          'details': {
-            'name': user.displayName ?? 'Anonymous',
-            'email': user.email ?? '',
-          },
-        }, SetOptions(merge: true));
-        await initializeUserData(user.uid);
-        if (mounted) Navigator.pushReplacementNamed(context, '/home');
-      }}
+        await AuthService.initializeUserData(user);
+      }
+
+      if (mounted) Navigator.pushReplacementNamed(context, '/home');
     } catch (e) {
       if (kDebugMode) print('Google Sign-In error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Google Sign-In failed: $e')),
-      );
+      _showError('Google Sign-In failed. Please try again.');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Card(
-            elevation: 8,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Login',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF10212B), Color(0xFF1D4E63)],
+          ),
+        ),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 460),
+              child: Card(
+                elevation: 12,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'Welcome back',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
                           ),
-                    ),
-                    const SizedBox(height: 24),
-                    TextFormField(
-                      controller: _emailController,
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.email),
-                      ),
-                      keyboardType: TextInputType.emailAddress,
-                      validator: (value) =>
-                          value!.isEmpty ? 'Enter an email' : null,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _passwordController,
-                      decoration: const InputDecoration(
-                        labelText: 'Password',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.lock),
-                      ),
-                      obscureText: true,
-                      validator: (value) =>
-                          value!.isEmpty ? 'Enter a password' : null,
-                    ),
-                    const SizedBox(height: 24),
-                    _isLoading
-                        ? const CircularProgressIndicator()
-                        : Column(
-                            children: [
-                              ElevatedButton(
-                                onPressed: _login,
-                                style: ElevatedButton.styleFrom(
-                                  minimumSize: const Size(double.infinity, 50),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: const Text('Login'),
-                              ),
-                              const SizedBox(height: 16),
-                              ElevatedButton.icon(
-                                onPressed: _signInWithGoogle,
-                                icon: const Icon(Icons.g_mobiledata),
-                                label: const Text('Sign in with Google'),
-                                style: ElevatedButton.styleFrom(
-                                  minimumSize: const Size(double.infinity, 50),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  backgroundColor: Colors.white,
-                                  foregroundColor: Colors.black,
-                                  side: const BorderSide(color: Colors.grey),
-                                ),
-                              ),
-                            ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Sign in to continue to Bima Guardian',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: Colors.black54,
                           ),
-                    const SizedBox(height: 16),
-                    TextButton(
-                      onPressed: _signInAnonymously,
-                      child: const Text('Continue as Guest'),
+                        ),
+                        const SizedBox(height: 24),
+                        TextFormField(
+                          controller: _emailController,
+                          decoration: const InputDecoration(
+                            labelText: 'Email',
+                            prefixIcon: Icon(Icons.email_outlined),
+                          ),
+                          keyboardType: TextInputType.emailAddress,
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Enter your email';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _passwordController,
+                          decoration: InputDecoration(
+                            labelText: 'Password',
+                            prefixIcon: const Icon(Icons.lock_outline),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                              ),
+                              onPressed: () {
+                                setState(() => _obscurePassword = !_obscurePassword);
+                              },
+                            ),
+                          ),
+                          obscureText: _obscurePassword,
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Enter your password';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 20),
+                        if (_isLoading)
+                          const Center(child: CircularProgressIndicator())
+                        else ...[
+                          ElevatedButton(
+                            onPressed: _login,
+                            style: ElevatedButton.styleFrom(
+                              minimumSize: const Size(double.infinity, 50),
+                            ),
+                            child: const Text('Login'),
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: _signInWithGoogle,
+                            icon: const Icon(Icons.g_mobiledata),
+                            label: const Text('Continue with Google'),
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(double.infinity, 50),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: _signInAnonymously,
+                            child: const Text('Continue as Guest'),
+                          ),
+                        ],
+                        const Divider(height: 28),
+                        TextButton(
+                          onPressed: () => Navigator.pushNamed(context, '/signup'),
+                          child: const Text('Don\'t have an account? Create one'),
+                        ),
+                      ],
                     ),
-                    TextButton(
-                      onPressed: () =>
-                          Navigator.pushNamed(context, '/signup'),
-                      child: const Text('Don\'t have an account? Sign Up'),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -199,37 +223,5 @@ class _LoginPageState extends State<LoginPage> {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
-  }
-}
-
-// Reuse the initializeUserData function from your original code
-Future<void> initializeUserData(String userId) async {
-  try {
-    var userDoc = FirebaseFirestore.instance.collection('users').doc(userId);
-    await userDoc.set({
-      'createdAt': FieldValue.serverTimestamp(),
-      'details': {'name': 'Anonymous', 'email': ''},
-    }, SetOptions(merge: true));
-    await userDoc.collection('policies').doc('default').set({
-      'id': 'default',
-      'type': 'Motor',
-      'status': 'pending',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-    await userDoc.collection('quotes').doc('default').set({
-      'id': 'default',
-      'type': 'Motor',
-      'amount': 0,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-    await userDoc.collection('insured_items').doc('default').set({
-      'id': 'default',
-      'type': 'Motor',
-      'name': 'Default Item',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-    if (kDebugMode) print('Initialized default user details for $userId');
-  } catch (e, stackTrace) {
-    if (kDebugMode) print('Error initializing user details: $e\n$stackTrace');
   }
 }
