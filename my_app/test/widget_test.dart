@@ -24,7 +24,6 @@ void main() {
     expect(find.text('1'), findsOneWidget);
   });
 }
-
 /*
 final policies = Provider.of<PolicyProvider>(context).policies;
 
@@ -348,3 +347,4 @@ dart
     expect(app.title, 'Bima Guardian');
   });
 }
+*/

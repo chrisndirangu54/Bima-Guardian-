@@ -7,7 +7,9 @@ class AuthService {
   AuthService._();
 
   static Future<void> initializeUserData(User user) async {
-    final userDoc = FirebaseFirestore.instance.collection('users').doc(user.uid);
+    final userDoc =
+        FirebaseFirestore.instance.collection('users').doc(user.uid);
+
     await userDoc.set({
       'createdAt': FieldValue.serverTimestamp(),
       'role': 'user',
@@ -16,9 +18,6 @@ class AuthService {
         'name': user.displayName ?? 'Anonymous',
         'email': user.email ?? '',
         'phone': user.phoneNumber ?? '',
-      'details': {
-        'name': user.displayName ?? 'Anonymous',
-        'email': user.email ?? '',
       },
     }, SetOptions(merge: true));
 

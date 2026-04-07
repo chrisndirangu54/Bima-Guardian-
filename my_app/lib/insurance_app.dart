@@ -16,7 +16,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:my_app/Models/insured_item.dart';
+import 'package:my_app/Models/Insured_item.dart';
 import 'package:my_app/Models/company.dart' as company_models;
 import 'package:my_app/Models/cover.dart';
 import 'package:my_app/Models/field_definition.dart';
@@ -29,6 +29,7 @@ import 'package:my_app/Screens/notifications_screen.dart';
 import 'package:my_app/Screens/pdf_preview.dart';
 import 'package:my_app/Services/webview.dart';
 import 'package:pdf/pdf.dart';
+import 'package:pdf/pdf.dart' as pdfColors;
 import 'package:pdf_text/pdf_text.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
@@ -1132,9 +1133,8 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         final renderedPage = await page.render(
           width: page.width.toInt(),
           height: page.height.toInt(),
-          format: pdf.PdfPageImageFormat.png,
         );
-        final backgroundBytes = renderedPage?.bytes;
+        final backgroundBytes = renderedPage.pixels;
         outputPdf.addPage(
           pw.Page(
             build: (pw.Context context) {
@@ -1202,7 +1202,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                         style: pw.TextStyle(
                           font: pw.Font.helvetica(),
                           fontSize: 12,
-                          color: PdfColors.black,
+                          color: pdfColors.PdfColors.black,
                         ),
                       ),
                     );
@@ -1241,79 +1241,91 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     }
   }
 
-  Future<File?> _fillQuotePdfWithOriginalLayout({
-    required String templateKey,
-    required Map<String, String> data,
-  }) async {
-    try {
-      final template = await InsuranceHomeScreen.getPDFTemplate(templateKey);
-      if (template == null) return null;
+Future<File?> _fillQuotePdfWithOriginalLayout({
+  required String templateKey,
+  required Map<String, String> data,
+}) async {
+  try {
+    final template = await InsuranceHomeScreen.getPDFTemplate(templateKey);
+    if (template == null) return null;
 
-      final templateFile = await _ensureTemplateFileAvailable(templateKey);
-      if (templateFile == null || !await templateFile.exists()) return null;
+    final templateFile = await _ensureTemplateFileAvailable(templateKey);
+    if (templateFile == null || !await templateFile.exists()) return null;
 
-      final pdfBytes = await templateFile.readAsBytes();
-      final pdfDoc = await pdf.PdfDocument.openData(pdfBytes);
-      final outputPdf = pw.Document();
+    final pdfBytes = await templateFile.readAsBytes();
 
-      for (int i = 0; i < pdfDoc.pageCount; i++) {
-        final page = await pdfDoc.getPage(i + 1);
-        final renderedPage = await page.render(
-          width: page.width.toInt(),
-          height: page.height.toInt(),
-          format: pdf.PdfPageImageFormat.png,
-        );
-        final backgroundBytes = renderedPage?.bytes;
+    // Open the template PDF for rendering using pdf
+    final pdfDoc = await pdf.PdfDocument.openData(pdfBytes);
 
-        outputPdf.addPage(
-          pw.Page(
-            build: (pw.Context context) => pw.Stack(
-              children: [
-                if (backgroundBytes != null)
-                  pw.Image(
-                    pw.MemoryImage(backgroundBytes),
-                    width: page.width.toDouble(),
-                    height: page.height.toDouble(),
-                  ),
-                ...data.entries.map((entry) {
-                  final coord = template.coordinates[entry.key];
-                  if (coord == null || coord['page'] != (i + 1).toDouble()) {
-                    return pw.SizedBox();
-                  }
-                  return pw.Positioned(
-                    left: coord['x']!,
-                    top: coord['y']!,
-                    child: pw.Text(
-                      entry.value,
-                      style: pw.TextStyle(
-                        font: pw.Font.helvetica(),
-                        fontSize: 12,
-                        color: PdfColors.black,
-                      ),
+    final outputPdf = pw.Document();
+
+    for (int i = 0; i < pdfDoc.pageCount; i++) {   // Note: .pagesCount (not .pageCount)
+      final page = await pdfDoc.getPage(i + 1);
+
+      // Render the page as image
+      final renderedPage = await page.render(
+        width: page.width.toInt(),
+        height: page.height.toInt(),
+      );
+
+      final Uint8List? backgroundBytes = renderedPage.pixels;
+
+      outputPdf.addPage(
+        pw.Page(
+          build: (pw.Context context) => pw.Stack(
+            children: [
+              if (backgroundBytes != null)
+                pw.Image(
+                  pw.MemoryImage(backgroundBytes),
+                  width: page.width.toDouble(),
+                  height: page.height.toDouble(),
+                  fit: pw.BoxFit.contain,
+                ),
+              ...data.entries.map((entry) {
+                final coord = template.coordinates[entry.key];
+                if (coord == null || coord['page'] != (i + 1).toDouble()) {
+                  return pw.SizedBox();
+                }
+                return pw.Positioned(
+                  left: coord['x']!,
+                  top: coord['y']!,
+                  child: pw.Text(
+                    entry.value,
+                    style: pw.TextStyle(
+                      font: pw.Font.helvetica(),
+                      fontSize: 12,
+                      color: pdfColors.PdfColors.black,
                     ),
-                  );
-                }),
-              ],
-            ),
+                  ),
+                );
+              }),
+            ],
           ),
-        );
-      }
-      await pdfDoc.dispose();
-
-      final directory = await getApplicationDocumentsDirectory();
-      final reportsDirectory = Directory('${directory.path}/reports');
-      if (!await reportsDirectory.exists()) {
-        await reportsDirectory.create(recursive: true);
-      }
-      final file = File('${reportsDirectory.path}/filled_quote_$templateKey.pdf');
-      await file.writeAsBytes(await outputPdf.save());
-      return file;
-    } catch (e) {
-      if (kDebugMode) print('Error generating original-layout quote PDF: $e');
-      return null;
+        ),
+      );
     }
-  }
 
+    await pdfDoc.dispose();   // Clean up the document
+
+    // Save the output PDF
+    final directory = await getApplicationDocumentsDirectory();
+    final reportsDirectory = Directory('${directory.path}/reports');
+    if (!await reportsDirectory.exists()) {
+      await reportsDirectory.create(recursive: true);
+    }
+
+    final file = File('${reportsDirectory.path}/filled_quote_$templateKey.pdf');
+    await file.writeAsBytes(await outputPdf.save());
+
+    return file;
+  } catch (e, stack) {
+    if (kDebugMode) {
+      print('Error generating original-layout quote PDF: $e');
+      print(stack);
+    }
+    return null;
+  }
+}
   Future<File?> _ensureTemplateFileAvailable(String templateKey) async {
     final directory = await getApplicationDocumentsDirectory();
     final templateDir = Directory('${directory.path}/pdf_templates');
@@ -1756,8 +1768,6 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         return exactLayoutFile;
       }
     }
-
-    final templateSections = template?.sections ?? const <QuoteTemplateSection>[];
 
     pdf.addPage(
       pw.Page(
@@ -5872,7 +5882,7 @@ child: SafeArea(
           builder: (context) => CoverDetailScreen(
             type: insuredItem?.type is String
                 ? insuredItem?.type as String
-                : insuredItem?.type?.toString() ??
+                : insuredItem?.type.toString() ??
                     type, // Use InsuredItem type if available
             subtype: insuredItem?.subtype is PolicySubtype
                 ? (insuredItem?.subtype as PolicySubtype).name

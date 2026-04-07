@@ -15,13 +15,10 @@ import 'package:my_app/Models/pdf_template.dart';
 import 'package:my_app/Models/policy.dart';
 import 'package:my_app/Screens/pdf_editor.dart';
 import 'package:my_app/Services/company_config_service.dart';
-import 'package:my_app/insurance_app.dart'; // Import PdfCoordinateEditor
-import 'package:flutter/material.dart';
+import 'package:my_app/insurance_app.dart';
 import 'package:carousel_slider/carousel_slider.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
-import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 
 class AdminPanel extends StatefulWidget {
@@ -98,14 +95,15 @@ class _AdminPanelState extends State<AdminPanel> {
       for (var policy in policies) {
         final docRef =
             FirebaseFirestore.instance.collection('policies').doc(policy.id);
+        // FIX: serialize model objects to JSON before writing to Firestore
         batch.set(docRef, {
           'id': policy.id,
-          'type': policy.type,
-          'subtype': policy.subtype,
+          'type': policy.type.toJson(),
+          'subtype': policy.subtype!.toJson(),
           'companyId': policy.companyId,
           'status': policy.status.toString(),
           'insuredItemId': policy.insuredItemId,
-          'coverageType': policy.coverageType,
+          'coverageType': policy.coverageType!.toJson(),
           'endDate': policy.endDate != null
               ? Timestamp.fromDate(policy.endDate!)
               : null,
@@ -139,7 +137,6 @@ class _AdminPanelState extends State<AdminPanel> {
       });
 
       if (cachedPdfTemplates.isEmpty) {
-        // Initialize default template
         final defaultTemplate = PDFTemplate(
           templateKey: 'default',
           policyType: 'motor',
@@ -222,24 +219,23 @@ class _AdminPanelState extends State<AdminPanel> {
       String filePath = result.files.single.path!;
       String templateKey = result.files.single.name.split('.').first;
 
-      // Show policy selection dialog
       final policyDetails = await _showPolicySelectionDialog(context);
-      if (policyDetails == null) return; // User canceled
+      if (policyDetails == null) return;
 
-      // Upload PDF to Firebase Storage
       try {
         final storageRef = FirebaseStorage.instance
             .ref()
             .child('pdf_templates/$templateKey.pdf');
         await storageRef.putFile(File(filePath));
-        final downloadUrl = await storageRef.getDownloadURL();
 
-        // Launch PdfCoordinateEditor
+        // FIX: check mounted before using context after async gap
+        if (!mounted) return;
+
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => PdfCoordinateEditor(
-              pdfPath: filePath, // Local path for editing
+              pdfPath: filePath,
               onSave: (coordinates, fieldDefinitions) async {
                 final template = PDFTemplate(
                   fields: fieldDefinitions,
@@ -252,7 +248,6 @@ class _AdminPanelState extends State<AdminPanel> {
                   templateKey: templateKey,
                 );
 
-                // Save template metadata to Firestore
                 await FirebaseFirestore.instance
                     .collection('pdf_templates')
                     .doc(templateKey)
@@ -262,13 +257,15 @@ class _AdminPanelState extends State<AdminPanel> {
                   cachedPdfTemplates[templateKey] = template;
                 });
 
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'PDF template "$templateKey" saved successfully',
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'PDF template "$templateKey" saved successfully',
+                      ),
                     ),
-                  ),
-                );
+                  );
+                }
               },
             ),
           ),
@@ -277,11 +274,13 @@ class _AdminPanelState extends State<AdminPanel> {
         if (kDebugMode) {
           print('Error uploading PDF template: $e');
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to upload PDF template: $e'),
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to upload PDF template: $e'),
+            ),
+          );
+        }
       }
     }
   }
@@ -294,6 +293,7 @@ class _AdminPanelState extends State<AdminPanel> {
     );
     if (config == null) return;
 
+    // FIX: removed duplicate FilePicker call; keep only the multi-extension version
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: [
@@ -308,9 +308,6 @@ class _AdminPanelState extends State<AdminPanel> {
         'xls',
         'xlsx',
       ],
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['json'],
     );
 
     if (result == null || result.files.single.path == null) return;
@@ -355,28 +352,14 @@ class _AdminPanelState extends State<AdminPanel> {
         );
       }
 
-      final raw = await File(result.files.single.path!).readAsString();
-      final json = jsonDecode(raw) as Map<String, dynamic>;
-      final rateCard = CompanyRateCard.fromJson(json);
-
-      if (rateCard.companyId.isEmpty ||
-          rateCard.insuranceType.isEmpty ||
-          rateCard.insuranceSubtype.isEmpty) {
-        throw const FormatException(
-          'Rate card JSON must include companyId, insuranceType, and insuranceSubtype.',
-        );
-      }
-
-      await CompanyConfigService.upsertRateCard(rateCard);
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+            // FIX: removed duplicate/conflicting string argument; single correct message
             content: Text(
               ['json', 'csv', 'txt'].contains(extension)
                   ? 'Rate card uploaded and converted for ${config['companyId']}'
                   : 'Rate card source uploaded. Conversion queued for ${config['companyId']}.',
-              'Rate card uploaded for ${rateCard.companyId} (${rateCard.insuranceType}/${rateCard.insuranceSubtype})',
             ),
           ),
         );
@@ -384,7 +367,7 @@ class _AdminPanelState extends State<AdminPanel> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to upload rate card JSON: $e')),
+          SnackBar(content: Text('Failed to upload rate card: $e')),
         );
       }
     }
@@ -398,6 +381,7 @@ class _AdminPanelState extends State<AdminPanel> {
     );
     if (config == null) return;
 
+    // FIX: removed duplicate FilePicker call; keep only the multi-extension version
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: [
@@ -411,9 +395,6 @@ class _AdminPanelState extends State<AdminPanel> {
         'xls',
         'xlsx',
       ],
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['json'],
     );
 
     if (result == null || result.files.single.path == null) return;
@@ -458,28 +439,14 @@ class _AdminPanelState extends State<AdminPanel> {
         );
       }
 
-      final raw = await File(result.files.single.path!).readAsString();
-      final json = jsonDecode(raw) as Map<String, dynamic>;
-      final template = CompanyQuoteTemplate.fromJson(json);
-
-      if (template.companyId.isEmpty ||
-          template.insuranceType.isEmpty ||
-          template.insuranceSubtype.isEmpty) {
-        throw const FormatException(
-          'Quote template JSON must include companyId, insuranceType, and insuranceSubtype.',
-        );
-      }
-
-      await CompanyConfigService.upsertQuoteTemplate(template);
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+            // FIX: removed duplicate/conflicting string argument; single correct message
             content: Text(
               ['json', 'txt'].contains(extension)
                   ? 'Quote template uploaded and converted for ${config['companyId']}'
                   : 'Quote source uploaded. Conversion queued for ${config['companyId']}.',
-              'Quote template uploaded for ${template.companyId} (${template.insuranceType}/${template.insuranceSubtype})',
             ),
           ),
         );
@@ -487,7 +454,7 @@ class _AdminPanelState extends State<AdminPanel> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to upload quote template JSON: $e')),
+          SnackBar(content: Text('Failed to upload quote template: $e')),
         );
       }
     }
@@ -592,18 +559,18 @@ class _AdminPanelState extends State<AdminPanel> {
         name: '',
       );
 
-      // Update Firestore
       await FirebaseFirestore.instance
           .collection('policies')
           .doc(policy.id)
           .set({
         'id': updatedPolicy.id,
-        'type': updatedPolicy.type,
-        'subtype': updatedPolicy.subtype,
+        // FIX: serialize model objects to JSON
+        'type': updatedPolicy.type.toJson(),
+        'subtype': updatedPolicy.subtype!.toJson(),
         'companyId': updatedPolicy.companyId,
         'status': updatedPolicy.status.toString(),
         'insuredItemId': updatedPolicy.insuredItemId,
-        'coverageType': updatedPolicy.coverageType,
+        'coverageType': updatedPolicy.coverageType!.toJson(),
         'endDate': updatedPolicy.endDate != null
             ? Timestamp.fromDate(updatedPolicy.endDate!)
             : null,
@@ -614,19 +581,19 @@ class _AdminPanelState extends State<AdminPanel> {
             policies.map((p) => p.id == policy.id ? updatedPolicy : p).toList();
       });
 
-      // Send notification
       await FirebaseMessaging.instance.sendMessage(
         to: '/topics/policy_updates',
         data: {'policy_id': policy.id, 'new_status': newStatus.toString()},
       );
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Policy status updated to $newStatus'),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Policy status updated to $newStatus'),
+          ),
+        );
+      }
 
-      // Notify expiration if applicable
       if (newStatus == CoverStatus.nearingExpiration ||
           newStatus == CoverStatus.expired) {
         await _notifyPolicyExpiration(updatedPolicy);
@@ -635,11 +602,13 @@ class _AdminPanelState extends State<AdminPanel> {
       if (kDebugMode) {
         print('Error updating policy status: $e');
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to update policy status: $e'),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update policy status: $e'),
+          ),
+        );
+      }
     }
   }
 
@@ -663,8 +632,10 @@ class _AdminPanelState extends State<AdminPanel> {
   Future<Map<String, String>?> _showPolicySelectionDialog(
     BuildContext context,
   ) async {
-    PolicyType? policyType;
-    PolicySubtype? policySubtype;
+    // FIX: use String? locals so the map returned is Map<String, String>
+    String? selectedPolicyType;
+    String? selectedPolicySubtype;
+
     final policyTypes = ['auto', 'health', 'home'];
     final policySubtypes = {
       'auto': ['comprehensive', 'third_party'],
@@ -709,7 +680,8 @@ class _AdminPanelState extends State<AdminPanel> {
                         borderSide: BorderSide(color: Color(0xFF8B0000)),
                       ),
                     ),
-                    value: policyType as String?,
+                    // FIX: value is now String? — no invalid cast
+                    value: selectedPolicyType,
                     items: policyTypes
                         .map(
                           (type) => DropdownMenuItem(
@@ -724,14 +696,14 @@ class _AdminPanelState extends State<AdminPanel> {
                         .toList(),
                     onChanged: (value) {
                       setState(() {
-                        policyType = value != null ? PolicyType.fromJson({'name': value}) : null;
-                        policySubtype = null;
+                        selectedPolicyType = value;
+                        selectedPolicySubtype = null;
                       });
                     },
                     validator: (value) =>
                         value == null ? 'Please select a policy type' : null,
                   ),
-                  if (policyType != null)
+                  if (selectedPolicyType != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 8.0),
                       child: DropdownButtonFormField<String>(
@@ -752,8 +724,9 @@ class _AdminPanelState extends State<AdminPanel> {
                             borderSide: BorderSide(color: Color(0xFF8B0000)),
                           ),
                         ),
-                        value: policySubtype?.name,
-                        items: policySubtypes[policyType]!
+                        value: selectedPolicySubtype,
+                        // FIX: key the map with the String directly
+                        items: policySubtypes[selectedPolicyType]!
                             .map(
                               (subtype) => DropdownMenuItem(
                                 value: subtype,
@@ -767,7 +740,7 @@ class _AdminPanelState extends State<AdminPanel> {
                             .toList(),
                         onChanged: (value) {
                           setState(() {
-                            policySubtype = value != null ? PolicySubtype.fromJson({'name': value}) : null;
+                            selectedPolicySubtype = value;
                           });
                         },
                         validator: (value) => value == null
@@ -787,10 +760,12 @@ class _AdminPanelState extends State<AdminPanel> {
                 ),
                 ElevatedButton(
                   onPressed: () {
-                    if (policyType != null && policySubtype != null) {
+                    if (selectedPolicyType != null &&
+                        selectedPolicySubtype != null) {
+                      // FIX: return plain strings — matches Map<String, String> return type
                       Navigator.pop(context, {
-                        'policyType': policyType!,
-                        'policySubtype': policySubtype!,
+                        'policyType': selectedPolicyType!,
+                        'policySubtype': selectedPolicySubtype!,
                       });
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -1011,7 +986,7 @@ class _AdminPanelState extends State<AdminPanel> {
                     ),
                   ),
                   child: Text(
-                    'Upload Rate Card JSON',
+                    'Upload Rate Card',
                     style: GoogleFonts.roboto(
                       color: Colors.white,
                       fontWeight: FontWeight.w500,
@@ -1027,7 +1002,7 @@ class _AdminPanelState extends State<AdminPanel> {
                     ),
                   ),
                   child: Text(
-                    'Upload Quote Template JSON',
+                    'Upload Quote Template',
                     style: GoogleFonts.roboto(
                       color: Colors.white,
                       fontWeight: FontWeight.w500,
@@ -1064,32 +1039,34 @@ class _AdminPanelState extends State<AdminPanel> {
                     ),
                     onPressed: () async {
                       try {
-                        // Delete from Firestore
                         await FirebaseFirestore.instance
                             .collection('pdf_templates')
                             .doc(templateKey)
                             .delete();
-                        // Delete from Firebase Storage
                         await FirebaseStorage.instance
                             .ref('pdf_templates/$templateKey.pdf')
                             .delete();
                         setState(() {
                           cachedPdfTemplates.remove(templateKey);
                         });
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Template $templateKey deleted'),
-                          ),
-                        );
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Template $templateKey deleted'),
+                            ),
+                          );
+                        }
                       } catch (e) {
                         if (kDebugMode) {
                           print('Error deleting template $templateKey: $e');
                         }
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Failed to delete template: $e'),
-                          ),
-                        );
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to delete template: $e'),
+                            ),
+                          );
+                        }
                       }
                     },
                   ),
@@ -1191,7 +1168,7 @@ class _AdminPanelState extends State<AdminPanel> {
                             ),
                           );
                         },
-                        interval: 2592000000, // Approx 30 days
+                        interval: 2592000000,
                       ),
                     ),
                     leftTitles: charts.AxisTitles(
@@ -1242,12 +1219,7 @@ class _AdminPanelState extends State<AdminPanel> {
   }
 }
 
-
 // Model for Banner data
-
-
-
-
 class BannerModel {
   final String imagePath;
   final String title;
@@ -1366,7 +1338,8 @@ class _BannerCarouselState extends State<BannerCarousel> {
       if (image != null) {
         final directory = await getApplicationDocumentsDirectory();
         final fileName = 'promo_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        final savedImage = await File(image.path).copy('${directory.path}/banners/$fileName');
+        final savedImage =
+            await File(image.path).copy('${directory.path}/banners/$fileName');
 
         setState(() {
           _banners.add(BannerModel(
@@ -1410,7 +1383,10 @@ class _BannerCarouselState extends State<BannerCarousel> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Theme.of(context).colorScheme.shadow.withOpacity(0.2),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .shadow
+                            .withOpacity(0.2),
                         blurRadius: 12,
                         spreadRadius: 2,
                         offset: const Offset(0, 4),
@@ -1425,14 +1401,19 @@ class _BannerCarouselState extends State<BannerCarousel> {
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) {
                               return Container(
-                                color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .primary
+                                    .withOpacity(0.2),
                                 child: Center(
                                   child: Text(
                                     banner.title,
                                     style: GoogleFonts.lora(
                                       fontSize: 24,
                                       fontWeight: FontWeight.bold,
-                                      color: Theme.of(context).colorScheme.onSurface,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface,
                                     ),
                                   ),
                                 ),
@@ -1440,14 +1421,18 @@ class _BannerCarouselState extends State<BannerCarousel> {
                             },
                           )
                         : Container(
-                            color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primary
+                                .withOpacity(0.2),
                             child: Center(
                               child: Text(
                                 banner.title,
                                 style: GoogleFonts.lora(
                                   fontSize: 24,
                                   fontWeight: FontWeight.bold,
-                                  color: Theme.of(context).colorScheme.onSurface,
+                                  color:
+                                      Theme.of(context).colorScheme.onSurface,
                                 ),
                               ),
                             ),
@@ -1458,7 +1443,6 @@ class _BannerCarouselState extends State<BannerCarousel> {
             );
           }).toList(),
         ),
-        // Removed the Upload New Banner button
       ],
     );
   }
