@@ -4962,7 +4962,163 @@ child: SafeArea(
     );
   }
 
-// _showChatBottomSheet (unchanged)
+  PolicyType? _extractInsuranceTypeFromMessage(
+    String message,
+    List<PolicyType> policyTypes,
+  ) {
+    final normalizedMessage = message.toLowerCase();
+    for (final type in policyTypes) {
+      final typeName = type.name.toLowerCase();
+      if (normalizedMessage.contains(typeName)) {
+        return type;
+      }
+    }
+
+    const typeAliases = <String, String>{
+      'car': 'motor',
+      'auto': 'motor',
+      'vehicle': 'motor',
+      'health': 'medical',
+      'hospital': 'medical',
+      'trip': 'travel',
+      'flight': 'travel',
+      'home': 'property',
+      'house': 'property',
+      'building': 'property',
+      'worker': 'wiba',
+      'workers': 'wiba',
+      'injury': 'wiba',
+    };
+
+    for (final entry in typeAliases.entries) {
+      if (normalizedMessage.contains(entry.key)) {
+        return policyTypes.firstWhere(
+          (type) => type.name.toLowerCase() == entry.value,
+          orElse: () => PolicyType(id: '', name: '', description: ''),
+        );
+      }
+    }
+
+    return null;
+  }
+
+  bool _isApplicationIntent(String message) {
+    const intentKeywords = <String>[
+      'apply',
+      'buy',
+      'purchase',
+      'start',
+      'need',
+      'want',
+      'insure',
+      'cover',
+      'quote',
+      'policy',
+    ];
+    final normalizedMessage = message.toLowerCase();
+    return intentKeywords.any(normalizedMessage.contains);
+  }
+
+  Future<Map<String, String>> _extractDialogPrefillFromMessage(
+    String message,
+    PolicyType policyType,
+  ) async {
+    final normalizedMessage = message.toLowerCase();
+    final prefill = <String, String>{};
+
+    try {
+      final subtypes =
+          await InsuranceHomeScreen.getPolicySubtypes(policyType.id);
+      PolicySubtype? matchedSubtype;
+
+      for (final subtype in subtypes) {
+        if (normalizedMessage.contains(subtype.name.toLowerCase())) {
+          matchedSubtype = subtype;
+          prefill['subtype'] = subtype.name;
+          break;
+        }
+      }
+
+      if (matchedSubtype != null) {
+        final coverageTypes =
+            await InsuranceHomeScreen.getCoverageTypes(matchedSubtype.id);
+        for (final coverageType in coverageTypes) {
+          if (normalizedMessage.contains(coverageType.name.toLowerCase())) {
+            prefill['coverage_type'] = coverageType.name;
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Could not build chatbot prefill from message: $e');
+      }
+    }
+
+    return prefill;
+  }
+
+  Future<Map<String, dynamic>?> _resolveNaturalLanguageApplication(
+    String message,
+  ) async {
+    final normalizedMessage = message.toLowerCase();
+    final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
+    final matchedType =
+        _extractInsuranceTypeFromMessage(normalizedMessage, policyTypes);
+    if (matchedType == null || matchedType.id.isEmpty) {
+      return null;
+    }
+
+    final subtypes = await InsuranceHomeScreen.getPolicySubtypes(matchedType.id);
+    if (subtypes.isEmpty) {
+      return null;
+    }
+
+    PolicySubtype selectedSubtype = subtypes.first;
+    for (final subtype in subtypes) {
+      if (normalizedMessage.contains(subtype.name.toLowerCase())) {
+        selectedSubtype = subtype;
+        break;
+      }
+    }
+
+    final coverageTypes =
+        await InsuranceHomeScreen.getCoverageTypes(selectedSubtype.id);
+    if (coverageTypes.isEmpty) {
+      return null;
+    }
+
+    CoverageType selectedCoverageType = coverageTypes.first;
+    for (final coverageType in coverageTypes) {
+      if (normalizedMessage.contains(coverageType.name.toLowerCase())) {
+        selectedCoverageType = coverageType;
+        break;
+      }
+    }
+
+    String? selectedCompany;
+    try {
+      final allCompanies = await InsuranceHomeScreen.getCompanies();
+      if (allCompanies.isNotEmpty) {
+        final companyMatch = allCompanies.firstWhere(
+          (company) => normalizedMessage.contains(company.name.toLowerCase()),
+          orElse: () => allCompanies.first,
+        );
+        selectedCompany = companyMatch.name;
+      }
+    } catch (_) {
+      selectedCompany = null;
+    }
+
+    return {
+      'type': matchedType,
+      'subtype': selectedSubtype,
+      'coverageType': selectedCoverageType,
+      'company': selectedCompany,
+    };
+  }
+
+// _showChatBottomSheet
   void _showChatBottomSheet(BuildContext context) {
     final TextEditingController chatController = TextEditingController();
     final List<String> chatMessages = [];
@@ -5015,7 +5171,7 @@ child: SafeArea(
                           controller: chatController,
                           decoration: InputDecoration(
                             hintText:
-                                'Type an insurance type (e.g., motor, medical)...',
+                                'E.g. "I want to apply for motor insurance"',
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -5026,36 +5182,58 @@ child: SafeArea(
                         icon: const Icon(Icons.send),
                         color: Theme.of(context).primaryColor,
                         onPressed: () async {
-                          final input =
-                              chatController.text.trim().toLowerCase();
-                          if (input.isEmpty) return;
+                          final rawInput = chatController.text.trim();
+                          final input = rawInput.toLowerCase();
+                          if (rawInput.isEmpty) return;
 
                           setState(() {
-                            chatMessages.add('You: $input');
+                            chatMessages.add('You: $rawInput');
                             chatController.clear();
                           });
 
-                          // Fetch policy types to validate input
-                          final policyTypes =
-                              await InsuranceHomeScreen.getPolicyTypes();
-                          final validType = policyTypes.firstWhere(
-                            (type) => type.name.toLowerCase() == input,
-                            orElse: () =>
-                                PolicyType(id: '', name: '', description: ''),
-                          );
+                          final resolvedApplication =
+                              await _resolveNaturalLanguageApplication(input);
+                          final matchedType =
+                              resolvedApplication?['type'] as PolicyType?;
+                          final hasIntent = _isApplicationIntent(input);
 
-                          if (validType.id.isNotEmpty) {
+                          if (matchedType != null && matchedType.id.isNotEmpty) {
+                            final selectedSubtype =
+                                resolvedApplication?['subtype'] as PolicySubtype?;
+                            final selectedCoverage = resolvedApplication?['coverageType']
+                                as CoverageType?;
+                            final selectedCompany =
+                                resolvedApplication?['company'] as String?;
+
                             setState(() {
-                              chatMessages.add(
-                                  'Bot: Starting $input insurance flow...');
+                              if (selectedSubtype != null &&
+                                  selectedCoverage != null) {
+                                chatMessages.add(
+                                  'Bot: Done. I selected ${matchedType.name} / ${selectedSubtype.name} / ${selectedCoverage.name}${selectedCompany != null ? " / $selectedCompany" : ""} for you.',
+                                );
+                              } else {
+                                chatMessages.add(
+                                  'Bot: Great! I can help with ${matchedType.name} insurance. Starting your application flow...',
+                                );
+                              }
                             });
 
                             // Trigger showInsuranceDialog
                             if (context.mounted) {
                               Navigator.pop(context); // Close bottom sheet
-                              showInsuranceDialog(
+                              if (selectedSubtype != null &&
+                                  selectedCoverage != null) {
+                                await _showInsuredItemDialog(
+                                  context,
+                                  matchedType,
+                                  selectedSubtype,
+                                  selectedCoverage,
+                                  preSelectedCompany: selectedCompany,
+                                );
+                              } else {
+                                showInsuranceDialog(
                                 context,
-                                input,
+                                matchedType.name.toLowerCase(),
                                 onFinalSubmit: (context, type, subtype,
                                     coverage, company) {
                                   // Save policy to Firestore or update UI
@@ -5071,12 +5249,25 @@ child: SafeArea(
                                 },
                                 scaffoldMessengerKey:
                                     GlobalKey<ScaffoldMessengerState>(),
-                              );
+                                  initialResponses:
+                                      await _extractDialogPrefillFromMessage(
+                                    input,
+                                    matchedType,
+                                  ),
+                                );
+                              }
                             }
+                          } else if (hasIntent) {
+                            setState(() {
+                              chatMessages.add(
+                                'Bot: I can help you apply. Please mention the insurance type (motor, medical, travel, property, or WIBA).',
+                              );
+                            });
                           } else {
                             setState(() {
                               chatMessages.add(
-                                  'Bot: Invalid insurance type. Try motor, medical, etc.');
+                                'Bot: Tell me what you want to insure, for example: "I need medical cover" or "Apply for motor insurance".',
+                              );
                             });
                           }
                         },
@@ -8416,6 +8607,7 @@ Future<void> showInsuranceDialog(
   int step = 0,
   void Function(BuildContext, String, String, String, String?)? onFinalSubmit,
   required GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey,
+  Map<String, String>? initialResponses,
 }) async {
   if (kDebugMode) {
     print(
@@ -8435,6 +8627,9 @@ Future<void> showInsuranceDialog(
     if (step == 0) {
       await dialogState.clearProgress(normalizedType);
       dialogState.resetForNewCycle();
+      if (initialResponses != null && initialResponses.isNotEmpty) {
+        initialResponses.forEach(dialogState.updateResponse);
+      }
     } else {
       await dialogState.loadProgress(normalizedType);
     }
