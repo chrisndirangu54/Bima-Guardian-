@@ -262,6 +262,7 @@ class PolicyModuleFactory {
           getCompanies: deps.getCompanies,
         ),
   };
+  static final List<_PredicatePolicyModuleBuilder> _predicateBuilders = [];
 
   static void registerBuilder({
     required String policyTypeName,
@@ -288,6 +289,38 @@ class PolicyModuleFactory {
           deps.getNextLevels,
           deps.getCompanies,
         );
+  }
+
+  static void registerMatcherBuilder({
+    required bool Function(PolicyType policyType) matcher,
+    required PolicyModule Function(
+      PolicyType policyType,
+      Future<List<PolicySubtype>> Function(String policyTypeId) getSubtypes,
+      Future<List<CoverageType>> Function(String subtypeId) getCoverageTypes,
+      Future<List<CoverageDetail>> Function(String coverageTypeId)?
+          getCoverageDetails,
+      Future<List<ModularPolicyComponent>> Function(
+        int levelIndex,
+        ModularPolicyComponent parent,
+      )?
+          getNextLevels,
+      Future<List<company_models.Company>> Function() getCompanies,
+    )
+        builder,
+  }) {
+    _predicateBuilders.add(
+      _PredicatePolicyModuleBuilder(
+        matcher: matcher,
+        builder: (deps) => builder(
+          deps.policyType,
+          deps.getSubtypes,
+          deps.getCoverageTypes,
+          deps.getCoverageDetails,
+          deps.getNextLevels,
+          deps.getCompanies,
+        ),
+      ),
+    );
   }
 
   static PolicyModule fromPolicyType({
@@ -317,6 +350,11 @@ class PolicyModuleFactory {
     if (builder != null) {
       return builder(deps);
     }
+    for (final predicateBuilder in _predicateBuilders) {
+      if (predicateBuilder.matcher(policyType)) {
+        return predicateBuilder.builder(deps);
+      }
+    }
     return GenericPolicyModule(
       policyType: policyType,
       getSubtypes: getSubtypes,
@@ -326,6 +364,16 @@ class PolicyModuleFactory {
       getCompanies: getCompanies,
     );
   }
+}
+
+class _PredicatePolicyModuleBuilder {
+  final bool Function(PolicyType policyType) matcher;
+  final PolicyModule Function(_PolicyModuleDependencies deps) builder;
+
+  const _PredicatePolicyModuleBuilder({
+    required this.matcher,
+    required this.builder,
+  });
 }
 
 class _PolicyModuleDependencies {
