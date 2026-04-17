@@ -2209,6 +2209,1058 @@ Future<File?> _fillQuotePdfWithOriginalLayout({
     }
   }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// UI IMPROVEMENT PATCHES for insurance_home_screen.dart
+// Apply these replacements to the corresponding methods in the original file.
+// All logic, providers, and imports remain identical — only visuals change.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── PALETTE CONSTANTS (add near top of InsuranceHomeScreenState) ─────────────
+// Replace the static const openAiApiKey line area with these first:
+//
+//   static const _darkTeal    = Color(0xFF10212B);
+//   static const _acidOlive   = Color(0xFFABFD06);
+//   static const _softOlive   = Color(0xFF91AF58);
+//   static const _cyan        = Color(0xFF00D1D1);
+//   static const _cream       = Color(0xFFEFFBDB);
+//   static const _creamDark   = Color(0xFFD8EBB8);
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 1. POLICY TYPE GRID CARD (replace the InkWell inside GridView.builder)
+//    Replaces itemBuilder in the GridView.builder inside _buildHomeScreen
+// ═══════════════════════════════════════════════════════════════════════════════
+
+Widget _buildPolicyCard(BuildContext context, PolicyType policyType,
+    GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  final icon = getCustomEmojiWidget(policyType.name);
+
+  return GestureDetector(
+    onTap: () async {
+      if (_isDialogOpening) return;
+      _isDialogOpening = true;
+      try {
+        await showInsuranceDialog(
+          context,
+          policyType.name,
+          scaffoldMessengerKey: scaffoldMessengerKey,
+          onFinalSubmit: null,
+        );
+      } catch (e) {
+        if (kDebugMode) print('Error in showInsuranceDialog: $e');
+        scaffoldMessengerKey.currentState?.showSnackBar(
+          SnackBar(content: Text('Failed to show dialog: $e')),
+        );
+      } finally {
+        _isDialogOpening = false;
+      }
+    },
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF13232E) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark ? const Color(0xFF2A4050) : const Color(0xFFD8EBB8),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black38
+                : const Color(0xFF10212B).withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          // Subtle accent stripe at top
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              height: 3,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFABFD06), Color(0xFF00D1D1)],
+                ),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Emoji icon in a pill container
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xFF1A2E3A)
+                        : const Color(0xFFEFFBDB),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: icon ?? const Text('🔧', style: TextStyle(fontSize: 22)),
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  policyType.name.toUpperCase(),
+                  style: GoogleFonts.dmSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: isDark
+                        ? const Color(0xFFD4ECA8)
+                        : const Color(0xFF10212B),
+                    letterSpacing: 0.8,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Text(
+                      'Get quote',
+                      style: GoogleFonts.dmSans(
+                        fontSize: 11,
+                        color: isDark
+                            ? const Color(0xFF91AF58)
+                            : const Color(0xFF4A6741),
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Icon(
+                      Icons.arrow_forward,
+                      size: 10,
+                      color: isDark
+                          ? const Color(0xFF91AF58)
+                          : const Color(0xFF4A6741),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 2. NAV ITEM (replace _buildNavItem method entirely)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+Widget _buildNavItem(
+  BuildContext context, {
+  required IconData icon,
+  required String title,
+  required VoidCallback onTap,
+  bool isSelected = false,
+}) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+    child: Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? (isDark
+                    ? const Color(0xFFABFD06).withOpacity(0.15)
+                    : const Color(0xFF10212B).withOpacity(0.08))
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: isSelected
+                ? Border.all(
+                    color: isDark
+                        ? const Color(0xFFABFD06).withOpacity(0.4)
+                        : const Color(0xFF10212B).withOpacity(0.2),
+                  )
+                : null,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? (isDark
+                          ? const Color(0xFFABFD06)
+                          : const Color(0xFF10212B))
+                      : (isDark
+                          ? const Color(0xFF1A2E3A)
+                          : const Color(0xFFEFFBDB)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  icon,
+                  size: 18,
+                  color: isSelected
+                      ? (isDark ? const Color(0xFF10212B) : Colors.white)
+                      : (isDark
+                          ? const Color(0xFF91AF58)
+                          : const Color(0xFF4A6741)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                title,
+                style: GoogleFonts.dmSans(
+                  fontSize: 14,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                  color: isSelected
+                      ? (isDark
+                          ? const Color(0xFFABFD06)
+                          : const Color(0xFF10212B))
+                      : (isDark
+                          ? const Color(0xFFB0CC90)
+                          : const Color(0xFF4A6741)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 3. NOTIFICATION BUTTON (replace _buildNotificationButton)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+Widget _buildNotificationButton(BuildContext context) {
+  return Padding(
+    padding: const EdgeInsets.only(right: 8),
+    child: Stack(
+      alignment: Alignment.center,
+      children: [
+        IconButton(
+          icon: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.notifications_outlined,
+                color: Colors.white, size: 20),
+          ),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) =>
+                    NotificationsScreen(notifications: notifications),
+              ),
+            );
+          },
+        ),
+        if (notifications.isNotEmpty)
+          Positioned(
+            right: 8,
+            top: 8,
+            child: Container(
+              width: 16,
+              height: 16,
+              decoration: const BoxDecoration(
+                color: Color(0xFFABFD06),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  '${notifications.length > 9 ? '9+' : notifications.length}',
+                  style: GoogleFonts.dmSans(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF10212B),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 4. QUOTES SCREEN LIST TILE (replace Card content inside _buildQuotesScreen)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+Widget _buildQuoteCard(BuildContext context, Quote quote) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  final typeEmoji = {
+    'motor': '🚘',
+    'medical': '🏥',
+    'travel': '✈️',
+    'property': '🏠',
+    'wiba': '💼',
+  }[quote.type.toLowerCase()] ?? '📋';
+
+  return GestureDetector(
+    onTap: () => handleCoverSubmission(
+      context,
+      PolicyType(id: '', name: quote.type, description: ''),
+      PolicySubtype(id: '', name: quote.subtype, description: '', policyTypeId: ''),
+      CoverageType(id: '', name: '', description: ''),
+      quote.company,
+      '',
+      quote.formData,
+    ),
+    child: Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF13232E) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? const Color(0xFF2A4050) : const Color(0xFFD8EBB8),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1A2E3A) : const Color(0xFFEFFBDB),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Text(typeEmoji, style: const TextStyle(fontSize: 22)),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${quote.type} — ${quote.subtype}',
+                    style: GoogleFonts.dmSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? const Color(0xFFD4ECA8) : const Color(0xFF10212B),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'KES ${quote.premium.toStringAsFixed(0)}',
+                    style: GoogleFonts.playfairDisplay(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? const Color(0xFFABFD06) : const Color(0xFF10212B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '${quote.generatedAt.day}/${quote.generatedAt.month}/${quote.generatedAt.year}',
+                  style: GoogleFonts.dmSans(
+                    fontSize: 11,
+                    color: isDark ? const Color(0xFF91AF58) : const Color(0xFF4A6741),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1A2E3A) : const Color(0xFFEFFBDB),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isDark ? const Color(0xFF2A4050) : const Color(0xFFD8EBB8),
+                    ),
+                  ),
+                  child: Text(
+                    'Apply',
+                    style: GoogleFonts.dmSans(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? const Color(0xFFABFD06) : const Color(0xFF10212B),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 5. CHAT BOTTOM SHEET (replace content in _showChatBottomSheet builder)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Replace the entire showModalBottomSheet content with this:
+//
+// showModalBottomSheet(
+//   context: context,
+//   isScrollControlled: true,
+//   backgroundColor: Colors.transparent,
+//   builder: (context) {
+//     ...
+//     return _buildChatSheet(context, chatController, chatMessages, setState);
+//   },
+// );
+
+Widget _buildChatSheet(
+  BuildContext context,
+  TextEditingController chatController,
+  List<String> chatMessages,
+  StateSetter setSheetState,
+) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  return Container(
+    decoration: BoxDecoration(
+      color: isDark ? const Color(0xFF13232E) : Colors.white,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      border: Border.all(
+        color: isDark ? const Color(0xFF2A4050) : const Color(0xFFD8EBB8),
+      ),
+    ),
+    padding: EdgeInsets.only(
+      bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+      left: 20,
+      right: 20,
+      top: 8,
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Drag handle
+        Container(
+          width: 40,
+          height: 4,
+          margin: const EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF2A4050) : const Color(0xFFD8EBB8),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: const Color(0xFFABFD06),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Center(
+                child: Text('🤖', style: TextStyle(fontSize: 18)),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'BIMA Bot',
+                  style: GoogleFonts.dmSans(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? const Color(0xFFD4ECA8) : const Color(0xFF10212B),
+                  ),
+                ),
+                Text(
+                  'Ask about insurance',
+                  style: GoogleFonts.dmSans(
+                    fontSize: 11,
+                    color: isDark ? const Color(0xFF91AF58) : const Color(0xFF4A6741),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (chatMessages.isNotEmpty)
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 200),
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: chatMessages.length,
+              itemBuilder: (context, index) {
+                final isBot = chatMessages[index].startsWith('Bot:');
+                return Align(
+                  alignment:
+                      isBot ? Alignment.centerLeft : Alignment.centerRight,
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.72,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isBot
+                          ? (isDark
+                              ? const Color(0xFF1A2E3A)
+                              : const Color(0xFFEFFBDB))
+                          : const Color(0xFF10212B),
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(14),
+                        topRight: const Radius.circular(14),
+                        bottomLeft: Radius.circular(isBot ? 4 : 14),
+                        bottomRight: Radius.circular(isBot ? 14 : 4),
+                      ),
+                    ),
+                    child: Text(
+                      chatMessages[index]
+                          .replaceFirst('Bot: ', '')
+                          .replaceFirst('You: ', ''),
+                      style: GoogleFonts.dmSans(
+                        fontSize: 13,
+                        color: isBot
+                            ? (isDark
+                                ? const Color(0xFFD4ECA8)
+                                : const Color(0xFF10212B))
+                            : const Color(0xFFEFFBDB),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: chatController,
+                style: GoogleFonts.dmSans(
+                  color: isDark ? const Color(0xFFD4ECA8) : const Color(0xFF10212B),
+                  fontSize: 14,
+                ),
+                decoration: InputDecoration(
+                  hintText: '"I need motor insurance"',
+                  hintStyle: GoogleFonts.dmSans(
+                    color: isDark
+                        ? const Color(0xFF4A6050)
+                        : const Color(0xFF8AAA80),
+                    fontSize: 13,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: isDark
+                          ? const Color(0xFF2A4050)
+                          : const Color(0xFFD8EBB8),
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: isDark
+                          ? const Color(0xFF2A4050)
+                          : const Color(0xFFD8EBB8),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: isDark
+                          ? const Color(0xFFABFD06)
+                          : const Color(0xFF10212B),
+                      width: 2,
+                    ),
+                  ),
+                  filled: true,
+                  fillColor: isDark
+                      ? const Color(0xFF1A2E3A)
+                      : const Color(0xFFF9FDF4),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            GestureDetector(
+              onTap: () {
+                // Send button tap — wire up to your existing send logic
+              },
+              child: Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10212B),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.send_rounded,
+                    color: Color(0xFFABFD06), size: 20),
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 6. MY ACCOUNT — DETAIL ROW (replace _buildDetailRow)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+Widget _buildDetailRow(BuildContext context, String label, String value) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 80,
+          child: Text(
+            label,
+            style: GoogleFonts.dmSans(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+              color: isDark
+                  ? const Color(0xFF91AF58)
+                  : const Color(0xFF4A6741),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            value,
+            style: GoogleFonts.dmSans(
+              fontSize: 14,
+              color: isDark
+                  ? const Color(0xFFD4ECA8)
+                  : const Color(0xFF10212B),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 7. SIDEBAR PANEL (desktop right-side trending panel)
+//    Replace the right sidebar Container child content with:
+// ═══════════════════════════════════════════════════════════════════════════════
+
+Widget _buildSidebarContent(BuildContext context) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  return SafeArea(
+    child: SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Section header
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1A2E3A) : const Color(0xFFEFFBDB),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                const Text('📰', style: TextStyle(fontSize: 20)),
+                const SizedBox(width: 8),
+                Text(
+                  'Market Pulse',
+                  style: GoogleFonts.playfairDisplay(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: isDark
+                        ? const Color(0xFFD4ECA8)
+                        : const Color(0xFF10212B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (trendingTopics.isNotEmpty)
+            ...trendingTopics.take(5).map((article) {
+              final a = article as Map<String, dynamic>?;
+              return GestureDetector(
+                onTap: () {
+                  final url = a?['url']?.toString() ?? 'https://newsapi.org';
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => WebViewPage(url: url),
+                    ),
+                  );
+                },
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF13232E) : Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isDark
+                          ? const Color(0xFF2A4050)
+                          : const Color(0xFFD8EBB8),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 4,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFABFD06),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          a?['title']?.toString() ?? 'Untitled',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.dmSans(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: isDark
+                                ? const Color(0xFFD4ECA8)
+                                : const Color(0xFF10212B),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList()
+          else
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: CircularProgressIndicator(
+                  color: Color(0xFF00D1D1),
+                  strokeWidth: 2,
+                ),
+              ),
+            ),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1A2E3A) : const Color(0xFFEFFBDB),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                const Text('📚', style: TextStyle(fontSize: 20)),
+                const SizedBox(width: 8),
+                Text(
+                  'Learn',
+                  style: GoogleFonts.playfairDisplay(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: isDark
+                        ? const Color(0xFFD4ECA8)
+                        : const Color(0xFF10212B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (blogPosts.isNotEmpty)
+            ...blogPosts.take(5).map((post) => GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          const WebViewPage(url: 'https://newsapi.org'),
+                    ),
+                  ),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF13232E) : Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isDark
+                            ? const Color(0xFF2A4050)
+                            : const Color(0xFFD8EBB8),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            post,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.dmSans(
+                              fontSize: 12,
+                              color: isDark
+                                  ? const Color(0xFFB0CC90)
+                                  : const Color(0xFF4A6741),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.open_in_new,
+                          size: 14,
+                          color: isDark
+                              ? const Color(0xFF91AF58)
+                              : const Color(0xFF4A6741),
+                        ),
+                      ],
+                    ),
+                  ),
+                ))
+          else
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: CircularProgressIndicator(
+                  color: Color(0xFF00D1D1),
+                  strokeWidth: 2,
+                ),
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 8. SECTION HEADER HELPER (add as a helper to use throughout screens)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+Widget _buildSectionHeader(BuildContext context, String title, {String? subtitle}) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: GoogleFonts.playfairDisplay(
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            color: isDark ? const Color(0xFFD4ECA8) : const Color(0xFF10212B),
+          ),
+        ),
+        if (subtitle != null) ...[
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: GoogleFonts.dmSans(
+              fontSize: 13,
+              color: isDark ? const Color(0xFF91AF58) : const Color(0xFF4A6741),
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 9. UPCOMING EXPIRATIONS CARD (replace ListTile inside _buildUpcomingScreen)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+Widget _buildUpcomingCard(BuildContext context, Cover cover) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  final daysLeft = cover.endDate!.difference(DateTime.now()).inDays;
+  final isUrgent = daysLeft <= 7;
+
+  final urgentColor = isUrgent ? const Color(0xFFFF6B6B) : const Color(0xFFFFB84D);
+  final urgentBg = isUrgent
+      ? const Color(0xFFFF6B6B).withOpacity(0.1)
+      : const Color(0xFFFFB84D).withOpacity(0.1);
+
+  return GestureDetector(
+    onTap: () {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('${cover.type} — ${cover.subtype}'),
+          content: Text('Expires in $daysLeft days'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+            TextButton(
+              onPressed: () {
+                final item = insuredItems.firstWhere(
+                  (i) => i.id == cover.insuredItemId,
+                  orElse: () => InsuredItem(
+                    id: cover.insuredItemId, name: '', email: '', contact: '',
+                    type: cover.type, subtype: cover.subtype,
+                    coverageType: cover.coverageType, details: {}, kraPin: '',
+                  ),
+                );
+                _showCoverActionsDialog(context, item);
+              },
+              child: const Text('Renew'),
+            ),
+          ],
+        ),
+      );
+    },
+    child: Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF13232E) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isUrgent
+              ? urgentColor.withOpacity(0.4)
+              : (isDark ? const Color(0xFF2A4050) : const Color(0xFFD8EBB8)),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: urgentBg,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Icon(
+                  isUrgent ? Icons.warning_amber_rounded : Icons.access_time_rounded,
+                  color: urgentColor,
+                  size: 24,
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${cover.type} — ${cover.subtype}',
+                    style: GoogleFonts.dmSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? const Color(0xFFD4ECA8) : const Color(0xFF10212B),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    isUrgent ? 'Expires in $daysLeft days — Act now!' : 'Expires in $daysLeft days',
+                    style: GoogleFonts.dmSans(
+                      fontSize: 12,
+                      color: urgentColor,
+                      fontWeight: isUrgent ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1A2E3A) : const Color(0xFFEFFBDB),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                'Renew',
+                style: GoogleFonts.dmSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? const Color(0xFFABFD06) : const Color(0xFF10212B),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 10. BOTTOM NAVIGATION BAR override (in build() method — mobile branch)
+//     Replace the BottomNavigationBar with this themed version:
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// bottomNavigationBar: Container(
+//   decoration: BoxDecoration(
+//     color: isDark ? const Color(0xFF0C1A21) : Colors.white,
+//     border: Border(
+//       top: BorderSide(
+//         color: isDark ? const Color(0xFF2A4050) : const Color(0xFFD8EBB8),
+//         width: 1,
+//       ),
+//     ),
+//   ),
+//   child: BottomNavigationBar(
+//     ...existing items and logic...
+//     backgroundColor: Colors.transparent,
+//     elevation: 0,
+//     selectedItemColor: isDark ? const Color(0xFFABFD06) : const Color(0xFF10212B),
+//     unselectedItemColor: isDark ? const Color(0xFF4A6050) : const Color(0xFF8AAA80),
+//     selectedLabelStyle: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w600),
+//     unselectedLabelStyle: GoogleFonts.dmSans(fontSize: 11),
+//   ),
+// ),
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 11. FAB override (both web and mobile build() branches)
+//     Replace FloatingActionButton with:
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// floatingActionButton: FloatingActionButton(
+//   onPressed: () => _showChatBottomSheet(context),
+//   backgroundColor: const Color(0xFFABFD06),
+//   foregroundColor: const Color(0xFF10212B),
+//   elevation: 4,
+//   child: const Icon(Icons.chat_bubble_outline_rounded, size: 24),
+// ),
+
+
   Widget _buildInsurableItemScreen(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
@@ -3998,32 +5050,6 @@ Future<File?> _fillQuotePdfWithOriginalLayout({
     );
   }
 
-  Widget _buildDetailRow(BuildContext context, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 2,
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              value,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _showEditUserDetailsDialog(
       BuildContext context, String currentName, String currentPhone) {
@@ -4448,50 +5474,6 @@ Future<File?> _fillQuotePdfWithOriginalLayout({
   }
 
 // Add this method inside _InsuranceHomeScreenState
-  Widget _buildNotificationButton(BuildContext context) {
-    return IconButton(
-      icon: Stack(
-        children: [
-          Icon(Icons.notifications,
-              size: 30, color: const Color.fromARGB(221, 148, 183, 82)),
-          if (notifications.isNotEmpty)
-            Positioned(
-              right: 0,
-              top: 0,
-              child: Container(
-                padding: EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  color: Colors.red,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                constraints: BoxConstraints(
-                  minWidth: 16,
-                  minHeight: 16,
-                ),
-                child: Text(
-                  '${notifications.length}',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ),
-        ],
-      ),
-      tooltip: 'Notifications',
-      onPressed: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) =>
-                NotificationsScreen(notifications: notifications),
-          ),
-        );
-      },
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -4935,32 +5917,188 @@ child: SafeArea(
           );
   }
 
-// Updated _buildNavItem to match Material Design with elevation and rounded corners
-  Widget _buildNavItem(BuildContext context,
-      {required IconData icon,
-      required String title,
-      required VoidCallback onTap}) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Card(
-        elevation: 4,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: ListTile(
-          leading: Padding(
-            padding: EdgeInsets.all(8.0),
-            child: Icon(icon, size: 24),
+PolicyType? _extractInsuranceTypeFromMessage(
+    String message,
+    List<PolicyType> policyTypes,
+  ) {
+    final normalizedMessage = message.toLowerCase();
+    for (final type in policyTypes) {
+      final typeName = type.name.toLowerCase();
+      if (normalizedMessage.contains(typeName)) {
+        return type;
+      }
+    }
+
+    const typeAliases = <String, String>{
+      'car': 'motor',
+      'auto': 'motor',
+      'vehicle': 'motor',
+      'health': 'medical',
+      'hospital': 'medical',
+      'trip': 'travel',
+      'flight': 'travel',
+      'home': 'property',
+      'house': 'property',
+      'building': 'property',
+      'worker': 'wiba',
+      'workers': 'wiba',
+      'injury': 'wiba',
+    };
+
+    for (final entry in typeAliases.entries) {
+      if (normalizedMessage.contains(entry.key)) {
+        return policyTypes.firstWhere(
+          (type) => type.name.toLowerCase() == entry.value,
+          orElse: () => PolicyType(id: '', name: '', description: ''),
+        );
+      }
+    }
+
+    return null;
+  }
+
+  bool _isApplicationIntent(String message) {
+    const intentKeywords = <String>[
+      'apply',
+      'buy',
+      'purchase',
+      'start',
+      'need',
+      'want',
+      'insure',
+      'cover',
+      'quote',
+      'policy',
+    ];
+    final normalizedMessage = message.toLowerCase();
+    return intentKeywords.any(normalizedMessage.contains);
+  }
+
+  Future<Map<String, String>> _extractDialogPrefillFromMessage(
+    String message,
+    PolicyType policyType,
+  ) async {
+    final normalizedMessage = message.toLowerCase();
+    final prefill = <String, String>{};
+
+    try {
+      final subtypes =
+          await InsuranceHomeScreen.getPolicySubtypes(policyType.id);
+      PolicySubtype? matchedSubtype;
+
+      for (final subtype in subtypes) {
+        if (normalizedMessage.contains(subtype.name.toLowerCase())) {
+          matchedSubtype = subtype;
+          prefill['subtype'] = subtype.name;
+          break;
+        }
+      }
+
+      if (matchedSubtype != null) {
+        final coverageTypes =
+            await InsuranceHomeScreen.getCoverageTypes(matchedSubtype.id);
+        for (final coverageType in coverageTypes) {
+          if (normalizedMessage.contains(coverageType.name.toLowerCase())) {
+            prefill['coverage_type'] = coverageType.name;
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Could not build chatbot prefill from message: $e');
+      }
+    }
+
+    return prefill;
+  }
+
+  Future<Map<String, dynamic>?> _resolveNaturalLanguageApplication(
+    String message,
+  ) async {
+    final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
+    final modules = policyTypes
+        .map(
+          (policyType) => PolicyModuleFactory.fromPolicyType(
+            policyType: policyType,
+            getSubtypes: InsuranceHomeScreen.getPolicySubtypes,
+            getCoverageTypes: InsuranceHomeScreen.getCoverageTypes,
+            getCompanies: InsuranceHomeScreen.getCompanies,
           ),
-          title: Text(title),
-          onTap: onTap,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        ),
-      ),
+        )
+        .toList();
+
+    final moduleMatch = await PolicyModuleResolver.resolve(
+      message: message,
+      modules: modules,
     );
+    if (moduleMatch == null) return null;
+    final resolution = moduleMatch.resolution;
+
+    return {
+      'type': resolution.type,
+      'subtype': resolution.subtype,
+      'coverageType': resolution.coverageType,
+      'coverageDetail': resolution.coverageDetail,
+      'additionalLevels': resolution.additionalLevels,
+      'company': resolution.companyName,
+      'moduleHint': moduleMatch.module.guiHint,
+      'moduleBundle': resolution.bundle,
+    final normalizedMessage = message.toLowerCase();
+    final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
+    final matchedType =
+        _extractInsuranceTypeFromMessage(normalizedMessage, policyTypes);
+    if (matchedType == null || matchedType.id.isEmpty) {
+      return null;
+    }
+
+    final subtypes = await InsuranceHomeScreen.getPolicySubtypes(matchedType.id);
+    if (subtypes.isEmpty) {
+      return null;
+    }
+
+    PolicySubtype selectedSubtype = subtypes.first;
+    for (final subtype in subtypes) {
+      if (normalizedMessage.contains(subtype.name.toLowerCase())) {
+        selectedSubtype = subtype;
+        break;
+      }
+    }
+
+    final coverageTypes =
+        await InsuranceHomeScreen.getCoverageTypes(selectedSubtype.id);
+    if (coverageTypes.isEmpty) {
+      return null;
+    }
+
+    CoverageType selectedCoverageType = coverageTypes.first;
+    for (final coverageType in coverageTypes) {
+      if (normalizedMessage.contains(coverageType.name.toLowerCase())) {
+        selectedCoverageType = coverageType;
+        break;
+      }
+    }
+
+    String? selectedCompany;
+    try {
+      final allCompanies = await InsuranceHomeScreen.getCompanies();
+      if (allCompanies.isNotEmpty) {
+        final companyMatch = allCompanies.firstWhere(
+          (company) => normalizedMessage.contains(company.name.toLowerCase()),
+          orElse: () => allCompanies.first,
+        );
+        selectedCompany = companyMatch.name;
+      }
+    } catch (_) {
+      selectedCompany = null;
+    }
+
+    return {
+      'type': matchedType,
+      'subtype': selectedSubtype,
+      'coverageType': selectedCoverageType,
+      'company': selectedCompany,
+    };
   }
 
   bool _isApplicationIntent(String message) {
