@@ -14,7 +14,9 @@ import 'package:my_app/Models/field_definition.dart';
 import 'package:my_app/Models/pdf_template.dart';
 import 'package:my_app/Models/policy.dart';
 import 'package:my_app/Screens/pdf_editor.dart';
+import 'package:my_app/Screens/web_form_filler_screen.dart';
 import 'package:my_app/Services/company_config_service.dart';
+import 'package:my_app/Services/policy_module_service.dart';
 import 'package:my_app/insurance_app.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:intl/intl.dart';
@@ -32,6 +34,7 @@ class _AdminPanelState extends State<AdminPanel> {
   List<Policy> policies = [];
   Map<String, PDFTemplate> cachedPdfTemplates = {};
   final TextEditingController _userSearchController = TextEditingController();
+  final TextEditingController _policyPromptController = TextEditingController();
   String _userSearchTerm = '';
 
   @override
@@ -44,7 +47,131 @@ class _AdminPanelState extends State<AdminPanel> {
   @override
   void dispose() {
     _userSearchController.dispose();
+    _policyPromptController.dispose();
     super.dispose();
+  }
+
+  Future<void> _showPolicyResolverDialog() async {
+    _policyPromptController.clear();
+    Map<String, dynamic>? result;
+    String? error;
+    bool loading = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> resolvePrompt() async {
+              final prompt = _policyPromptController.text.trim();
+              if (prompt.isEmpty) return;
+              setDialogState(() {
+                loading = true;
+                error = null;
+                result = null;
+              });
+              try {
+                final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
+                final modules = policyTypes
+                    .map(
+                      (policyType) => PolicyModuleFactory.fromPolicyType(
+                        policyType: policyType,
+                        getSubtypes: InsuranceHomeScreen.getPolicySubtypes,
+                        getCoverageTypes: InsuranceHomeScreen.getCoverageTypes,
+                        getCompanies: InsuranceHomeScreen.getCompanies,
+                      ),
+                    )
+                    .toList();
+                final match = await PolicyModuleResolver.resolve(
+                  message: prompt.toLowerCase(),
+                  modules: modules,
+                );
+                if (match == null) {
+                  setDialogState(() {
+                    error = 'No module matched this prompt.';
+                  });
+                  return;
+                }
+                setDialogState(() {
+                  result = {
+                    'module': match.module.displayName,
+                    'hint': match.module.guiHint,
+                    'type': match.resolution.type.name,
+                    'subtype': match.resolution.subtype.name,
+                    'coverage': match.resolution.coverageType.name,
+                    'company': match.resolution.companyName ?? 'Not selected',
+                    'levels': match.resolution.additionalLevels.length,
+                  };
+                });
+              } catch (e) {
+                setDialogState(() {
+                  error = 'Resolver error: $e';
+                });
+              } finally {
+                setDialogState(() {
+                  loading = false;
+                });
+              }
+            }
+
+            return AlertDialog(
+              title: const Text('Policy Module Resolver'),
+              content: SizedBox(
+                width: 460,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: _policyPromptController,
+                      decoration: const InputDecoration(
+                        labelText: 'Natural language prompt',
+                        hintText: 'e.g. apply for motor comprehensive',
+                      ),
+                      onSubmitted: (_) => resolvePrompt(),
+                    ),
+                    const SizedBox(height: 12),
+                    if (loading) const LinearProgressIndicator(),
+                    if (error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Text(error!,
+                            style: const TextStyle(color: Color(0xFF8B0000))),
+                      ),
+                    if (result != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Module: ${result!['module']}'),
+                            Text('Hint: ${result!['hint']}'),
+                            Text('Type: ${result!['type']}'),
+                            Text('Subtype: ${result!['subtype']}'),
+                            Text('Coverage: ${result!['coverage']}'),
+                            Text('Company: ${result!['company']}'),
+                            Text(
+                                'Additional dynamic levels: ${result!['levels']}'),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Close'),
+                ),
+                ElevatedButton(
+                  onPressed: loading ? null : resolvePrompt,
+                  child: const Text('Resolve'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _loadPolicies() async {
@@ -987,6 +1114,45 @@ class _AdminPanelState extends State<AdminPanel> {
                   ),
                   child: Text(
                     'Upload Rate Card',
+                    style: GoogleFonts.roboto(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const WebFormFillerScreen(),
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1B263B),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Open Web Form Filler',
+                    style: GoogleFonts.roboto(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: _showPolicyResolverDialog,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1D4E63),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Test Policy Modules',
                     style: GoogleFonts.roboto(
                       color: Colors.white,
                       fontWeight: FontWeight.w500,

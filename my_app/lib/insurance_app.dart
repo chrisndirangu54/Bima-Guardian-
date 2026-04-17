@@ -8,6 +8,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:my_app/Screens/admin_panel.dart';
 import 'package:my_app/Screens/webview_page.dart';
 import 'package:my_app/Services/email_analyzer.dart';
+import 'package:my_app/Services/policy_module_service.dart';
 import 'package:my_app/Services/company_config_service.dart';
 import 'package:web/web.dart' as web; // Use this instead of dart:html
 
@@ -4962,7 +4963,97 @@ child: SafeArea(
     );
   }
 
-// _showChatBottomSheet (unchanged)
+  bool _isApplicationIntent(String message) {
+    const intentKeywords = <String>[
+      'apply',
+      'buy',
+      'purchase',
+      'start',
+      'need',
+      'want',
+      'insure',
+      'cover',
+      'quote',
+      'policy',
+    ];
+    final normalizedMessage = message.toLowerCase();
+    return intentKeywords.any(normalizedMessage.contains);
+  }
+
+  Future<Map<String, String>> _extractDialogPrefillFromMessage(
+    String message,
+    PolicyType policyType,
+  ) async {
+    final normalizedMessage = message.toLowerCase();
+    final prefill = <String, String>{};
+
+    try {
+      final subtypes =
+          await InsuranceHomeScreen.getPolicySubtypes(policyType.id);
+      PolicySubtype? matchedSubtype;
+
+      for (final subtype in subtypes) {
+        if (normalizedMessage.contains(subtype.name.toLowerCase())) {
+          matchedSubtype = subtype;
+          prefill['subtype'] = subtype.name;
+          break;
+        }
+      }
+
+      if (matchedSubtype != null) {
+        final coverageTypes =
+            await InsuranceHomeScreen.getCoverageTypes(matchedSubtype.id);
+        for (final coverageType in coverageTypes) {
+          if (normalizedMessage.contains(coverageType.name.toLowerCase())) {
+            prefill['coverage_type'] = coverageType.name;
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Could not build chatbot prefill from message: $e');
+      }
+    }
+
+    return prefill;
+  }
+
+  Future<Map<String, dynamic>?> _resolveNaturalLanguageApplication(
+    String message,
+  ) async {
+    final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
+    final modules = policyTypes
+        .map(
+          (policyType) => PolicyModuleFactory.fromPolicyType(
+            policyType: policyType,
+            getSubtypes: InsuranceHomeScreen.getPolicySubtypes,
+            getCoverageTypes: InsuranceHomeScreen.getCoverageTypes,
+            getCompanies: InsuranceHomeScreen.getCompanies,
+          ),
+        )
+        .toList();
+
+    final moduleMatch = await PolicyModuleResolver.resolve(
+      message: message,
+      modules: modules,
+    );
+    if (moduleMatch == null) return null;
+    final resolution = moduleMatch.resolution;
+
+    return {
+      'type': resolution.type,
+      'subtype': resolution.subtype,
+      'coverageType': resolution.coverageType,
+      'coverageDetail': resolution.coverageDetail,
+      'additionalLevels': resolution.additionalLevels,
+      'company': resolution.companyName,
+      'moduleHint': moduleMatch.module.guiHint,
+      'moduleBundle': resolution.bundle,
+    };
+  }
+
+// _showChatBottomSheet
   void _showChatBottomSheet(BuildContext context) {
     final TextEditingController chatController = TextEditingController();
     final List<String> chatMessages = [];
@@ -5015,7 +5106,7 @@ child: SafeArea(
                           controller: chatController,
                           decoration: InputDecoration(
                             hintText:
-                                'Type an insurance type (e.g., motor, medical)...',
+                                'E.g. "I want to apply for motor insurance"',
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -5026,36 +5117,64 @@ child: SafeArea(
                         icon: const Icon(Icons.send),
                         color: Theme.of(context).primaryColor,
                         onPressed: () async {
-                          final input =
-                              chatController.text.trim().toLowerCase();
-                          if (input.isEmpty) return;
+                          final rawInput = chatController.text.trim();
+                          final input = rawInput.toLowerCase();
+                          if (rawInput.isEmpty) return;
 
                           setState(() {
-                            chatMessages.add('You: $input');
+                            chatMessages.add('You: $rawInput');
                             chatController.clear();
                           });
 
-                          // Fetch policy types to validate input
-                          final policyTypes =
-                              await InsuranceHomeScreen.getPolicyTypes();
-                          final validType = policyTypes.firstWhere(
-                            (type) => type.name.toLowerCase() == input,
-                            orElse: () =>
-                                PolicyType(id: '', name: '', description: ''),
-                          );
+                          final resolvedApplication =
+                              await _resolveNaturalLanguageApplication(input);
+                          final matchedType =
+                              resolvedApplication?['type'] as PolicyType?;
+                          final hasIntent = _isApplicationIntent(input);
 
-                          if (validType.id.isNotEmpty) {
+                          if (matchedType != null && matchedType.id.isNotEmpty) {
+                            final selectedSubtype =
+                                resolvedApplication?['subtype'] as PolicySubtype?;
+                            final selectedCoverage = resolvedApplication?['coverageType']
+                                as CoverageType?;
+                            final selectedCompany =
+                                resolvedApplication?['company'] as String?;
+                            final moduleHint =
+                                resolvedApplication?['moduleHint'] as String?;
+
                             setState(() {
-                              chatMessages.add(
-                                  'Bot: Starting $input insurance flow...');
+                              if (selectedSubtype != null &&
+                                  selectedCoverage != null) {
+                                chatMessages.add(
+                                  'Bot: Done. I selected ${matchedType.name} / ${selectedSubtype.name} / ${selectedCoverage.name}${selectedCompany != null ? " / $selectedCompany" : ""} for you.',
+                                );
+                                if (moduleHint != null &&
+                                    moduleHint.trim().isNotEmpty) {
+                                  chatMessages.add('Bot: $moduleHint');
+                                }
+                              } else {
+                                chatMessages.add(
+                                  'Bot: Great! I can help with ${matchedType.name} insurance. Starting your application flow...',
+                                );
+                              }
                             });
 
                             // Trigger showInsuranceDialog
                             if (context.mounted) {
                               Navigator.pop(context); // Close bottom sheet
-                              showInsuranceDialog(
+                              if (selectedSubtype != null &&
+                                  selectedCoverage != null) {
+                                await _showInsuredItemDialog(
+                                  context,
+                                  matchedType,
+                                  selectedSubtype,
+                                  selectedCoverage,
+                                  preSelectedCompany: selectedCompany,
+                                );
+                              } else {
+                                showInsuranceDialog(
                                 context,
-                                input,
+                                matchedType.name.toLowerCase(),
                                 onFinalSubmit: (context, type, subtype,
                                     coverage, company) {
                                   // Save policy to Firestore or update UI
@@ -5071,12 +5190,25 @@ child: SafeArea(
                                 },
                                 scaffoldMessengerKey:
                                     GlobalKey<ScaffoldMessengerState>(),
-                              );
+                                  initialResponses:
+                                      await _extractDialogPrefillFromMessage(
+                                    input,
+                                    matchedType,
+                                  ),
+                                );
+                              }
                             }
+                          } else if (hasIntent) {
+                            setState(() {
+                              chatMessages.add(
+                                'Bot: I can help you apply. Please mention the insurance type (motor, medical, travel, property, or WIBA).',
+                              );
+                            });
                           } else {
                             setState(() {
                               chatMessages.add(
-                                  'Bot: Invalid insurance type. Try motor, medical, etc.');
+                                'Bot: Tell me what you want to insure, for example: "I need medical cover" or "Apply for motor insurance".',
+                              );
                             });
                           }
                         },
@@ -8416,6 +8548,7 @@ Future<void> showInsuranceDialog(
   int step = 0,
   void Function(BuildContext, String, String, String, String?)? onFinalSubmit,
   required GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey,
+  Map<String, String>? initialResponses,
 }) async {
   if (kDebugMode) {
     print(
@@ -8435,6 +8568,9 @@ Future<void> showInsuranceDialog(
     if (step == 0) {
       await dialogState.clearProgress(normalizedType);
       dialogState.resetForNewCycle();
+      if (initialResponses != null && initialResponses.isNotEmpty) {
+        initialResponses.forEach(dialogState.updateResponse);
+      }
     } else {
       await dialogState.loadProgress(normalizedType);
     }
