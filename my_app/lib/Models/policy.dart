@@ -2,7 +2,126 @@ import 'package:flutter/foundation.dart';
 import 'package:my_app/Models/cover.dart';
 import 'package:my_app/insurance_app.dart';
 
-class PolicyType {
+abstract class ModularPolicyComponent {
+  String get id;
+  String get name;
+  String get description;
+  Map<String, dynamic> toMap();
+}
+
+class ModularPolicyBundle<
+    TType extends ModularPolicyComponent,
+    TSubtype extends ModularPolicyComponent,
+    TCoverage extends ModularPolicyComponent> {
+  final String moduleName;
+  final TType type;
+  final TSubtype subtype;
+  final TCoverage coverageType;
+  final ModularPolicyComponent? coverageDetail;
+  final List<ModularPolicyComponent> additionalLevels;
+
+  const ModularPolicyBundle({
+    required this.moduleName,
+    required this.type,
+    required this.subtype,
+    required this.coverageType,
+    this.coverageDetail,
+    this.additionalLevels = const [],
+  });
+
+  List<ModularPolicyComponent> get allLevels => [
+        type,
+        subtype,
+        coverageType,
+        if (coverageDetail != null) coverageDetail!,
+        ...additionalLevels,
+      ];
+
+  Map<String, dynamic> toMap() => {
+        'moduleName': moduleName,
+        'type': type.toMap(),
+        'subtype': subtype.toMap(),
+        'coverageType': coverageType.toMap(),
+        'coverageDetail': coverageDetail?.toMap(),
+        'additionalLevels': additionalLevels.map((level) => level.toMap()).toList(),
+      };
+}
+
+class CoverageDetail implements ModularPolicyComponent {
+  final String id;
+  final String name;
+  final String description;
+  final String coverageTypeId;
+  String icon;
+
+  CoverageDetail({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.coverageTypeId,
+    this.icon = '',
+  });
+
+  factory CoverageDetail.fromMap(Map<String, dynamic> map) => CoverageDetail(
+        id: map['id'] ?? '',
+        name: map['name'] ?? '',
+        description: map['description'] ?? '',
+        coverageTypeId: map['coverageTypeId'] ?? '',
+        icon: map['icon'] ?? '',
+      );
+
+  factory CoverageDetail.fromFirestore(Map<String, dynamic> data) =>
+      CoverageDetail.fromMap(data);
+
+  @override
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'name': name,
+        'description': description,
+        'coverageTypeId': coverageTypeId,
+        'icon': icon,
+      };
+}
+
+class DynamicPolicyLevel implements ModularPolicyComponent {
+  final String id;
+  final String name;
+  final String description;
+  final String parentId;
+  final int levelIndex;
+  final Map<String, dynamic> metadata;
+
+  DynamicPolicyLevel({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.parentId,
+    required this.levelIndex,
+    this.metadata = const {},
+  });
+
+  factory DynamicPolicyLevel.fromMap(Map<String, dynamic> map) =>
+      DynamicPolicyLevel(
+        id: map['id'] ?? '',
+        name: map['name'] ?? '',
+        description: map['description'] ?? '',
+        parentId: map['parentId'] ?? '',
+        levelIndex: map['levelIndex'] ?? 0,
+        metadata: Map<String, dynamic>.from(map['metadata'] ?? {}),
+      );
+
+  @override
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'name': name,
+        'description': description,
+        'parentId': parentId,
+        'levelIndex': levelIndex,
+        'metadata': metadata,
+      };
+}
+
+class PolicyType implements ModularPolicyComponent {
   final String id;
   final String name;
   final String description;
@@ -48,7 +167,7 @@ class PolicyType {
       );
 }
 
-class PolicySubtype {
+class PolicySubtype implements ModularPolicyComponent {
   final String id;
   final String name;
   final String policyTypeId;
@@ -106,7 +225,7 @@ class PolicySubtype {
   String toString() => name;
 }
 
-class CoverageType {
+class CoverageType implements ModularPolicyComponent {
   final String id;
   final String name;
   final String description;

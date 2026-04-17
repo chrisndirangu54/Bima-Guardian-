@@ -8,6 +8,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:my_app/Screens/admin_panel.dart';
 import 'package:my_app/Screens/webview_page.dart';
 import 'package:my_app/Services/email_analyzer.dart';
+import 'package:my_app/Services/policy_module_service.dart';
 import 'package:my_app/Services/company_config_service.dart';
 import 'package:web/web.dart' as web; // Use this instead of dart:html
 
@@ -6015,6 +6016,34 @@ PolicyType? _extractInsuranceTypeFromMessage(
   Future<Map<String, dynamic>?> _resolveNaturalLanguageApplication(
     String message,
   ) async {
+    final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
+    final modules = policyTypes
+        .map(
+          (policyType) => PolicyModuleFactory.fromPolicyType(
+            policyType: policyType,
+            getSubtypes: InsuranceHomeScreen.getPolicySubtypes,
+            getCoverageTypes: InsuranceHomeScreen.getCoverageTypes,
+            getCompanies: InsuranceHomeScreen.getCompanies,
+          ),
+        )
+        .toList();
+
+    final moduleMatch = await PolicyModuleResolver.resolve(
+      message: message,
+      modules: modules,
+    );
+    if (moduleMatch == null) return null;
+    final resolution = moduleMatch.resolution;
+
+    return {
+      'type': resolution.type,
+      'subtype': resolution.subtype,
+      'coverageType': resolution.coverageType,
+      'coverageDetail': resolution.coverageDetail,
+      'additionalLevels': resolution.additionalLevels,
+      'company': resolution.companyName,
+      'moduleHint': moduleMatch.module.guiHint,
+      'moduleBundle': resolution.bundle,
     final normalizedMessage = message.toLowerCase();
     final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
     final matchedType =
@@ -6158,6 +6187,8 @@ PolicyType? _extractInsuranceTypeFromMessage(
                                 as CoverageType?;
                             final selectedCompany =
                                 resolvedApplication?['company'] as String?;
+                            final moduleHint =
+                                resolvedApplication?['moduleHint'] as String?;
 
                             setState(() {
                               if (selectedSubtype != null &&
@@ -6165,6 +6196,10 @@ PolicyType? _extractInsuranceTypeFromMessage(
                                 chatMessages.add(
                                   'Bot: Done. I selected ${matchedType.name} / ${selectedSubtype.name} / ${selectedCoverage.name}${selectedCompany != null ? " / $selectedCompany" : ""} for you.',
                                 );
+                                if (moduleHint != null &&
+                                    moduleHint.trim().isNotEmpty) {
+                                  chatMessages.add('Bot: $moduleHint');
+                                }
                               } else {
                                 chatMessages.add(
                                   'Bot: Great! I can help with ${matchedType.name} insurance. Starting your application flow...',
