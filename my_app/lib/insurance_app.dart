@@ -6101,6 +6101,96 @@ PolicyType? _extractInsuranceTypeFromMessage(
     };
   }
 
+  bool _isApplicationIntent(String message) {
+    const intentKeywords = <String>[
+      'apply',
+      'buy',
+      'purchase',
+      'start',
+      'need',
+      'want',
+      'insure',
+      'cover',
+      'quote',
+      'policy',
+    ];
+    final normalizedMessage = message.toLowerCase();
+    return intentKeywords.any(normalizedMessage.contains);
+  }
+
+  Future<Map<String, String>> _extractDialogPrefillFromMessage(
+    String message,
+    PolicyType policyType,
+  ) async {
+    final normalizedMessage = message.toLowerCase();
+    final prefill = <String, String>{};
+
+    try {
+      final subtypes =
+          await InsuranceHomeScreen.getPolicySubtypes(policyType.id);
+      PolicySubtype? matchedSubtype;
+
+      for (final subtype in subtypes) {
+        if (normalizedMessage.contains(subtype.name.toLowerCase())) {
+          matchedSubtype = subtype;
+          prefill['subtype'] = subtype.name;
+          break;
+        }
+      }
+
+      if (matchedSubtype != null) {
+        final coverageTypes =
+            await InsuranceHomeScreen.getCoverageTypes(matchedSubtype.id);
+        for (final coverageType in coverageTypes) {
+          if (normalizedMessage.contains(coverageType.name.toLowerCase())) {
+            prefill['coverage_type'] = coverageType.name;
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Could not build chatbot prefill from message: $e');
+      }
+    }
+
+    return prefill;
+  }
+
+  Future<Map<String, dynamic>?> _resolveNaturalLanguageApplication(
+    String message,
+  ) async {
+    final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
+    final modules = policyTypes
+        .map(
+          (policyType) => PolicyModuleFactory.fromPolicyType(
+            policyType: policyType,
+            getSubtypes: InsuranceHomeScreen.getPolicySubtypes,
+            getCoverageTypes: InsuranceHomeScreen.getCoverageTypes,
+            getCompanies: InsuranceHomeScreen.getCompanies,
+          ),
+        )
+        .toList();
+
+    final moduleMatch = await PolicyModuleResolver.resolve(
+      message: message,
+      modules: modules,
+    );
+    if (moduleMatch == null) return null;
+    final resolution = moduleMatch.resolution;
+
+    return {
+      'type': resolution.type,
+      'subtype': resolution.subtype,
+      'coverageType': resolution.coverageType,
+      'coverageDetail': resolution.coverageDetail,
+      'additionalLevels': resolution.additionalLevels,
+      'company': resolution.companyName,
+      'moduleHint': moduleMatch.module.guiHint,
+      'moduleBundle': resolution.bundle,
+    };
+  }
+
 // _showChatBottomSheet
   void _showChatBottomSheet(BuildContext context) {
     final TextEditingController chatController = TextEditingController();
