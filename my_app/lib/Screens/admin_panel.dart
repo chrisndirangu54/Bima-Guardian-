@@ -14,6 +14,7 @@ import 'package:my_app/Models/field_definition.dart';
 import 'package:my_app/Models/pdf_template.dart';
 import 'package:my_app/Models/policy.dart';
 import 'package:my_app/Screens/pdf_editor.dart';
+import 'package:my_app/Screens/web_form_filler_screen.dart';
 import 'package:my_app/Services/company_config_service.dart';
 import 'package:my_app/insurance_app.dart';
 import 'package:carousel_slider/carousel_slider.dart';
@@ -987,6 +988,29 @@ class _AdminPanelState extends State<AdminPanel> {
                   ),
                   child: Text(
                     'Upload Rate Card',
+                    style: GoogleFonts.roboto(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const WebFormFillerScreen(),
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1B263B),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Open Web Form Filler',
                     style: GoogleFonts.roboto(
                       color: Colors.white,
                       fontWeight: FontWeight.w500,
