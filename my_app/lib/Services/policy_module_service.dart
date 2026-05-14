@@ -76,7 +76,7 @@ class ConfigDrivenPolicyModule implements PolicyModule {
     final selectedSubtype = _matchByName(
       normalizedMessage,
       subtypes,
-      (subtype) => subtype.name,
+      (subtype) => (subtype as PolicySubtype?)?.name ?? '',
     );
 
     final coverageTypes = await getCoverageTypes(selectedSubtype.id);
@@ -87,7 +87,7 @@ class ConfigDrivenPolicyModule implements PolicyModule {
     final selectedCoverageType = _matchByName(
       normalizedMessage,
       coverageTypes,
-      (coverage) => coverage.name,
+      (coverage) => (coverage as CoverageType?)?.name ?? '',
     );
     CoverageDetail? selectedCoverageDetail;
     if (getCoverageDetails != null) {
@@ -96,7 +96,7 @@ class ConfigDrivenPolicyModule implements PolicyModule {
         selectedCoverageDetail = _matchByName(
           normalizedMessage,
           details,
-          (detail) => detail.name,
+          (detail) => detail!.name,
         );
       }
     }
@@ -111,7 +111,7 @@ class ConfigDrivenPolicyModule implements PolicyModule {
         : _matchByName(
             normalizedMessage,
             companies,
-            (company) => company.name,
+            (company) => company?.name ?? '',
           ).name;
 
     return PolicyModuleResolution(
@@ -145,7 +145,7 @@ class ConfigDrivenPolicyModule implements PolicyModule {
       final selected = _matchByName(
         normalizedMessage,
         options,
-        (level) => level.name,
+        (level) => level!.name,
       );
       resolved.add(selected);
       parent = selected;
@@ -171,9 +171,12 @@ class ConfigDrivenPolicyModule implements PolicyModule {
     List<T> options,
     String Function(T item) getName,
   ) {
+    if (options.isEmpty) {
+      throw StateError('Options list cannot be empty');
+    }
     return options.firstWhere(
       (item) => normalizedMessage.contains(getName(item).toLowerCase()),
-      orElse: () => options.first,
+      orElse: () => options.first as T,
     );
   }
 }
