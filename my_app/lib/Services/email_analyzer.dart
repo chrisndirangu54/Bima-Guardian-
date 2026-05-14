@@ -4,7 +4,7 @@ import 'package:googleapis/gmail/v1.dart' as gmail;
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:http/http.dart' as http;
 import 'package:my_app/Models/cover.dart';
-import 'dart:convert';
+import 'package:my_app/Services/gemini_service.dart';
 
 // Assuming Cover class and ClaimStatus enum are defined as provided
 
@@ -37,50 +37,33 @@ class EmailAnalyzer {
     return emailDetails;
   }
 
-  // Analyze email content using ChatGPT (or similar AI model)
+  // Analyze email content using Gemini's free-tier model.
   Future<ClaimStatus> _analyzeEmailContent(String emailContent) async {
-    final openAiApiKey = 'YOUR_OPENAI_API_KEY';
-    final url = Uri.parse('https://api.openai.com/v1/chat/completions');
-    final headers = {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer $openAiApiKey',
-    };
-
-    final body = jsonEncode({
-      'model': 'gpt-4', // or 'gpt-3.5-turbo'
-      'messages': [
-        {
-          'role': 'system',
-          'content':
-              'You are an assistant that analyzes emails to determine insurance claim statuses. Read the email content and return one of the following statuses: "pending", "approved", "rejected", or "none". If the email does not mention a claim status, return "none".',
-        },
-        {
-          'role': 'user',
-          'content': emailContent,
-        },
-      ],
-    });
-
     try {
-      final response = await http.post(url, headers: headers, body: body);
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final statusText = data['choices'][0]['message']['content'].trim();
-        switch (statusText.toLowerCase()) {
-          case 'pending':
-            return ClaimStatus.pending;
-          case 'approved':
-            return ClaimStatus.approved;
-          case 'rejected':
-            return ClaimStatus.rejected;
-          default:
-            return ClaimStatus.none;
-        }
-      } else {
-        throw Exception('Failed to analyze email: ${response.statusCode}');
+      final statusText = await GeminiService.generateText(
+        prompt: '''You are an assistant that analyzes emails to determine insurance claim statuses.
+Read the email content and return exactly one of these lowercase values: pending, approved, rejected, none.
+If the email does not mention a claim status, return none.
+
+Email:
+$emailContent''',
+        maxOutputTokens: 10,
+      );
+
+      switch (statusText.trim().toLowerCase()) {
+        case 'pending':
+          return ClaimStatus.pending;
+        case 'approved':
+          return ClaimStatus.approved;
+        case 'rejected':
+          return ClaimStatus.rejected;
+        default:
+          return ClaimStatus.none;
       }
     } catch (e) {
-      print('Error analyzing email: $e');
+      if (kDebugMode) {
+        print('Error analyzing email with Gemini: $e');
+      }
       return ClaimStatus.none;
     }
   }

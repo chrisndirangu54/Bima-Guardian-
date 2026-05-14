@@ -8,6 +8,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:my_app/Screens/admin_panel.dart';
 import 'package:my_app/Screens/webview_page.dart';
 import 'package:my_app/Services/email_analyzer.dart';
+import 'package:my_app/Services/gemini_service.dart';
 import 'package:my_app/Services/policy_module_service.dart';
 import 'package:my_app/Services/company_config_service.dart';
 import 'package:web/web.dart' as web; // Use this instead of dart:html
@@ -393,7 +394,6 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
   final secureStorage = const FlutterSecureStorage();
   String? selectedInsuredItemId;
   String? selectedQuoteId;
-  static const String openAiApiKey = 'your-openai-api-key-here';
   static const String mpesaApiKey = 'your-mpesa-api-key-here';
   List<Policy> policies = [];
   static const String paystackSecretKey = 'your-paystack-secret-key-here';
@@ -1005,47 +1005,33 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     });
   }
 
-  Future<bool> _validatePdfWithChatGPT(File pdfFile) async {
+  Future<bool> _validatePdfWithGemini(File pdfFile) async {
     try {
       PDFDoc doc = await PDFDoc.fromPath(pdfFile.path);
       String text = await doc.text;
 
-      final response = await http.post(
-        Uri.parse('https://api.openai.com/v1/chat/completions'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $openAiApiKey',
-        },
-        body: jsonEncode({
-          'model': 'gpt-3.5-turbo',
-          'messages': [
-            {
-              'role': 'system',
-              'content':
-                  'You are an expert at validating form data. Given the text of a filled PDF, check if fields like name, email, phone, etc., are correctly filled. Return a JSON object with a boolean "valid" and a "message" explaining any issues.',
-            },
-            {'role': 'user', 'content': 'Validate this PDF text:\n\n$text'},
-          ],
-          'max_tokens': 200,
-        }),
+      final rawText = await GeminiService.generateText(
+        prompt: '''You are an expert at validating form data. Given the text of a filled PDF, check if fields like name, email, phone, etc., are correctly filled. Return ONLY a JSON object with a boolean "valid" and a "message" explaining any issues.
+
+Validate this PDF text:
+
+$text''',
+        maxOutputTokens: 200,
+        jsonResponse: true,
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final result = jsonDecode(data['choices'][0]['message']['content']);
-        if (!result['valid']) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('ChatGPT Validation Failed: ${result['message']}'),
-            ),
-          );
-        }
-        return result['valid'];
+      final result = jsonDecode(GeminiService.cleanJsonText(rawText));
+      if (!result['valid']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gemini validation failed: ${result['message']}'),
+          ),
+        );
       }
-      return false;
+      return result['valid'];
     } catch (e) {
       if (kDebugMode) {
-        print('ChatGPT validation error: $e');
+        print('Gemini validation error: $e');
       }
       return false;
     }
@@ -1076,7 +1062,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       );
       return approved ?? false;
     } else {
-      return await _validatePdfWithChatGPT(pdfFile);
+      return await _validatePdfWithGemini(pdfFile);
     }
   }
 
@@ -2216,7 +2202,7 @@ Future<File?> _fillQuotePdfWithOriginalLayout({
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ── PALETTE CONSTANTS (add near top of InsuranceHomeScreenState) ─────────────
-// Replace the static const openAiApiKey line area with these first:
+// Palette constants used by this section:
 //
 //   static const _darkTeal    = Color(0xFF10212B);
 //   static const _acidOlive   = Color(0xFFABFD06);
@@ -6964,43 +6950,17 @@ PolicyType? _extractInsuranceTypeFromMessage(
       final bytes = await file.readAsBytes();
       final base64Image = base64Encode(bytes);
 
-      final requestBody = {
-        'model': 'gpt-4o',
-        'messages': [
-          {
-            'role': 'user',
-            'content': [
-              {
-                'type': 'text',
-                'text':
-                    'Extract the following fields from the provided document: name, email, phone, id_number, kra_pin, vehicle_value, regno, chassis_number, health_condition, travel_destination, employee_count, insurer. Return as a JSON object.',
-              },
-              {
-                'type': 'image_url',
-                'image_url': {'url': 'data:image/jpeg;base64,$base64Image'}
-              }
-            ]
-          }
-        ],
-        'max_tokens': 300
-      };
-
-      final response = await http.post(
-        Uri.parse('https://api.openai.com/v1/chat/completions'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer YOUR_OPENAI_API_KEY',
-        },
-        body: jsonEncode(requestBody),
+      final rawText = await GeminiService.generateFromImage(
+        prompt:
+            'Extract the following fields from the provided document: name, email, phone, id_number, kra_pin, vehicle_value, regno, chassis_number, health_condition, travel_destination, employee_count, insurer. Return ONLY a JSON object.',
+        base64Image: base64Image,
+        maxOutputTokens: 300,
+        jsonResponse: true,
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final extracted = jsonDecode(data['choices'][0]['message']['content'])
-            as Map<String, dynamic>;
-        return extracted.map((key, value) => MapEntry(key, value.toString()));
-      }
-      return null;
+      final extracted = jsonDecode(GeminiService.cleanJsonText(rawText))
+          as Map<String, dynamic>;
+      return extracted.map((key, value) => MapEntry(key, value.toString()));
     } catch (e) {
       if (kDebugMode) print('OCR Error: $e');
       return null;
