@@ -3,12 +3,21 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class GeminiService {
+  static const String apiKey = String.fromEnvironment(
+    'GEMINI_API_KEY',
+    defaultValue: 'AIzaSyC9l-r597J799tIcTthyISAwX5t4z3r6A4',
+  );
+  static const String freeTierModel = String.fromEnvironment(
+    'GEMINI_MODEL',
+    defaultValue: 'gemini-3.1-flash-lite',
+  );
   static const String apiKey = 'AIzaSyC9l-r597J799tIcTthyISAwX5t4z3r6A4';
   static const String freeTierModel = 'gemini-2.0-flash-lite';
   static const String _baseUrl =
       'https://generativelanguage.googleapis.com/v1beta/models';
 
   static Uri _generateContentUri() =>
+      Uri.parse('$_baseUrl/$freeTierModel:generateContent');
       Uri.parse('$_baseUrl/$freeTierModel:generateContent?key=$apiKey');
 
   static Future<String> generateText({
@@ -52,6 +61,16 @@ class GeminiService {
     int maxOutputTokens = 1000,
     bool jsonResponse = false,
   }) async {
+    if (apiKey.isEmpty) {
+      throw Exception('Gemini API key is missing.');
+    }
+
+    final response = await http.post(
+      _generateContentUri(),
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
     final response = await http.post(
       _generateContentUri(),
       headers: {'Content-Type': 'application/json'},
