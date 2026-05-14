@@ -12,6 +12,8 @@ class Cover {
   final PolicyType type;
   final PolicySubtype subtype;
   final CoverageType coverageType;
+  final CoverageDetail? coverageDetail;
+  final List<ModularPolicyComponent> additionalLevels;
   CoverStatus status;
   DateTime? expirationDate;
   final String pdfTemplateKey;
@@ -33,6 +35,8 @@ class Cover {
     required this.type,
     required this.subtype,
     required this.coverageType,
+    this.coverageDetail,
+    this.additionalLevels = const [],
     required this.status,
     this.expirationDate, // Made nullable
     required this.pdfTemplateKey,
@@ -55,6 +59,8 @@ class Cover {
         'type': type.toJson(),
         'subtype': subtype.toJson(),
         'coverageType': coverageType.toJson(),
+        'coverageDetail': coverageDetail?.toMap(),
+        'additionalLevels': additionalLevels.map((e) => e.toMap()).toList(),
         'status': status.name,
         'expirationDate': expirationDate?.toIso8601String(),
         'pdfTemplateKey': pdfTemplateKey,
@@ -77,6 +83,15 @@ class Cover {
             json['subtype'] as Map<String, dynamic>? ?? {}),
         coverageType: CoverageType.fromJson(
             json['coverageType'] as Map<String, dynamic>? ?? {}),
+        coverageDetail: json['coverageDetail'] is Map<String, dynamic>
+            ? CoverageDetail.fromMap(
+                json['coverageDetail'] as Map<String, dynamic>,
+              )
+            : null,
+        additionalLevels: (json['additionalLevels'] as List<dynamic>? ?? [])
+            .whereType<Map<String, dynamic>>()
+            .map<ModularPolicyComponent>(DynamicPolicyLevel.fromMap)
+            .toList(),
         status: CoverStatus.values.firstWhere(
           (e) => e.name == (json['status'] as String? ?? ''),
           orElse: () => CoverStatus.active,
@@ -105,6 +120,8 @@ class Cover {
         'type': type.toMap(),
         'subtype': subtype.toMap(),
         'coverageType': coverageType.toMap(),
+        'coverageDetail': coverageDetail?.toMap(),
+        'additionalLevels': additionalLevels.map((e) => e.toMap()).toList(),
         'status': status.name,
         'expirationDate': expirationDate?.toIso8601String(),
         'pdfTemplateKey': pdfTemplateKey,
@@ -127,6 +144,15 @@ class Cover {
             map['subtype'] as Map<String, dynamic>? ?? {}),
         coverageType: CoverageType.fromMap(
             map['coverageType'] as Map<String, dynamic>? ?? {}),
+        coverageDetail: map['coverageDetail'] is Map<String, dynamic>
+            ? CoverageDetail.fromMap(
+                map['coverageDetail'] as Map<String, dynamic>,
+              )
+            : null,
+        additionalLevels: (map['additionalLevels'] as List<dynamic>? ?? [])
+            .whereType<Map<String, dynamic>>()
+            .map<ModularPolicyComponent>(DynamicPolicyLevel.fromMap)
+            .toList(),
         status: CoverStatus.values.firstWhere(
           (e) => e.name == (map['status'] as String? ?? ''),
           orElse: () => CoverStatus.active,
@@ -155,6 +181,8 @@ class Cover {
     PolicyType? type,
     PolicySubtype? subtype,
     CoverageType? coverageType,
+    CoverageDetail? coverageDetail,
+    List<ModularPolicyComponent>? additionalLevels,
     CoverStatus? status,
     DateTime? expirationDate,
     String? pdfTemplateKey,
@@ -174,6 +202,8 @@ class Cover {
       type: type ?? this.type,
       subtype: subtype ?? this.subtype,
       coverageType: coverageType ?? this.coverageType,
+      coverageDetail: coverageDetail ?? this.coverageDetail,
+      additionalLevels: additionalLevels ?? this.additionalLevels,
       status: status ?? this.status,
       expirationDate: expirationDate ?? this.expirationDate,
       pdfTemplateKey: pdfTemplateKey ?? this.pdfTemplateKey,
@@ -215,6 +245,8 @@ class Cover {
           type == other.type &&
           subtype == other.subtype &&
           coverageType == other.coverageType &&
+          coverageDetail == other.coverageDetail &&
+          additionalLevels.toString() == other.additionalLevels.toString() &&
           status == other.status &&
           expirationDate == other.expirationDate &&
           pdfTemplateKey == other.pdfTemplateKey &&
@@ -235,6 +267,8 @@ class Cover {
         type,
         subtype,
         coverageType,
+        coverageDetail,
+        additionalLevels,
         status,
         expirationDate,
         pdfTemplateKey,
@@ -249,5 +283,5 @@ class Cover {
 
   @override
   String toString() =>
-      'Cover(id: $id, name: $name, insuredItemId: $insuredItemId, companyId: $companyId, type: ${type.name}, subtype: ${subtype.name}, coverageType: ${coverageType.name}, status: $status, expirationDate: $expirationDate, extensionCount: $extensionCount)';
+      'Cover(id: $id, name: $name, insuredItemId: $insuredItemId, companyId: $companyId, type: ${type.name}, subtype: ${subtype.name}, coverageType: ${coverageType.name}, coverageDetail: ${coverageDetail?.name}, dynamicLevels: ${additionalLevels.length}, status: $status, expirationDate: $expirationDate, extensionCount: $extensionCount)';
 }

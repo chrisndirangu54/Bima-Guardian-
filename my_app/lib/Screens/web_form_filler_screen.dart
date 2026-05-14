@@ -151,7 +151,7 @@ class _WebFormFillerScreenState extends State<WebFormFillerScreen>
 
       if (schema.fields.isEmpty) {
         throw Exception(
-          'Claude found no form fields on this page. '
+          'Gemini found no form fields on this page. '
           'Try scrolling to the form first and extracting again.',
         );
       }
@@ -1051,7 +1051,7 @@ class _HowItWorks extends StatelessWidget {
         Icons.auto_awesome_outlined,
         'JS extracts the live, fully-rendered DOM (no http.get)'
       ),
-      (Icons.auto_awesome, 'Claude AI classifies every field with CSS selectors'),
+      (Icons.auto_awesome, 'Gemini AI classifies every field with CSS selectors'),
       (Icons.edit_outlined, 'You fill a clean, validated Flutter form'),
       (
         Icons.send_rounded,

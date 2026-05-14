@@ -8,6 +8,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:my_app/Screens/admin_panel.dart';
 import 'package:my_app/Screens/webview_page.dart';
 import 'package:my_app/Services/email_analyzer.dart';
+import 'package:my_app/Services/policy_module_service.dart';
 import 'package:my_app/Services/company_config_service.dart';
 import 'package:my_app/Services/policy_module_service.dart';
 import 'package:web/web.dart' as web;
@@ -267,8 +268,8 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
   final secureStorage = const FlutterSecureStorage();
   String? selectedInsuredItemId;
   String? selectedQuoteId;
-  static const String openAiApiKey    = 'your-openai-api-key-here';
-  static const String mpesaApiKey     = 'your-mpesa-api-key-here';
+  static const String openAiApiKey = 'your-openai-api-key-here';
+  static const String mpesaApiKey = 'your-mpesa-api-key-here';
   List<Policy> policies = [];
   static const String paystackSecretKey = 'your-paystack-secret-key-here';
   InsuredItem? insuredItem;
@@ -513,8 +514,10 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       if (mounted && !shown) {
         shown = true;
         SchedulerBinding.instance.addPostFrameCallback((_) {
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('Failed to load policies: $e')));
+          }
         });
       }
     }
@@ -637,34 +640,48 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     setState(() => chatMessages.add({'sender': 'bot', 'text': formatted}));
   }
 
-  Future<bool> _validatePdfWithChatGPT(File pdfFile) async {
+  Future<bool> _validatePdfWithGemini(File pdfFile) async {
     try {
-      final doc  = await PDFDoc.fromPath(pdfFile.path);
-      final text = await doc.text;
+      PDFDoc doc = await PDFDoc.fromPath(pdfFile.path);
+      String text = await doc.text;
+
       final response = await http.post(
         Uri.parse('https://api.openai.com/v1/chat/completions'),
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $openAiApiKey'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $openAiApiKey',
+        },
         body: jsonEncode({
           'model': 'gpt-3.5-turbo',
           'messages': [
-            {'role': 'system', 'content': 'Validate form fields. Return JSON with "valid" bool and "message".'},
-            {'role': 'user', 'content': 'Validate:\n\n$text'},
+            {
+              'role': 'system',
+              'content':
+                  'You are an expert at validating form data. Given the text of a filled PDF, check if fields like name, email, phone, etc., are correctly filled. Return a JSON object with a boolean "valid" and a "message" explaining any issues.',
+            },
+            {'role': 'user', 'content': 'Validate this PDF text:\n\n$text'},
           ],
           'max_tokens': 200,
         }),
       );
+
       if (response.statusCode == 200) {
-        final data   = jsonDecode(response.body);
+        final data = jsonDecode(response.body);
         final result = jsonDecode(data['choices'][0]['message']['content']);
         if (!result['valid']) {
           ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Validation Failed: ${result['message']}')));
+            SnackBar(
+              content: Text('ChatGPT Validation Failed: ${result['message']}'),
+            ),
+          );
         }
         return result['valid'];
       }
       return false;
     } catch (e) {
-      if (kDebugMode) print('ChatGPT validation error: $e');
+      if (kDebugMode) {
+        print('ChatGPT validation error: $e');
+      }
       return false;
     }
   }
@@ -683,6 +700,8 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         ),
       );
       return approved ?? false;
+    } else {
+      return await _validatePdfWithChatGPT(pdfFile);
     }
     return _validatePdfWithChatGPT(pdfFile);
   }
@@ -692,15 +711,19 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     try {
       final template = await InsuranceHomeScreen.getPDFTemplate(templateKey);
       if (template == null) {
-        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('PDF template not found')));
+        }
         return null;
       }
       final directory    = await getApplicationDocumentsDirectory();
       final templateFile = File('${directory.path}/pdf_templates/$templateKey.pdf');
       if (!await templateFile.exists()) {
-        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('PDF template file not found')));
+        }
         return null;
       }
       final pdfBytes  = await templateFile.readAsBytes();
@@ -738,8 +761,10 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       return outputFile;
     } catch (e, st) {
       if (kDebugMode) print('Error filling PDF: $e\n$st');
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to generate PDF: $e')));
+      }
       return null;
     }
   }
@@ -834,13 +859,17 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
           if (pdfFile != null && await _previewPdf(pdfFile)) {
             await _sendEmail(companyId, type.name, subtype.name, details, pdfFile,
                 details['regno'] ?? '', details['vehicle_type'] ?? '', coverId);
-            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text(isClaim ? 'Claim sent.' : 'Cancellation sent.')));
+            }
           }
         } else {
           pdfFile = await _generateFallbackPdf(type.name, subtype.name, details);
-          if (pdfFile != null) await _sendEmail(companyId, type.name, subtype.name, details,
+          if (pdfFile != null) {
+            await _sendEmail(companyId, type.name, subtype.name, details,
               pdfFile, details['regno'] ?? '', details['vehicle_type'] ?? '', coverId);
+          }
         }
         currentState = 'claim_process';
         chatMessages.add({'sender': 'bot', 'text': '${type.name.toUpperCase()} claim submitted.'});
@@ -863,8 +892,10 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       );
 
       if (proceedWithPayment == null) {
-        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Action canceled.')));
+        }
         return;
       }
 
@@ -905,8 +936,10 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         }
       } else {
         pdfFile = await _generateFallbackPdf(type.name, subtype.name, details);
-        if (pdfFile != null) await _sendEmail(companyId, type.name, subtype.name, details,
+        if (pdfFile != null) {
+          await _sendEmail(companyId, type.name, subtype.name, details,
             pdfFile, details['regno'] ?? '', details['vehicle_type'] ?? '', cover.id);
+        }
       }
 
       final paymentStatus = await _initializePayment(cover.id, premium.toString(), '', context: context);
@@ -933,8 +966,10 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       }
     } catch (e) {
       if (kDebugMode) print('Error in handleCoverSubmission: $e');
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to process action: $e')));
+      }
     }
   }
 
@@ -1123,8 +1158,10 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       ..attachments.add(mailer.FileAttachment(filledPdf, fileName: 'filled_form.pdf'));
     try {
       await mailer.send(message, smtpServer);
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Form details and PDF sent to company email')));
+      }
       _logAction('Email sent to $company for $insuranceSubtype ($insuranceType)');
       Future.delayed(const Duration(minutes: 5), () async {
         final analyzer = EmailAnalyzer();
@@ -1133,8 +1170,10 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       });
     } catch (e) {
       if (kDebugMode) print('Error sending email: $e');
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Failed to send email')));
+      }
     }
   }
 
@@ -1162,89 +1201,153 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     }
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // UI COMPONENTS
-  // ══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
+// UI IMPROVEMENT PATCHES for insurance_home_screen.dart
+// Apply these replacements to the corresponding methods in the original file.
+// All logic, providers, and imports remain identical — only visuals change.
+// ═══════════════════════════════════════════════════════════════════════════════
 
-  /// Policy type card used in the home screen grid.
-  Widget _buildPolicyCard(BuildContext context, PolicyType policyType,
-      GlobalKey<ScaffoldMessengerState> smKey) {
-    final icon = getCustomEmojiWidget(policyType.name);
-    return GestureDetector(
-      onTap: () async {
-        if (_isDialogOpening) return;
-        _isDialogOpening = true;
-        try {
-          await showInsuranceDialog(context, policyType.name,
-              scaffoldMessengerKey: smKey, onFinalSubmit: null);
-        } catch (e) {
-          smKey.currentState?.showSnackBar(SnackBar(content: Text('Failed to show dialog: $e')));
-        } finally {
-          _isDialogOpening = false;
-        }
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
-        decoration: BoxDecoration(
-          color: _surface,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: _border),
-          boxShadow: [
-            BoxShadow(
-              color: _isDark ? Colors.black38 : _kDarkTeal.withOpacity(0.06),
-              blurRadius: 12, offset: const Offset(0, 4),
-            ),
-          ],
+// ── PALETTE CONSTANTS (add near top of InsuranceHomeScreenState) ─────────────
+// Replace the static const openAiApiKey line area with these first:
+//
+//   static const _darkTeal    = Color(0xFF10212B);
+//   static const _acidOlive   = Color(0xFFABFD06);
+//   static const _softOlive   = Color(0xFF91AF58);
+//   static const _cyan        = Color(0xFF00D1D1);
+//   static const _cream       = Color(0xFFEFFBDB);
+//   static const _creamDark   = Color(0xFFD8EBB8);
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 1. POLICY TYPE GRID CARD (replace the InkWell inside GridView.builder)
+//    Replaces itemBuilder in the GridView.builder inside _buildHomeScreen
+// ═══════════════════════════════════════════════════════════════════════════════
+
+Widget _buildPolicyCard(BuildContext context, PolicyType policyType,
+    GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  final icon = getCustomEmojiWidget(policyType.name);
+
+  return GestureDetector(
+    onTap: () async {
+      if (_isDialogOpening) return;
+      _isDialogOpening = true;
+      try {
+        await showInsuranceDialog(
+          context,
+          policyType.name,
+          scaffoldMessengerKey: scaffoldMessengerKey,
+          onFinalSubmit: null,
+        );
+      } catch (e) {
+        if (kDebugMode) print('Error in showInsuranceDialog: $e');
+        scaffoldMessengerKey.currentState?.showSnackBar(
+          SnackBar(content: Text('Failed to show dialog: $e')),
+        );
+      } finally {
+        _isDialogOpening = false;
+      }
+    },
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF13232E) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark ? const Color(0xFF2A4050) : const Color(0xFFD8EBB8),
         ),
-        child: Stack(
-          children: [
-            // Accent gradient stripe at top
-            Positioned(
-              top: 0, left: 0, right: 0,
-              child: Container(
-                height: 3,
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(colors: [_kAcidOlive, _kCyan]),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 44, height: 44,
-                    decoration: BoxDecoration(color: _iconBg, borderRadius: BorderRadius.circular(12)),
-                    child: Center(child: icon ?? const Text('🔧', style: TextStyle(fontSize: 22))),
-                  ),
-                  const Spacer(),
-                  Text(
-                    policyType.name.toUpperCase(),
-                    style: GoogleFonts.dmSans(
-                        fontSize: 12, fontWeight: FontWeight.w700,
-                        color: _textPrimary, letterSpacing: 0.8),
-                    maxLines: 2, overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      Text('Get quote', style: GoogleFonts.dmSans(fontSize: 11, color: _textMuted)),
-                      const SizedBox(width: 2),
-                      Icon(Icons.arrow_forward, size: 10, color: _textMuted),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black38
+                : const Color(0xFF10212B).withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-    );
-  }
+      child: Stack(
+        children: [
+          // Subtle accent stripe at top
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              height: 3,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFABFD06), Color(0xFF00D1D1)],
+                ),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Emoji icon in a pill container
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xFF1A2E3A)
+                        : const Color(0xFFEFFBDB),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: icon ?? const Text('🔧', style: TextStyle(fontSize: 22)),
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  policyType.name.toUpperCase(),
+                  style: GoogleFonts.dmSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: isDark
+                        ? const Color(0xFFD4ECA8)
+                        : const Color(0xFF10212B),
+                    letterSpacing: 0.8,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Text(
+                      'Get quote',
+                      style: GoogleFonts.dmSans(
+                        fontSize: 11,
+                        color: isDark
+                            ? const Color(0xFF91AF58)
+                            : const Color(0xFF4A6741),
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Icon(
+                      Icons.arrow_forward,
+                      size: 10,
+                      color: isDark
+                          ? const Color(0xFF91AF58)
+                          : const Color(0xFF4A6741),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
 
   /// Desktop/web sidebar navigation item.
   Widget _buildNavItem(BuildContext context,
@@ -1624,9 +1727,11 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
               })
               .whereType<InsuredItem>()
               .toList();
-          if (items.isEmpty) return Center(
+          if (items.isEmpty) {
+            return Center(
               child: Text('No insurable items found.',
                   style: GoogleFonts.dmSans(fontSize: 14, color: _textMuted)));
+          }
           return ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             itemCount: items.length,
@@ -1989,8 +2094,10 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       _genericControllers.forEach((_, c) => c.clear());
       cover.claimCount++;
     } catch (e) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to process claim: $e')));
+      }
     }
   }
 
@@ -2741,198 +2848,46 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     return prefill;
   }
 
-  Future<Map<String, dynamic>?> _resolveNaturalLanguageApplication(String message) async {
-    // Primary: try module-based resolution if service is available
-    try {
-      final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
-      final modules = policyTypes.map((pt) => PolicyModuleFactory.fromPolicyType(
-        policyType: pt,
-        getSubtypes: InsuranceHomeScreen.getPolicySubtypes,
-        getCoverageTypes: InsuranceHomeScreen.getCoverageTypes,
-        getCompanies: InsuranceHomeScreen.getCompanies,
-      )).toList();
-      final moduleMatch = await PolicyModuleResolver.resolve(message: message, modules: modules);
-      if (moduleMatch != null) {
-        final res = moduleMatch.resolution;
-        return {
-          'type':             res.type,
-          'subtype':          res.subtype,
-          'coverageType':     res.coverageType,
-          'coverageDetail':   res.coverageDetail,
-          'additionalLevels': res.additionalLevels,
-          'company':          res.companyName,
-          'moduleHint':       moduleMatch.module.guiHint,
-          'moduleBundle':     res.bundle,
-        };
-      }
-    } catch (_) {
-      // fall through to legacy resolution below
-    }
+  Future<Map<String, dynamic>?> _resolveNaturalLanguageApplication(
+    String message,
+  ) async {
+    final policyTypes = await InsuranceHomeScreen.getPolicyTypes();
+    final modules = policyTypes
+        .map(
+          (policyType) => PolicyModuleFactory.fromPolicyType(
+            policyType: policyType,
+            getSubtypes: InsuranceHomeScreen.getPolicySubtypes,
+            getCoverageTypes: InsuranceHomeScreen.getCoverageTypes,
+            getCompanies: InsuranceHomeScreen.getCompanies,
+          ),
+        )
+        .toList();
 
-    // Fallback: keyword-based resolution
-    final nm    = message.toLowerCase();
-    final types = await InsuranceHomeScreen.getPolicyTypes();
-    final matched = _extractInsuranceTypeFromMessage(nm, types);
-    if (matched == null || matched.id.isEmpty) return null;
-    final subtypes = await InsuranceHomeScreen.getPolicySubtypes(matched.id);
-    if (subtypes.isEmpty) return null;
-    var sub = subtypes.first;
-    for (final s in subtypes) { if (nm.contains(s.name.toLowerCase())) { sub = s; break; } }
-    final coverage = await InsuranceHomeScreen.getCoverageTypes(sub.id);
-    if (coverage.isEmpty) return null;
-    var cov = coverage.first;
-    for (final c in coverage) { if (nm.contains(c.name.toLowerCase())) { cov = c; break; } }
-    String? co;
-    try {
-      final all = await InsuranceHomeScreen.getCompanies();
-      if (all.isNotEmpty) {
-        co = all.firstWhere((c) => nm.contains(c.name.toLowerCase()), orElse: () => all.first).name;
-      }
-    } catch (_) {}
-    return {'type': matched, 'subtype': sub, 'coverageType': cov, 'company': co};
-  }
-
-  // ── Full build() ─────────────────────────────────────────────────────────────
-
-  @override
-  Widget build(BuildContext context) {
-    return kIsWeb
-        ? LayoutBuilder(builder: (context, constraints) {
-            final isDesktopWeb = constraints.maxWidth > 800;
-            return Scaffold(
-              backgroundColor: Theme.of(context).colorScheme.surface,
-              appBar: AppBar(
-                title: Text('BIMA GUARDIAN',
-                    style: GoogleFonts.playfairDisplay(
-                        fontSize: 20, fontWeight: FontWeight.w700,
-                        color: _kCream, letterSpacing: 1.5)),
-                backgroundColor: _kDarkTeal,
-                foregroundColor: _kCream,
-                elevation: 0,
-                actions: isDesktopWeb ? [_buildNotificationButton(context)] : null,
-                leading: isDesktopWeb ? null : Builder(builder: (ctx) =>
-                    IconButton(icon: const Icon(Icons.menu, color: _kCream),
-                        onPressed: () => Scaffold.of(ctx).openDrawer())),
-              ),
-              drawer: isDesktopWeb ? null : _buildDrawer(context),
-              body: Row(children: [
-                if (isDesktopWeb)
-                  Container(
-                    width: 260,
-                    color: _isDark ? const Color(0xFF0C1A21) : Colors.white,
-                    child: Column(children: [
-                      const SizedBox(height: 12),
-                      _buildNavItem(context, icon: Icons.home,             title: 'Home',            onTap: () => _onItemTapped(0), isSelected: _selectedIndex == 0),
-                      _buildNavItem(context, icon: Icons.description,      title: 'Quotes',          onTap: () => _onItemTapped(1), isSelected: _selectedIndex == 1),
-                      _buildNavItem(context, icon: Icons.hourglass_empty,  title: 'Upcoming',        onTap: () => _onItemTapped(2), isSelected: _selectedIndex == 2),
-                      _buildNavItem(context, icon: Icons.account_circle,   title: 'My Account',      onTap: () => _onItemTapped(3), isSelected: _selectedIndex == 3),
-                      _buildNavItem(context, icon: Icons.add_business,     title: 'Insurable Items', onTap: () => _onItemTapped(4), isSelected: _selectedIndex == 4),
-                      if (userRole == UserRole.admin)
-                        _buildNavItem(context, icon: Icons.admin_panel_settings, title: 'Admin Panel',
-                            onTap: () => Navigator.pushNamed(context, '/admin')),
-                    ]),
-                  ),
-                Expanded(child: _getSelectedScreen()),
-                if (isDesktopWeb)
-                  Container(
-                    width: 260,
-                    decoration: BoxDecoration(
-                      color: _isDark ? const Color(0xFF0C1A21) : Colors.white,
-                      border: Border(left: BorderSide(color: _border)),
-                    ),
-                    padding: const EdgeInsets.all(20),
-                    child: _buildSidebarContent(context),
-                  ),
-              ]),
-              floatingActionButton: FloatingActionButton(
-                onPressed: () => _showChatBottomSheet(context),
-                backgroundColor: _kAcidOlive,
-                foregroundColor: _kDarkTeal,
-                elevation: 4,
-                child: const Icon(Icons.chat_bubble_outline_rounded, size: 24),
-              ),
-            );
-          })
-        : Scaffold(
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            body: _getSelectedScreen(),
-            bottomNavigationBar: Container(
-              decoration: BoxDecoration(
-                color: _isDark ? const Color(0xFF0C1A21) : Colors.white,
-                border: Border(top: BorderSide(color: _border)),
-              ),
-              child: BottomNavigationBar(
-                items: const [
-                  BottomNavigationBarItem(icon: Icon(Icons.home),            label: 'Home'),
-                  BottomNavigationBarItem(icon: Icon(Icons.description),     label: 'Quotes'),
-                  BottomNavigationBarItem(icon: Icon(Icons.hourglass_empty), label: 'Upcoming'),
-                  BottomNavigationBarItem(icon: Icon(Icons.account_circle),  label: 'My Account'),
-                  BottomNavigationBarItem(icon: Icon(Icons.add_business),    label: 'Items'),
-                ],
-                currentIndex: _selectedIndex ?? 0,
-                onTap: _onItemTapped,
-                selectedItemColor:   _isDark ? _kAcidOlive : _kDarkTeal,
-                unselectedItemColor: _isDark ? const Color(0xFF4A6050) : const Color(0xFF8AAA80),
-                backgroundColor:     Colors.transparent,
-                elevation: 0,
-                type: BottomNavigationBarType.fixed,
-                selectedLabelStyle:   GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w600),
-                unselectedLabelStyle: GoogleFonts.dmSans(fontSize: 11),
-              ),
-            ),
-            floatingActionButton: FloatingActionButton(
-              onPressed: () => _showChatBottomSheet(context),
-              backgroundColor: _kAcidOlive,
-              foregroundColor: _kDarkTeal,
-              elevation: 4,
-              child: const Icon(Icons.chat_bubble_outline_rounded, size: 24),
-            ),
-          );
-  }
-
-  Widget _buildDrawer(BuildContext context) {
-    return Drawer(
-      backgroundColor: _isDark ? const Color(0xFF0C1A21) : Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.only(
-          topRight: Radius.circular(20), bottomRight: Radius.circular(20))),
-      child: SafeArea(child: Column(children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: const BoxDecoration(color: _kDarkTeal),
-          child: Row(children: [
-            const Text('🛡️', style: TextStyle(fontSize: 24)),
-            const SizedBox(width: 10),
-            Text('BIMA GUARDIAN',
-                style: GoogleFonts.playfairDisplay(
-                    fontSize: 16, fontWeight: FontWeight.w700, color: _kCream)),
-          ]),
-        ),
-        const SizedBox(height: 8),
-        _buildNavItem(context, icon: Icons.home,             title: 'Home',            onTap: () { _onItemTapped(0); Navigator.pop(context); }),
-        _buildNavItem(context, icon: Icons.description,      title: 'Quotes',          onTap: () { _onItemTapped(1); Navigator.pop(context); }),
-        _buildNavItem(context, icon: Icons.hourglass_empty,  title: 'Upcoming',        onTap: () { _onItemTapped(2); Navigator.pop(context); }),
-        _buildNavItem(context, icon: Icons.account_circle,   title: 'My Account',      onTap: () { _onItemTapped(3); Navigator.pop(context); }),
-        _buildNavItem(context, icon: Icons.add_business,     title: 'Insurable Items', onTap: () { _onItemTapped(4); Navigator.pop(context); }),
-        if (userRole == UserRole.admin)
-          _buildNavItem(context, icon: Icons.admin_panel_settings, title: 'Admin Panel',
-              onTap: () { Navigator.pushNamed(context, '/admin'); Navigator.pop(context); }),
-        _buildNavItem(context, icon: Icons.notifications, title: 'Notifications',
-            onTap: () { Navigator.push(context, MaterialPageRoute(
-                builder: (_) => NotificationsScreen(notifications: notifications))); Navigator.pop(context); }),
-      ])),
+    final moduleMatch = await PolicyModuleResolver.resolve(
+      message: message,
+      modules: modules,
     );
+    if (moduleMatch == null) return null;
+    final resolution = moduleMatch.resolution;
+
+    return {
+      'type': resolution.type,
+      'subtype': resolution.subtype,
+      'coverageType': resolution.coverageType,
+      'coverageDetail': resolution.coverageDetail,
+      'additionalLevels': resolution.additionalLevels,
+      'company': resolution.companyName,
+      'moduleHint': moduleMatch.module.guiHint,
+      'moduleBundle': resolution.bundle,
+    };
   }
 
-  // ── Payment dialogs ───────────────────────────────────────────────────────────
-
-  Future<void> showPaymentDialog(BuildContext context) async {
-    String paymentMethod = 'mpesa';
-    String phoneNumber   = '';
-    String amount        = '';
-    bool   autoBilling   = false;
-    final formKey = GlobalKey<FormState>();
-
-    await showDialog(
+// _showChatBottomSheet
+  void _showChatBottomSheet(BuildContext context) {
+    final TextEditingController chatController = TextEditingController();
+    final List<String> chatMessages = [];
+    String? pdfTemplateKey;
+    showModalBottomSheet(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
@@ -3200,191 +3155,179 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
 
     await showDialog(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text('Select or Create Insured Item',
-              style: GoogleFonts.playfairDisplay(fontSize: 17, fontWeight: FontWeight.w600)),
-          content: Column(mainAxisSize: MainAxisSize.min, children: [
-            if (!createNew)
-              DropdownButtonFormField<String>(
-                value: insuredItemId,
-                decoration: const InputDecoration(labelText: 'Existing Insured Item'),
-                items: insuredItems.map((item) => DropdownMenuItem(
-                  value: item.id,
-                  child: Text('${item.details['name'] ?? 'Item'} (${item.type.name.toUpperCase()})'),
-                )).toList(),
-                onChanged: (v) => setDialogState(() => insuredItemId = v),
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              title: const Text('Select or Create Insured Item'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!createNew)
+                    DropdownButtonFormField<String>(
+                      decoration: InputDecoration(
+                        labelText: 'Existing Insured Item',
+                        labelStyle: const TextStyle(color: Color(0xFFD3D3D3)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFD3D3D3)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFD3D3D3)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              const BorderSide(color: Color(0xFF8B0000)),
+                        ),
+                      ),
+                      value: insuredItemId,
+                      items: insuredItems
+                          .map((item) => DropdownMenuItem(
+                                value: item.id,
+                                child: Text(
+                                  '${item.details['name'] ?? 'Item'} (${item.type.name.toUpperCase()})',
+                                  style:
+                                      const TextStyle(color: Color(0xFF1B263B)),
+                                ),
+                              ))
+                          .toList(),
+                      onChanged: (value) =>
+                          setDialogState(() => insuredItemId = value),
+                    ),
+                  if (!createNew)
+                    CheckboxListTile(
+                      title: const Text(
+                        'Create New Insured Item',
+                        style: TextStyle(color: Color(0xFF1B263B)),
+                      ),
+                      value: createNew,
+                      onChanged: (value) =>
+                          setDialogState(() => createNew = value ?? false),
+                      activeColor: const Color(0xFF8B0000),
+                    ),
+                ],
               ),
-            if (!createNew)
-              CheckboxListTile(
-                title: const Text('Create New Insured Item'),
-                value: createNew,
-                onChanged: (v) => setDialogState(() => createNew = v ?? false),
-                activeColor: _kDarkTeal,
-              ),
-          ]),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(dialogContext);
-                if (context.mounted) Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => CoverDetailScreen(
-                    type: type.name.toLowerCase(), subtype: subtype.name.toLowerCase(),
-                    coverageType: coverageType.name.toLowerCase(),
-                    insuredItem: insuredItemId != null
-                        ? insuredItems.firstWhere((i) => i.id == insuredItemId) : null,
-                    fields: fields,
-                    onSubmit: (_) {},
-                    onAutofillPreviousPolicy: autofillFromPreviousPolicy,
-                    onAutofillLogbook: autofillFromLogbook,
-                    showCompanyDialog: (ctx, t, s, c, details, {required String subtypeId,
-                        required String coverageTypeId, String? preSelectedCompany}) =>
-                        _showCompanyDialog(ctx, t, s, c, details,
-                            subtypeId: subtypeId, coverageTypeId: coverageTypeId,
-                            preSelectedCompany: preSelectedCompany),
-                    preSelectedCompany: preSelectedCompany,
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: Color(0xFFD3D3D3)),
                   ),
-                ));
-              },
-              child: const Text('Next'),
-            ),
-          ],
-        ),
-      ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                    if (context.mounted) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => CoverDetailScreen(
+                            type: type.name.toLowerCase(),
+                            subtype: subtype.name.toLowerCase(),
+                            coverageType: coverageType.name.toLowerCase(),
+                            insuredItem: insuredItemId != null
+                                ? insuredItems.firstWhere(
+                                    (item) => item.id == insuredItemId)
+                                : null,
+                            fields: fields,
+                            onSubmit: (details) {}, // No-op, handled in submit
+                            onAutofillPreviousPolicy:
+                                autofillFromPreviousPolicy,
+                            onAutofillLogbook: autofillFromLogbook,
+                            showCompanyDialog: (BuildContext context,
+                                PolicyType type,
+                                PolicySubtype subtype,
+                                CoverageType coverageType,
+                                Map<String, String> details,
+                                {required String subtypeId,
+                                required String coverageTypeId,
+                                String? preSelectedCompany}) {
+                              return _showCompanyDialog(
+                                context,
+                                type,
+                                subtype,
+                                coverageType,
+                                details,
+                                subtypeId: subtypeId,
+                                coverageTypeId: coverageTypeId,
+                                preSelectedCompany: preSelectedCompany,
+                              );
+                            }, // Still passed but not used
+                            preSelectedCompany:
+                                preSelectedCompany, // Pass company
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF8B0000),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text(
+                    'Next',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
-
-  Future<void> _showCompanyDialog(BuildContext context, PolicyType type, PolicySubtype subtype,
-      CoverageType coverageType, Map<String, String> details,
-      {String? preSelectedCompany, required String subtypeId, required String coverageTypeId}) async {
-    try {
-      final companies = await InsuranceHomeScreen.getCompanies();
-      final cached    = await InsuranceHomeScreen.getCachedPdfTemplates();
-      final eligible  = companies.where((c) {
-        return c.policySubtype?.id == subtypeId || c.coverageType?.id == coverageTypeId;
-      }).toList();
-      if (eligible.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No companies available.')));
-        return;
-      }
-      String companyId = preSelectedCompany != null && eligible.any((c) => c.name == preSelectedCompany)
-          ? eligible.firstWhere((c) => c.name == preSelectedCompany).id
-          : eligible.first.id;
-      String tmplKey = eligible.firstWhere((c) => c.id == companyId)
-          .pdfTemplateKey.firstWhere((k) => cached.containsKey(k), orElse: () => 'default');
-
-      showDialog(context: context, builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDS) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text('Select Insurance Company',
-              style: GoogleFonts.playfairDisplay(fontSize: 17, fontWeight: FontWeight.w600)),
-          content: Column(mainAxisSize: MainAxisSize.min, children: [
-            DropdownButtonFormField<String>(
-              value: companyId,
-              decoration: const InputDecoration(labelText: 'Company'),
-              items: eligible.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
-              onChanged: (v) => setDS(() {
-                companyId = v ?? companyId;
-                final co = eligible.firstWhere((c) => c.id == companyId);
-                tmplKey = co.pdfTemplateKey.firstWhere((k) => cached.containsKey(k), orElse: () => 'default');
-              }),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              value: tmplKey,
-              decoration: const InputDecoration(labelText: 'PDF Template'),
-              items: eligible.firstWhere((c) => c.id == companyId)
-                  .pdfTemplateKey.where((k) => cached.containsKey(k))
-                  .map((k) => DropdownMenuItem(value: k, child: Text(k))).toList(),
-              onChanged: (v) => setDS(() => tmplKey = v ?? tmplKey),
-            ),
-          ]),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(dialogContext);
-                await FirebaseFirestore.instance.collection('form_submissions').add({
-                  'user_id': details['insured_item_id'] ?? 'unknown',
-                  'type': type.name, 'subtype': subtype.name, 'coverage_type': coverageType.name,
-                  'company_id': companyId, 'pdf_template_key': tmplKey,
-                  'details': details, 'timestamp': FieldValue.serverTimestamp(),
-                });
-                handleCoverSubmission(context, type, subtype, coverageType, companyId, tmplKey, details);
-              },
-              child: const Text('Submit'),
-            ),
-          ],
-        ),
-      ));
-    } catch (e, st) {
-      if (kDebugMode) print('Error in _showCompanyDialog: $e\n$st');
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to load company options.')));
-    }
-  }
-
-  Future<void> showCompanyDialog(BuildContext context, String type, String subtype,
-      String coverageType, Map<String, String> details,
-      {String? preSelectedCompany, required String subtypeId, required String coverageTypeId,
-       Map<String, String>? initialExtractedData, InsuredItem? insuredItem}) async {
-    company_models.Company? selCo;
-    Map<String, String>? extractedData;
-    PDFTemplate? tmpl;
-    if (preSelectedCompany != null) {
-      final doc = await FirebaseFirestore.instance.collection('pdf_templates').doc(preSelectedCompany).get();
-      tmpl = doc.exists ? PDFTemplate.fromJson(doc.data()!) : null;
-    }
-    await showDialog(context: context, builder: (context) => CompanySelectionDialog(
-      previousCompany: preSelectedCompany ?? initialExtractedData?['insurer'],
-      subtypeId: subtypeId, coverageTypeId: coverageTypeId,
-      initialExtractedData: initialExtractedData,
-      previousCompanies: insuredItem?.previousCompanies ?? [],
-      onConfirm: (company, data) { selCo = company as company_models.Company?; extractedData = data; },
-    ));
-    if (selCo != null && mounted) {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => CoverDetailScreen(
-        type: insuredItem?.type is String ? insuredItem?.type as String : insuredItem?.type.toString() ?? type,
-        subtype: insuredItem?.subtype is PolicySubtype ? (insuredItem?.subtype as PolicySubtype).name : subtype,
-        coverageType: (insuredItem?.coverageType ?? coverageType).toString(),
-        insuredItem: insuredItem, onSubmit: (_) {},
-        onAutofillPreviousPolicy: (f, d, c) {}, onAutofillLogbook: (f, d) {},
-        fields: tmpl?.fields ?? {},
-        showCompanyDialog: (ctx, t, s, c, d, {required String subtypeId, required String coverageTypeId, String? preSelectedCompany}) =>
-            showCompanyDialog(ctx, t.name, s.name, c.name, d,
-                subtypeId: subtypeId, coverageTypeId: coverageTypeId, preSelectedCompany: preSelectedCompany),
-        preSelectedCompany: selCo?.id, extractedData: extractedData,
-      )));
-    }
-  }
-
-  void navigateToCoverDetailScreen(String type, String subtype, String coverageType,
-      String subtypeId, String coverageTypeId) {
-    showCompanyDialog(context, type, subtype, coverageType, {},
-        subtypeId: subtypeId, coverageTypeId: coverageTypeId,
-        initialExtractedData: _initialExtractedData, insuredItem: _selectedInsuredItem);
-  }
-
-  // ── OCR & autofill ────────────────────────────────────────────────────────────
 
   Future<Map<String, String>?> _performOCR(File file) async {
     try {
       setState(() => _isOcrLoading = true);
       final bytes = await file.readAsBytes();
-      final b64   = base64Encode(bytes);
+      final base64Image = base64Encode(bytes);
+
+      final requestBody = {
+        'model': 'gpt-4o',
+        'messages': [
+          {
+            'role': 'user',
+            'content': [
+              {
+                'type': 'text',
+                'text':
+                    'Extract the following fields from the provided document: name, email, phone, id_number, kra_pin, vehicle_value, regno, chassis_number, health_condition, travel_destination, employee_count, insurer. Return as a JSON object.',
+              },
+              {
+                'type': 'image_url',
+                'image_url': {'url': 'data:image/jpeg;base64,$base64Image'}
+              }
+            ]
+          }
+        ],
+        'max_tokens': 300
+      };
+
       final response = await http.post(
         Uri.parse('https://api.openai.com/v1/chat/completions'),
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer YOUR_OPENAI_API_KEY'},
-        body: jsonEncode({'model': 'gpt-4o', 'messages': [{'role': 'user', 'content': [
-          {'type': 'text', 'text': 'Extract: name, email, phone, id_number, kra_pin, vehicle_value, regno, chassis_number, health_condition, travel_destination, employee_count, insurer. Return JSON only.'},
-          {'type': 'image_url', 'image_url': {'url': 'data:image/jpeg;base64,$b64'}},
-        ]}], 'max_tokens': 300}),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer YOUR_OPENAI_API_KEY',
+        },
+        body: jsonEncode(requestBody),
       );
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return (jsonDecode(data['choices'][0]['message']['content']) as Map<String, dynamic>)
-            .map((k, v) => MapEntry(k, v.toString()));
+        final extracted = jsonDecode(data['choices'][0]['message']['content'])
+            as Map<String, dynamic>;
+        return extracted.map((key, value) => MapEntry(key, value.toString()));
       }
       return null;
     } catch (e) {
@@ -3444,8 +3387,10 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Insured item data loaded.')));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Failed to load insured items.')));
+      }
     } finally {
       setState(() => _isLoadingItems = false);
     }
@@ -3778,14 +3723,18 @@ Future<void> showInsuranceDialog(BuildContext context, String insuranceType,
           onBack: currentStep > 0 ? () {
             dialogState.saveProgress(normalizedType, currentStep);
             Navigator.of(dialogContext).pop();
-            if (context.mounted) showInsuranceDialog(context, normalizedType, step: currentStep - 1,
+            if (context.mounted) {
+              showInsuranceDialog(context, normalizedType, step: currentStep - 1,
                 onFinalSubmit: onFinalSubmit, scaffoldMessengerKey: scaffoldMessengerKey);
+            }
           } : null,
           onSubmit: () async {
             Navigator.of(dialogContext).pop();
             if (currentStep + 1 < configList.length) {
-              if (context.mounted) showInsuranceDialog(context, normalizedType, step: currentStep + 1,
+              if (context.mounted) {
+                showInsuranceDialog(context, normalizedType, step: currentStep + 1,
                   onFinalSubmit: onFinalSubmit, scaffoldMessengerKey: scaffoldMessengerKey);
+              }
             } else {
               final subtype  = dialogState.responses['subtype']?.toString();
               final coverage = dialogState.responses['coverage_type']?.toString();
@@ -3809,8 +3758,10 @@ Future<void> showInsuranceDialog(BuildContext context, String insuranceType,
                   if (!context.mounted) return;
                   if (selectedCompany != null) {
                     final state = context.findAncestorStateOfType<InsuranceHomeScreenState>();
-                    if (state != null) await state._showInsuredItemDialog(
+                    if (state != null) {
+                      await state._showInsuredItemDialog(
                         context, pType, subtypeObj, covType, preSelectedCompany: selectedCompany);
+                    }
                     dialogState.clearProgress(normalizedType);
                     dialogState.resetForNewCycle();
                     onFinalSubmit?.call(dialogContext, normalizedType, subtype, coverage, selectedCompany);

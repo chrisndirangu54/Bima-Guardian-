@@ -7,6 +7,7 @@ import 'package:my_app/Models/field_definition.dart';
 import 'package:my_app/Screens/pdf_preview.dart';
 import 'package:pdf_render/pdf_render.dart';
 import 'package:http/http.dart' as http;
+import 'package:my_app/Services/gemini_service.dart';
 import 'package:path_provider/path_provider.dart';
 
 class PdfCoordinateEditor extends StatefulWidget {
@@ -43,7 +44,6 @@ class _PdfCoordinateEditorState extends State<PdfCoordinateEditor> {
     'custom_field',
   ];
   static const String layoutLmApiUrl = 'your-layoutlmv3-api-url-here';
-  static const String openAiApiKey = 'your-openai-api-key-here';
   final MethodChannel platform = const MethodChannel(
     'com.example.myapp/pdfExtractor',
   );
@@ -75,11 +75,11 @@ class _PdfCoordinateEditorState extends State<PdfCoordinateEditor> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'SOTA AI extraction (LayoutLMv3) is not fully supported on web due to file system limitations. Falling back to GPT-based extraction.',
+              'SOTA AI extraction (LayoutLMv3) is not fully supported on web due to file system limitations. Falling back to Gemini-based extraction.',
             ),
           ),
         );
-        await _extractFieldsWithGpt(); // Fallback to GPT for web
+        await _extractFieldsWithGemini(); // Fallback to Gemini for web
         return;
       }
 
@@ -112,6 +112,7 @@ class _PdfCoordinateEditorState extends State<PdfCoordinateEditor> {
         final suggestedFields = List<Map<String, dynamic>>.from(
           data['predictions'],
         );
+
         setState(() {
           _suggestedFields = suggestedFields;
           _fieldDefinitions.addAll({
@@ -159,20 +160,20 @@ class _PdfCoordinateEditorState extends State<PdfCoordinateEditor> {
           ),
         );
       } else {
-        // If LayoutLMv3 API fails, fall back to GPT
-        await _extractFieldsWithGpt();
+        // If LayoutLMv3 API fails, fall back to Gemini
+        await _extractFieldsWithGemini();
       }
     } catch (e) {
       print('SOTA AI extraction error: $e');
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('SOTA AI extraction failed: $e')));
-      // If SOTA AI extraction fails (e.g., network error, API issue), fall back to GPT
-      await _extractFieldsWithGpt();
+      // If SOTA AI extraction fails (e.g., network error, API issue), fall back to Gemini
+      await _extractFieldsWithGemini();
     }
   }
 
-  Future<void> _extractFieldsWithGpt() async {
+  Future<void> _extractFieldsWithGemini() async {
     try {
       // Use the platform channel to get text with bounds from native code
       final List<Map<String, dynamic>> textWithPositions =
@@ -189,97 +190,78 @@ class _PdfCoordinateEditorState extends State<PdfCoordinateEditor> {
         return;
       }
 
-      // Send accurate text and bounding box data to OpenAI API
-      final response = await http.post(
-        Uri.parse('https://api.openai.com/v1/chat/completions'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $openAiApiKey',
-        },
-        body: jsonEncode({
-          'model': 'gpt-4-vision-preview',
-          'messages': [
-            {
-              'role': 'system',
-              'content':
-                  'You are an expert at analyzing PDF forms. Given text and precise positional data (page, x, y, width, height), identify form fields, their names, types (text, number, email, phone, date, custom), and coordinates. Return a JSON array of objects with "name", "type", "confidence", "page", "x", "y". Example: [{"name": "ClientName", "type": "text", "confidence": 0.9, "page": 1, "x": 100, "y": 700}]',
-            },
-            {
-              'role': 'user',
-              'content':
-                  'Analyze this PDF data:\n\n${jsonEncode(textWithPositions)}',
-            },
-          ],
-          'max_tokens': 1000,
-        }),
+      // Send accurate text and bounding box data to Gemini's free-tier model.
+      final rawText = await GeminiService.generateText(
+        prompt: '''You are an expert at analyzing PDF forms. Given text and precise positional data (page, x, y, width, height), identify form fields, their names, types (text, number, email, phone, date, custom), and coordinates.
+Return ONLY a JSON array of objects with "name", "type", "confidence", "page", "x", and "y".
+Example: [{"name": "ClientName", "type": "text", "confidence": 0.9, "page": 1, "x": 100, "y": 700}]
+
+PDF data:
+${jsonEncode(textWithPositions)}''',
+        maxOutputTokens: 1000,
+        jsonResponse: true,
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final suggestedFields = List<Map<String, dynamic>>.from(
-          jsonDecode(data['choices'][0]['message']['content']),
-        );
-        setState(() {
-          _suggestedFields = suggestedFields;
-          _fieldDefinitions.addAll({
-            for (var field in suggestedFields)
-              field['name'] as String: FieldDefinition(
-                // Ensure key is String
-                expectedType: ExpectedType.values.firstWhere(
+      final suggestedFields = List<Map<String, dynamic>>.from(
+        jsonDecode(GeminiService.cleanJsonText(rawText)),
+      );
+
+      setState(() {
+        _suggestedFields = suggestedFields;
+        _fieldDefinitions.addAll({
+          for (var field in suggestedFields)
+            field['name'] as String: FieldDefinition(
+              // Ensure key is String
+              expectedType: ExpectedType.values.firstWhere(
+                (e) => e.toString().split('.').last == field['type'],
+                orElse: () => ExpectedType.custom,
+              ),
+              validator: _getValidator(
+                ExpectedType.values.firstWhere(
                   (e) => e.toString().split('.').last == field['type'],
                   orElse: () => ExpectedType.custom,
                 ),
-                validator: _getValidator(
-                  ExpectedType.values.firstWhere(
-                    (e) => e.toString().split('.').last == field['type'],
-                    orElse: () => ExpectedType.custom,
-                  ),
-                ),
-                isSuggested: true,
-                confidence: field['confidence'].toDouble(),
-                boundingBox: {
-                  'x': field['x'].toDouble(),
-                  'y': field['y'].toDouble(),
-                  'width':
-                      200.0, // Width/height may be adjusted based on GPT output
-                  'height': 20.0,
-                  'page': field['page'].toDouble(),
-                },
               ),
-          });
-          _coordinates.addAll({
-            for (var field in suggestedFields)
-              field['name'] as String: {
-                // Ensure key is String
-                'page': field['page'].toDouble(),
+              isSuggested: true,
+              confidence: field['confidence'].toDouble(),
+              boundingBox: {
                 'x': field['x'].toDouble(),
                 'y': field['y'].toDouble(),
+                'width':
+                    200.0, // Width/height may be adjusted based on Gemini output
+                'height': 20.0,
+                'page': field['page'].toDouble(),
               },
-          });
-          _fields.addAll(
-            suggestedFields
-                .map((f) => f['name'] as String)
-                .where((name) => !_fields.contains(name))
-                .toList(),
-          );
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'GPT-based field and coordinate extraction completed',
             ),
+        });
+        _coordinates.addAll({
+          for (var field in suggestedFields)
+            field['name'] as String: {
+              // Ensure key is String
+              'page': field['page'].toDouble(),
+              'x': field['x'].toDouble(),
+              'y': field['y'].toDouble(),
+            },
+        });
+        _fields.addAll(
+          suggestedFields
+              .map((f) => f['name'] as String)
+              .where((name) => !_fields.contains(name))
+              .toList(),
+        );
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Gemini-based field and coordinate extraction completed',
           ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('GPT extraction failed: ${response.body}')),
-        );
-      }
+        ),
+      );
     } catch (e) {
-      print('GPT extraction error: $e');
+      print('Gemini extraction error: $e');
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('GPT extraction failed: $e')));
+      ).showSnackBar(SnackBar(content: Text('Gemini extraction failed: $e')));
     }
   }
 

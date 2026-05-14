@@ -1,12 +1,10 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:my_app/Services/gemini_service.dart';
 import 'package:my_app/Models/extracted_form_field.dart';
 
 class WebFormService {
-  static const String _anthropicUrl = 'https://api.anthropic.com/v1/messages';
-
   static const String domExtractionScript = r'''
 (function() {
   var forms = Array.from(document.querySelectorAll('form'));
@@ -30,19 +28,8 @@ class WebFormService {
     String url,
     String html,
   ) async {
-    final response = await http.post(
-      Uri.parse(_anthropicUrl),
-      headers: {
-        'Content-Type': 'application/json',
-        'anthropic-version': '2023-06-01',
-      },
-      body: jsonEncode({
-        'model': 'claude-sonnet-4-20250514',
-        'max_tokens': 1500,
-        'messages': [
-          {
-            'role': 'user',
-            'content': '''Analyze the HTML below and extract every interactive form field.
+    final rawText = await GeminiService.generateText(
+      prompt: '''Analyze the HTML below and extract every interactive form field.
 Return ONLY a valid JSON object — no markdown, no explanation, no backticks.
 
 Rules:
@@ -75,35 +62,18 @@ Schema:
 
 HTML:
 $html''',
-          }
-        ],
-      }),
+      maxOutputTokens: 1500,
+      jsonResponse: true,
     ).timeout(const Duration(seconds: 30));
 
-    if (response.statusCode != 200) {
-      throw Exception(
-          'Claude API error (HTTP ${response.statusCode}): ${response.body}');
-    }
-
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-
-    final rawText = (data['content'] as List<dynamic>)
-        .whereType<Map<String, dynamic>>()
-        .where((b) => b['type'] == 'text')
-        .map((b) => b['text'] as String)
-        .join('');
-
-    final clean = rawText
-        .replaceAll(RegExp(r'```json\s*'), '')
-        .replaceAll(RegExp(r'```\s*'), '')
-        .trim();
+    final clean = GeminiService.cleanJsonText(rawText);
 
     try {
       final schema = jsonDecode(clean) as Map<String, dynamic>;
       return WebFormSchema.fromJson(url, schema);
     } catch (e) {
       throw Exception(
-          'Failed to parse Claude response as JSON.\nRaw:\n$clean\n\nError: $e');
+          'Failed to parse Gemini response as JSON.\nRaw:\n$clean\n\nError: $e');
     }
   }
 

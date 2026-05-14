@@ -5,11 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:my_app/Models/Insured_item.dart';
 import 'package:my_app/Models/company.dart';
 import 'package:my_app/Models/field_definition.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:my_app/Models/policy.dart';
+import 'package:my_app/Services/gemini_service.dart';
 import 'package:my_app/insurance_app.dart';
 
 // GenericDialog for selecting extracted data
@@ -100,42 +100,17 @@ class _CompanySelectionDialogState extends State<CompanySelectionDialog> {
       final bytes = await file.readAsBytes();
       final base64Image = base64Encode(bytes);
 
-      final requestBody = {
-        'model': 'gpt-4o',
-        'messages': [
-          {
-            'role': 'user',
-            'content': [
-              {
-                'type': 'text',
-                'text':
-                    'Extract the following fields from the provided document: name, email, phone, id_number, kra_pin, vehicle_value, regno, chassis_number, health_condition, travel_destination, employee_count, insurer. Return as a JSON object.',
-              },
-              {
-                'type': 'image_url',
-                'image_url': {'url': 'data:image/jpeg;base64,$base64Image'}
-              }
-            ]
-          }
-        ],
-        'max_tokens': 300
-      };
-
-      final response = await http.post(
-        Uri.parse('https://api.openai.com/v1/chat/completions'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer YOUR_OPENAI_API_KEY', // TODO: Secure this key
-        },
-        body: jsonEncode(requestBody),
+      final rawText = await GeminiService.generateFromImage(
+        prompt:
+            'Extract the following fields from the provided document: name, email, phone, id_number, kra_pin, vehicle_value, regno, chassis_number, health_condition, travel_destination, employee_count, insurer. Return ONLY a JSON object.',
+        base64Image: base64Image,
+        maxOutputTokens: 300,
+        jsonResponse: true,
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final extracted = jsonDecode(data['choices'][0]['message']['content']) as Map<String, dynamic>;
-        return extracted.map((key, value) => MapEntry(key, value.toString()));
-      }
-      return null;
+      final extracted = jsonDecode(GeminiService.cleanJsonText(rawText))
+          as Map<String, dynamic>;
+      return extracted.map((key, value) => MapEntry(key, value.toString()));
     } catch (e) {
       if (kDebugMode) print('OCR Error: $e');
       return null;
@@ -428,42 +403,17 @@ class _CoverDetailScreenState extends State<CoverDetailScreen> {
       final bytes = await file.readAsBytes();
       final base64Image = base64Encode(bytes);
 
-      final requestBody = {
-        'model': 'gpt-4o',
-        'messages': [
-          {
-            'role': 'user',
-            'content': [
-              {
-                'type': 'text',
-                'text':
-                    'Extract the following fields from the provided document: name, email, phone, id_number, kra_pin, vehicle_value, regno, chassis_number, health_condition, travel_destination, employee_count, insurer. Return as a JSON object.',
-              },
-              {
-                'type': 'image_url',
-                'image_url': {'url': 'data:image/jpeg;base64,$base64Image'}
-              }
-            ]
-          }
-        ],
-        'max_tokens': 300
-      };
-
-      final response = await http.post(
-        Uri.parse('https://api.openai.com/v1/chat/completions'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer YOUR_OPENAI_API_KEY', // TODO: Secure this key
-        },
-        body: jsonEncode(requestBody),
+      final rawText = await GeminiService.generateFromImage(
+        prompt:
+            'Extract the following fields from the provided document: name, email, phone, id_number, kra_pin, vehicle_value, regno, chassis_number, health_condition, travel_destination, employee_count, insurer. Return ONLY a JSON object.',
+        base64Image: base64Image,
+        maxOutputTokens: 300,
+        jsonResponse: true,
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final extracted = jsonDecode(data['choices'][0]['message']['content']) as Map<String, dynamic>;
-        return extracted.map((key, value) => MapEntry(key, value.toString()));
-      }
-      return null;
+      final extracted = jsonDecode(GeminiService.cleanJsonText(rawText))
+          as Map<String, dynamic>;
+      return extracted.map((key, value) => MapEntry(key, value.toString()));
     } catch (e) {
       if (kDebugMode) print('OCR Error: $e');
       return null;
