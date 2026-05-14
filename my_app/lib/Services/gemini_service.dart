@@ -11,11 +11,14 @@ class GeminiService {
     'GEMINI_MODEL',
     defaultValue: 'gemini-3.1-flash-lite',
   );
+  static const String apiKey = 'AIzaSyC9l-r597J799tIcTthyISAwX5t4z3r6A4';
+  static const String freeTierModel = 'gemini-2.0-flash-lite';
   static const String _baseUrl =
       'https://generativelanguage.googleapis.com/v1beta/models';
 
   static Uri _generateContentUri() =>
       Uri.parse('$_baseUrl/$freeTierModel:generateContent');
+      Uri.parse('$_baseUrl/$freeTierModel:generateContent?key=$apiKey');
 
   static Future<String> generateText({
     required String prompt,
@@ -68,6 +71,9 @@ class GeminiService {
         'Content-Type': 'application/json',
         'x-goog-api-key': apiKey,
       },
+    final response = await http.post(
+      _generateContentUri(),
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'contents': [
           {
