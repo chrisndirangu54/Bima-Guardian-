@@ -513,8 +513,10 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       if (mounted && !shown) {
         shown = true;
         SchedulerBinding.instance.addPostFrameCallback((_) {
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('Failed to load policies: $e')));
+          }
         });
       }
     }
@@ -692,15 +694,19 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
     try {
       final template = await InsuranceHomeScreen.getPDFTemplate(templateKey);
       if (template == null) {
-        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('PDF template not found')));
+        }
         return null;
       }
       final directory    = await getApplicationDocumentsDirectory();
       final templateFile = File('${directory.path}/pdf_templates/$templateKey.pdf');
       if (!await templateFile.exists()) {
-        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('PDF template file not found')));
+        }
         return null;
       }
       final pdfBytes  = await templateFile.readAsBytes();
@@ -738,8 +744,10 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       return outputFile;
     } catch (e, st) {
       if (kDebugMode) print('Error filling PDF: $e\n$st');
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to generate PDF: $e')));
+      }
       return null;
     }
   }
@@ -834,13 +842,17 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
           if (pdfFile != null && await _previewPdf(pdfFile)) {
             await _sendEmail(companyId, type.name, subtype.name, details, pdfFile,
                 details['regno'] ?? '', details['vehicle_type'] ?? '', coverId);
-            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text(isClaim ? 'Claim sent.' : 'Cancellation sent.')));
+            }
           }
         } else {
           pdfFile = await _generateFallbackPdf(type.name, subtype.name, details);
-          if (pdfFile != null) await _sendEmail(companyId, type.name, subtype.name, details,
+          if (pdfFile != null) {
+            await _sendEmail(companyId, type.name, subtype.name, details,
               pdfFile, details['regno'] ?? '', details['vehicle_type'] ?? '', coverId);
+          }
         }
         currentState = 'claim_process';
         chatMessages.add({'sender': 'bot', 'text': '${type.name.toUpperCase()} claim submitted.'});
@@ -863,8 +875,10 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       );
 
       if (proceedWithPayment == null) {
-        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Action canceled.')));
+        }
         return;
       }
 
@@ -905,8 +919,10 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         }
       } else {
         pdfFile = await _generateFallbackPdf(type.name, subtype.name, details);
-        if (pdfFile != null) await _sendEmail(companyId, type.name, subtype.name, details,
+        if (pdfFile != null) {
+          await _sendEmail(companyId, type.name, subtype.name, details,
             pdfFile, details['regno'] ?? '', details['vehicle_type'] ?? '', cover.id);
+        }
       }
 
       final paymentStatus = await _initializePayment(cover.id, premium.toString(), '', context: context);
@@ -933,8 +949,10 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       }
     } catch (e) {
       if (kDebugMode) print('Error in handleCoverSubmission: $e');
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to process action: $e')));
+      }
     }
   }
 
@@ -1123,8 +1141,10 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       ..attachments.add(mailer.FileAttachment(filledPdf, fileName: 'filled_form.pdf'));
     try {
       await mailer.send(message, smtpServer);
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Form details and PDF sent to company email')));
+      }
       _logAction('Email sent to $company for $insuranceSubtype ($insuranceType)');
       Future.delayed(const Duration(minutes: 5), () async {
         final analyzer = EmailAnalyzer();
@@ -1133,8 +1153,10 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       });
     } catch (e) {
       if (kDebugMode) print('Error sending email: $e');
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Failed to send email')));
+      }
     }
   }
 
@@ -1624,9 +1646,11 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
               })
               .whereType<InsuredItem>()
               .toList();
-          if (items.isEmpty) return Center(
+          if (items.isEmpty) {
+            return Center(
               child: Text('No insurable items found.',
                   style: GoogleFonts.dmSans(fontSize: 14, color: _textMuted)));
+          }
           return ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             itemCount: items.length,
@@ -1989,8 +2013,10 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
       _genericControllers.forEach((_, c) => c.clear());
       cover.claimCount++;
     } catch (e) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to process claim: $e')));
+      }
     }
   }
 
@@ -3229,7 +3255,8 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(dialogContext);
-                if (context.mounted) Navigator.push(context, MaterialPageRoute(
+                if (context.mounted) {
+                  Navigator.push(context, MaterialPageRoute(
                   builder: (_) => CoverDetailScreen(
                     type: type.name.toLowerCase(), subtype: subtype.name.toLowerCase(),
                     coverageType: coverageType.name.toLowerCase(),
@@ -3247,6 +3274,7 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
                     preSelectedCompany: preSelectedCompany,
                   ),
                 ));
+                }
               },
               child: const Text('Next'),
             ),
@@ -3444,8 +3472,10 @@ class InsuranceHomeScreenState extends State<InsuranceHomeScreen> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Insured item data loaded.')));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Failed to load insured items.')));
+      }
     } finally {
       setState(() => _isLoadingItems = false);
     }
@@ -3778,14 +3808,18 @@ Future<void> showInsuranceDialog(BuildContext context, String insuranceType,
           onBack: currentStep > 0 ? () {
             dialogState.saveProgress(normalizedType, currentStep);
             Navigator.of(dialogContext).pop();
-            if (context.mounted) showInsuranceDialog(context, normalizedType, step: currentStep - 1,
+            if (context.mounted) {
+              showInsuranceDialog(context, normalizedType, step: currentStep - 1,
                 onFinalSubmit: onFinalSubmit, scaffoldMessengerKey: scaffoldMessengerKey);
+            }
           } : null,
           onSubmit: () async {
             Navigator.of(dialogContext).pop();
             if (currentStep + 1 < configList.length) {
-              if (context.mounted) showInsuranceDialog(context, normalizedType, step: currentStep + 1,
+              if (context.mounted) {
+                showInsuranceDialog(context, normalizedType, step: currentStep + 1,
                   onFinalSubmit: onFinalSubmit, scaffoldMessengerKey: scaffoldMessengerKey);
+              }
             } else {
               final subtype  = dialogState.responses['subtype']?.toString();
               final coverage = dialogState.responses['coverage_type']?.toString();
@@ -3809,8 +3843,10 @@ Future<void> showInsuranceDialog(BuildContext context, String insuranceType,
                   if (!context.mounted) return;
                   if (selectedCompany != null) {
                     final state = context.findAncestorStateOfType<InsuranceHomeScreenState>();
-                    if (state != null) await state._showInsuredItemDialog(
+                    if (state != null) {
+                      await state._showInsuredItemDialog(
                         context, pType, subtypeObj, covType, preSelectedCompany: selectedCompany);
+                    }
                     dialogState.clearProgress(normalizedType);
                     dialogState.resetForNewCycle();
                     onFinalSubmit?.call(dialogContext, normalizedType, subtype, coverage, selectedCompany);
