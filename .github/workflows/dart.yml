@@ -7,7 +7,7 @@ name: Flutter CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "agents/**" ]
   pull_request:
     branches: [ "main" ]
 
