@@ -10,7 +10,6 @@ import 'package:my_app/Screens/webview_page.dart';
 import 'package:my_app/Services/email_analyzer.dart';
 import 'package:my_app/Services/company_config_service.dart';
 import 'package:my_app/Services/policy_module_service.dart';
-import 'package:web/web.dart' as web;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
