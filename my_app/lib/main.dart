@@ -17,9 +17,11 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'firebase_options.dart';
 import 'package:webview_flutter_web/webview_flutter_web.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'Services/di.dart' as di;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await di.setupDI();
 
   try {
     await Firebase.initializeApp(
