@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_app/Services/di.dart' as di;
-import 'services/mocks/mock_services.dart';
+import 'mocks/mock_services.dart';
 import 'package:my_app/Models/policy.dart';
 import 'package:my_app/Services/policy_module_service.dart';
 
