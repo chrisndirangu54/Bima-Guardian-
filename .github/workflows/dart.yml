@@ -14,12 +14,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      # Opt into Node.js 24 for JavaScript-based actions (fixes Node.js 20 deprecation)
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.0
 
       # Install Flutter SDK for CI
       - uses: subosito/flutter-action@v2
