@@ -1,11 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:my_app/Screens/login.dart';
 import 'package:provider/provider.dart';
 import 'package:my_app/Providers/theme_provider.dart';
@@ -16,10 +14,11 @@ import 'package:my_app/Screens/signup.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'firebase_options.dart';
 import 'package:webview_flutter_web/webview_flutter_web.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'Services/di.dart' as di;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await di.setupDI();
 
   try {
     await Firebase.initializeApp(
@@ -68,8 +67,6 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
-        ChangeNotifierProvider(create: (_) => ColorProvider()),
-        ChangeNotifierProvider(create: (_) => DialogState()),
       ],
       child: const MyApp(),
     ),
