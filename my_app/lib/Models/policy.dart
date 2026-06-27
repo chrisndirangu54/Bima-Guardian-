@@ -285,8 +285,6 @@ class Policy {
   final CoverageType? coverageType;
   final CoverStatus status;
   final DateTime? endDate;
-  final bool? isClaim = false; // Added isClaim field
-  final bool? isExtention = false; // Added isExtension field
 
   Policy({
     required this.id,
@@ -306,26 +304,30 @@ class Policy {
         'insuredItemId': insuredItemId,
         'companyId': companyId,
         'type': type.toJson(),
-        'subtype': subtype!.toJson(),
-        'coverageType': coverageType!.toJson(),
+        'subtype': subtype?.toJson(),
+        'coverageType': coverageType?.toJson(),
         'status': status.name,
         'expirationDate': endDate?.toIso8601String(),
       };
 
   factory Policy.fromJson(Map<String, dynamic> json) => Policy(
-        id: json['id'],
-        name: json['name'], // Add name from JSON
-        insuredItemId: json['insuredItemId'],
-        companyId: json['companyId'],
-        type: PolicyType.fromJson(json['type']),
-        subtype: PolicySubtype.fromJson(json['subtype']),
-        coverageType: CoverageType.fromJson(json['coverageType']),
+        id: json['id'] as String? ?? '',
+        name: json['name'] as String? ?? '',
+        insuredItemId: json['insuredItemId'] as String? ?? '',
+        companyId: json['companyId'] as String? ?? '',
+        type: PolicyType.fromJson(json['type'] as Map<String, dynamic>? ?? {}),
+        subtype: json['subtype'] != null
+            ? PolicySubtype.fromJson(json['subtype'] as Map<String, dynamic>)
+            : null,
+        coverageType: json['coverageType'] != null
+            ? CoverageType.fromJson(json['coverageType'] as Map<String, dynamic>)
+            : null,
         status: CoverStatus.values.firstWhere(
-          (e) => e.name == json['status'],
+          (e) => e.name == (json['status'] as String? ?? ''),
           orElse: () => CoverStatus.active,
         ),
         endDate: json['expirationDate'] != null
-            ? DateTime.parse(json['expirationDate'])
+            ? DateTime.parse(json['expirationDate'] as String)
             : null,
       );
 
@@ -349,7 +351,7 @@ class Policy {
 
   @override
   String toString() {
-    return 'Policy(id: $id, name: $name, insuredItemId: $insuredItemId, companyId: $companyId, type: ${type.name}, subtype: ${subtype!.name}, coverageType: ${coverageType!.name}, status: ${status.name}, endDate: $endDate, )';
+    return 'Policy(id: $id, name: $name, insuredItemId: $insuredItemId, companyId: $companyId, type: ${type.name}, subtype: ${subtype?.name}, coverageType: ${coverageType?.name}, status: ${status.name}, endDate: $endDate, )';
   }
 
   static Future<Policy> fromCover(Cover updatedCover) async {

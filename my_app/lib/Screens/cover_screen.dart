@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:my_app/Models/Insured_item.dart';
+import 'package:my_app/Models/insured_item.dart';
 import 'package:my_app/Models/company.dart';
 import 'package:my_app/Models/field_definition.dart';
 import 'dart:convert';

@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:my_app/insurance_app.dart';
 import 'package:my_app/Models/policy.dart';
 
@@ -25,7 +26,7 @@ class Cover {
   final DateTime? endDate;
   final int extensionCount; // New field to track extensions
   final ClaimStatus claimStatus;
-  int claimCount = 0; // Default to 0, can be updated later  
+  final int claimCount;
 
   Cover({
     required this.id,
@@ -48,6 +49,7 @@ class Cover {
     this.endDate,
     this.extensionCount = 0, // Default to 0
     this.claimStatus = ClaimStatus.none, // Default to none
+    this.claimCount = 0,
   }) : assert(extensionCount >= 0 && extensionCount <= 2,
             'Extension count must be 0, 1, or 2');
 
@@ -71,6 +73,8 @@ class Cover {
         'startDate': startDate.toIso8601String(),
         'endDate': endDate?.toIso8601String(),
         'extensionCount': extensionCount,
+        'claimStatus': claimStatus.name,
+        'claimCount': claimCount,
       };
 
   factory Cover.fromJson(Map<String, dynamic> json) => Cover(
@@ -110,6 +114,11 @@ class Cover {
             ? DateTime.parse(json['endDate'] as String)
             : null,
         extensionCount: json['extensionCount'] as int? ?? 0,
+        claimStatus: ClaimStatus.values.firstWhere(
+          (e) => e.name == (json['claimStatus'] as String? ?? ''),
+          orElse: () => ClaimStatus.none,
+        ),
+        claimCount: json['claimCount'] as int? ?? 0,
       );
 
   Map<String, dynamic> toMap() => {
@@ -132,6 +141,8 @@ class Cover {
         'startDate': startDate.toIso8601String(),
         'endDate': endDate?.toIso8601String(),
         'extensionCount': extensionCount,
+        'claimStatus': claimStatus.name,
+        'claimCount': claimCount,
       };
 
   factory Cover.fromMap(Map<String, dynamic> map) => Cover(
@@ -171,6 +182,11 @@ class Cover {
             ? DateTime.parse(map['endDate'] as String)
             : null,
         extensionCount: map['extensionCount'] as int? ?? 0,
+        claimStatus: ClaimStatus.values.firstWhere(
+          (e) => e.name == (map['claimStatus'] as String? ?? ''),
+          orElse: () => ClaimStatus.none,
+        ),
+        claimCount: map['claimCount'] as int? ?? 0,
       );
 
   Cover copyWith({
@@ -193,6 +209,8 @@ class Cover {
     DateTime? startDate,
     DateTime? endDate,
     int? extensionCount,
+    ClaimStatus? claimStatus,
+    int? claimCount,
   }) {
     return Cover(
       id: id ?? this.id,
@@ -214,6 +232,8 @@ class Cover {
       startDate: startDate ?? this.startDate,
       endDate: endDate ?? this.endDate,
       extensionCount: extensionCount ?? this.extensionCount,
+      claimStatus: claimStatus ?? this.claimStatus,
+      claimCount: claimCount ?? this.claimCount,
     );
   }
 
@@ -233,6 +253,9 @@ class Cover {
     );
   }
 
+  static const _listEquality = ListEquality<ModularPolicyComponent>();
+  static const _mapEquality = MapEquality<String, dynamic>();
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -246,42 +269,46 @@ class Cover {
           subtype == other.subtype &&
           coverageType == other.coverageType &&
           coverageDetail == other.coverageDetail &&
-          additionalLevels.toString() == other.additionalLevels.toString() &&
+          _listEquality.equals(additionalLevels, other.additionalLevels) &&
           status == other.status &&
           expirationDate == other.expirationDate &&
           pdfTemplateKey == other.pdfTemplateKey &&
           paymentStatus == other.paymentStatus &&
           premium == other.premium &&
           billingFrequency == other.billingFrequency &&
-          formData == other.formData &&
+          _mapEquality.equals(formData, other.formData) &&
           startDate == other.startDate &&
           endDate == other.endDate &&
-          extensionCount == other.extensionCount;
+          extensionCount == other.extensionCount &&
+          claimStatus == other.claimStatus &&
+          claimCount == other.claimCount;
 
-  @override
-  int get hashCode => Object.hash(
-        id,
-        name,
-        insuredItemId,
-        companyId,
-        type,
-        subtype,
-        coverageType,
-        coverageDetail,
-        additionalLevels,
-        status,
-        expirationDate,
-        pdfTemplateKey,
-        paymentStatus,
-        premium,
-        billingFrequency,
-        formData,
-        startDate,
-        endDate,
-        extensionCount,
-      );
+@override
+int get hashCode => Object.hashAll([
+  id,
+  name,
+  insuredItemId,
+  companyId,
+  type,
+  subtype,
+  coverageType,
+  coverageDetail,
+  _listEquality.hash(additionalLevels),
+  status,
+  expirationDate,
+  pdfTemplateKey,
+  paymentStatus,
+  premium,
+  billingFrequency,
+  _mapEquality.hash(formData),
+  startDate,
+  endDate,
+  extensionCount,
+  claimStatus,
+  claimCount,
+]);
 
   @override
   String toString() =>
-      'Cover(id: $id, name: $name, insuredItemId: $insuredItemId, companyId: $companyId, type: ${type.name}, subtype: ${subtype.name}, coverageType: ${coverageType.name}, coverageDetail: ${coverageDetail?.name}, dynamicLevels: ${additionalLevels.length}, status: $status, expirationDate: $expirationDate, extensionCount: $extensionCount)';
+      'Cover(id: $id, name: $name, insuredItemId: $insuredItemId, companyId: $companyId, type: ${type.name}, subtype: ${subtype.name}, coverageType: ${coverageType.name}, coverageDetail: ${coverageDetail?.name}, dynamicLevels: ${additionalLevels.length}, status: $status, expirationDate: $expirationDate, extensionCount: $extensionCount, claimStatus: ${claimStatus.name}, claimCount: $claimCount)';
 }

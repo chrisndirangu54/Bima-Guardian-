@@ -34,11 +34,11 @@ class GeminiService {
   // ── Public API ──────────────────────────────────────────────────────────────
 
   /// Generate text from a plain-text [prompt].
-  static Future<String> generateText({
-    required String prompt,
-    int maxOutputTokens = 1000,
-    bool jsonResponse = false,
-  }) =>
+static Future<String> generateText({
+  required String prompt,
+  int maxOutputTokens = 1000,
+  bool jsonResponse = false,
+}) =>
       generateContent(
         parts: [
           {'text': prompt},

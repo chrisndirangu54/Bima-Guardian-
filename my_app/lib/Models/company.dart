@@ -6,9 +6,6 @@ class Company {
   final List<String> pdfTemplateKey; // e.g., ['default', 'health_template']
   final CoverageType? coverageType; // Add this line
   final PolicySubtype? policySubtype; // Added missing field
-  final bool? isClaim = false; // Added isClaim field
-  final bool? isExtention = false; // Added isExtension field
-  final bool? isCancellation = false; // Added isCancellation field
 
   /// Static lists of all coverage types and policy subtypes
   static final List<CoverageType> allCoverageTypes = [
@@ -56,7 +53,7 @@ class Company {
         'id': id,
         'name': name,
         'pdfTemplateKeys': pdfTemplateKey,
-        'coverageType': coverageType.toString(),
+        'coverageType': coverageType?.toString(),
         'policySubtype': policySubtype?.toString(),
         'icon': icon,
       };
@@ -79,12 +76,12 @@ class Company {
   }
 
   factory Company.fromJson(Map<String, dynamic> json) => Company(
-        id: json['id'],
-        name: json['name'],
-        pdfTemplateKey: List<String>.from(json['pdfTemplateKeys']),
-        coverageType: Company.coverageTypeFromString(json['coverageType']),
-        policySubtype: Company.policySubtypesFromString(json['policySubtype']),
-        icon: json['icon'],
+        id: json['id'] as String? ?? '',
+        name: json['name'] as String? ?? '',
+        pdfTemplateKey: List<String>.from(json['pdfTemplateKeys'] as List? ?? []),
+        coverageType: Company.coverageTypeFromString(json['coverageType'] as String?),
+        policySubtype: Company.policySubtypesFromString(json['policySubtype'] as String?),
+        icon: json['icon'] as String?,
       );
   static Company fromFirestore(Map<String, dynamic> data) {
     return Company(

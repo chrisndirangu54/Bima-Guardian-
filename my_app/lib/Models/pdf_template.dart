@@ -29,16 +29,16 @@ class PDFTemplate {
   };
 
   factory PDFTemplate.fromJson(Map<String, dynamic> json) => PDFTemplate(
-    fields: (json['fields'] as Map<String, dynamic>).map(
-      (key, value) => MapEntry(key, FieldDefinition.fromJson(value)),
-    ),
-    fieldMappings: Map<String, String>.from(json['fieldMappings']),
-    coordinates: (json['coordinates'] as Map<String, dynamic>).map(
-      (key, value) => MapEntry(key, Map<String, double>.from(value)),
-    ),
-    policyType: json['policyType'],
-    policySubtype: json['policySubtype'],
-    templateKey: json['templateKey'],
+    fields: (json['fields'] as Map<String, dynamic>?)?.map(
+      (key, value) => MapEntry(key, FieldDefinition.fromJson(value as Map<String, dynamic>)),
+    ) ?? {},
+    fieldMappings: Map<String, String>.from(json['fieldMappings'] as Map? ?? {}),
+    coordinates: (json['coordinates'] as Map<String, dynamic>?)?.map(
+      (key, value) => MapEntry(key, Map<String, double>.from(value as Map)),
+    ) ?? {},
+    policyType: json['policyType'] as String? ?? '',
+    policySubtype: json['policySubtype'] as String? ?? '',
+    templateKey: json['templateKey'] as String? ?? '',
     coverageType: json['coverageType'] as String? ?? '', // Handle nullable coverageType
   );
 }

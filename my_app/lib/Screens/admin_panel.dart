@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:collection/collection.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:fl_chart/fl_chart.dart' as charts;
@@ -37,11 +38,63 @@ class _AdminPanelState extends State<AdminPanel> {
   final TextEditingController _policyPromptController = TextEditingController();
   String _userSearchTerm = '';
 
+  // ── Admin verification ──────────────────────────────────────────────────
+  //
+  // This screen must NEVER trust a role/flag handed to it by the caller —
+  // the only nav-button that links here is hidden for non-admins, but that
+  // is a UI convenience, not access control. Anyone who can call
+  // Navigator.pushNamed(context, '/admin') from anywhere in the app (or via
+  // a deep link / route table) would otherwise land here with full access.
+  // So we re-verify the *current* signed-in user's admin status directly
+  // against Firestore every time this screen is built, and refuse to render
+  // any admin content until that check has passed.
+  bool _isVerifyingAccess = true;
+  bool _isAuthorized = false;
+
   @override
   void initState() {
     super.initState();
+    _verifyAdminAccess();
     _loadPolicies();
     _loadCachedPdfTemplates();
+  }
+
+  Future<void> _verifyAdminAccess() async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        if (mounted) {
+          setState(() {
+            _isAuthorized = false;
+            _isVerifyingAccess = false;
+          });
+        }
+        return;
+      }
+
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+      final data = doc.data() ?? <String, dynamic>{};
+      final isAdmin = data['isAdmin'] == true || data['role'] == 'admin';
+
+      if (!mounted) return;
+      setState(() {
+        _isAuthorized = isAdmin;
+        _isVerifyingAccess = false;
+      });
+    } catch (e) {
+      if (kDebugMode) print('Admin verification error: $e');
+      // Fail closed: any error verifying access means we do NOT show
+      // admin content.
+      if (mounted) {
+        setState(() {
+          _isAuthorized = false;
+          _isVerifyingAccess = false;
+        });
+      }
+    }
   }
 
   @override
@@ -981,6 +1034,76 @@ class _AdminPanelState extends State<AdminPanel> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isVerifyingAccess) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(
+            'Admin Panel',
+            style: GoogleFonts.lora(
+              color: const Color(0xFF1B263B),
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          backgroundColor: Colors.white,
+          elevation: 0,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!_isAuthorized) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(
+            'Admin Panel',
+            style: GoogleFonts.lora(
+              color: const Color(0xFF1B263B),
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          backgroundColor: Colors.white,
+          elevation: 0,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.lock_outline, size: 48, color: Colors.grey),
+                const SizedBox(height: 16),
+                Text(
+                  'Access Denied',
+                  style: GoogleFonts.lora(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF1B263B),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'You do not have permission to view this page.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.roboto(color: Colors.grey.shade700),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  child: const Text('Go Back'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return _buildAdminContent(context);
+  }
+
+  Widget _buildAdminContent(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(

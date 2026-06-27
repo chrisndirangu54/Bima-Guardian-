@@ -1,0 +1,951 @@
+diff -ru bima-guardian/my_app/lib/Models/company.dart bima-guardian-fix/my_app/lib/Models/company.dart
+--- bima-guardian/my_app/lib/Models/company.dart	2026-06-24 18:09:40.359579755 +0000
++++ bima-guardian-fix/my_app/lib/Models/company.dart	2026-06-25 06:39:32.069357103 +0000
+@@ -6,9 +6,6 @@
+   final List<String> pdfTemplateKey; // e.g., ['default', 'health_template']
+   final CoverageType? coverageType; // Add this line
+   final PolicySubtype? policySubtype; // Added missing field
+-  final bool? isClaim = false; // Added isClaim field
+-  final bool? isExtention = false; // Added isExtension field
+-  final bool? isCancellation = false; // Added isCancellation field
+ 
+   /// Static lists of all coverage types and policy subtypes
+   static final List<CoverageType> allCoverageTypes = [
+@@ -56,7 +53,7 @@
+         'id': id,
+         'name': name,
+         'pdfTemplateKeys': pdfTemplateKey,
+-        'coverageType': coverageType.toString(),
++        'coverageType': coverageType?.toString(),
+         'policySubtype': policySubtype?.toString(),
+         'icon': icon,
+       };
+@@ -79,12 +76,12 @@
+   }
+ 
+   factory Company.fromJson(Map<String, dynamic> json) => Company(
+-        id: json['id'],
+-        name: json['name'],
+-        pdfTemplateKey: List<String>.from(json['pdfTemplateKeys']),
+-        coverageType: Company.coverageTypeFromString(json['coverageType']),
+-        policySubtype: Company.policySubtypesFromString(json['policySubtype']),
+-        icon: json['icon'],
++        id: json['id'] as String? ?? '',
++        name: json['name'] as String? ?? '',
++        pdfTemplateKey: List<String>.from(json['pdfTemplateKeys'] as List? ?? []),
++        coverageType: Company.coverageTypeFromString(json['coverageType'] as String?),
++        policySubtype: Company.policySubtypesFromString(json['policySubtype'] as String?),
++        icon: json['icon'] as String?,
+       );
+   static Company fromFirestore(Map<String, dynamic> data) {
+     return Company(
+diff -ru bima-guardian/my_app/lib/Models/cover.dart bima-guardian-fix/my_app/lib/Models/cover.dart
+--- bima-guardian/my_app/lib/Models/cover.dart	2026-06-24 18:09:40.359866210 +0000
++++ bima-guardian-fix/my_app/lib/Models/cover.dart	2026-06-25 06:37:14.897807245 +0000
+@@ -1,3 +1,4 @@
++import 'package:collection/collection.dart';
+ import 'package:my_app/insurance_app.dart';
+ import 'package:my_app/Models/policy.dart';
+ 
+@@ -25,7 +26,7 @@
+   final DateTime? endDate;
+   final int extensionCount; // New field to track extensions
+   final ClaimStatus claimStatus;
+-  int claimCount = 0; // Default to 0, can be updated later  
++  final int claimCount;
+ 
+   Cover({
+     required this.id,
+@@ -48,6 +49,7 @@
+     this.endDate,
+     this.extensionCount = 0, // Default to 0
+     this.claimStatus = ClaimStatus.none, // Default to none
++    this.claimCount = 0,
+   }) : assert(extensionCount >= 0 && extensionCount <= 2,
+             'Extension count must be 0, 1, or 2');
+ 
+@@ -71,6 +73,8 @@
+         'startDate': startDate.toIso8601String(),
+         'endDate': endDate?.toIso8601String(),
+         'extensionCount': extensionCount,
++        'claimStatus': claimStatus.name,
++        'claimCount': claimCount,
+       };
+ 
+   factory Cover.fromJson(Map<String, dynamic> json) => Cover(
+@@ -110,6 +114,11 @@
+             ? DateTime.parse(json['endDate'] as String)
+             : null,
+         extensionCount: json['extensionCount'] as int? ?? 0,
++        claimStatus: ClaimStatus.values.firstWhere(
++          (e) => e.name == (json['claimStatus'] as String? ?? ''),
++          orElse: () => ClaimStatus.none,
++        ),
++        claimCount: json['claimCount'] as int? ?? 0,
+       );
+ 
+   Map<String, dynamic> toMap() => {
+@@ -132,6 +141,8 @@
+         'startDate': startDate.toIso8601String(),
+         'endDate': endDate?.toIso8601String(),
+         'extensionCount': extensionCount,
++        'claimStatus': claimStatus.name,
++        'claimCount': claimCount,
+       };
+ 
+   factory Cover.fromMap(Map<String, dynamic> map) => Cover(
+@@ -171,6 +182,11 @@
+             ? DateTime.parse(map['endDate'] as String)
+             : null,
+         extensionCount: map['extensionCount'] as int? ?? 0,
++        claimStatus: ClaimStatus.values.firstWhere(
++          (e) => e.name == (map['claimStatus'] as String? ?? ''),
++          orElse: () => ClaimStatus.none,
++        ),
++        claimCount: map['claimCount'] as int? ?? 0,
+       );
+ 
+   Cover copyWith({
+@@ -193,6 +209,8 @@
+     DateTime? startDate,
+     DateTime? endDate,
+     int? extensionCount,
++    ClaimStatus? claimStatus,
++    int? claimCount,
+   }) {
+     return Cover(
+       id: id ?? this.id,
+@@ -214,6 +232,8 @@
+       startDate: startDate ?? this.startDate,
+       endDate: endDate ?? this.endDate,
+       extensionCount: extensionCount ?? this.extensionCount,
++      claimStatus: claimStatus ?? this.claimStatus,
++      claimCount: claimCount ?? this.claimCount,
+     );
+   }
+ 
+@@ -233,6 +253,9 @@
+     );
+   }
+ 
++  static const _listEquality = ListEquality<ModularPolicyComponent>();
++  static const _mapEquality = MapEquality<String, dynamic>();
++
+   @override
+   bool operator ==(Object other) =>
+       identical(this, other) ||
+@@ -246,17 +269,19 @@
+           subtype == other.subtype &&
+           coverageType == other.coverageType &&
+           coverageDetail == other.coverageDetail &&
+-          additionalLevels.toString() == other.additionalLevels.toString() &&
++          _listEquality.equals(additionalLevels, other.additionalLevels) &&
+           status == other.status &&
+           expirationDate == other.expirationDate &&
+           pdfTemplateKey == other.pdfTemplateKey &&
+           paymentStatus == other.paymentStatus &&
+           premium == other.premium &&
+           billingFrequency == other.billingFrequency &&
+-          formData == other.formData &&
++          _mapEquality.equals(formData, other.formData) &&
+           startDate == other.startDate &&
+           endDate == other.endDate &&
+-          extensionCount == other.extensionCount;
++          extensionCount == other.extensionCount &&
++          claimStatus == other.claimStatus &&
++          claimCount == other.claimCount;
+ 
+   @override
+   int get hashCode => Object.hash(
+@@ -268,20 +293,22 @@
+         subtype,
+         coverageType,
+         coverageDetail,
+-        additionalLevels,
++        _listEquality.hash(additionalLevels),
+         status,
+         expirationDate,
+         pdfTemplateKey,
+         paymentStatus,
+         premium,
+         billingFrequency,
+-        formData,
++        _mapEquality.hash(formData),
+         startDate,
+         endDate,
+         extensionCount,
++        claimStatus,
++        claimCount,
+       );
+ 
+   @override
+   String toString() =>
+-      'Cover(id: $id, name: $name, insuredItemId: $insuredItemId, companyId: $companyId, type: ${type.name}, subtype: ${subtype.name}, coverageType: ${coverageType.name}, coverageDetail: ${coverageDetail?.name}, dynamicLevels: ${additionalLevels.length}, status: $status, expirationDate: $expirationDate, extensionCount: $extensionCount)';
++      'Cover(id: $id, name: $name, insuredItemId: $insuredItemId, companyId: $companyId, type: ${type.name}, subtype: ${subtype.name}, coverageType: ${coverageType.name}, coverageDetail: ${coverageDetail?.name}, dynamicLevels: ${additionalLevels.length}, status: $status, expirationDate: $expirationDate, extensionCount: $extensionCount, claimStatus: ${claimStatus.name}, claimCount: $claimCount)';
+ }
+diff -ru bima-guardian/my_app/lib/Models/policy.dart bima-guardian-fix/my_app/lib/Models/policy.dart
+--- bima-guardian/my_app/lib/Models/policy.dart	2026-06-24 18:09:40.359866210 +0000
++++ bima-guardian-fix/my_app/lib/Models/policy.dart	2026-06-25 06:38:42.044315511 +0000
+@@ -285,8 +285,6 @@
+   final CoverageType? coverageType;
+   final CoverStatus status;
+   final DateTime? endDate;
+-  final bool? isClaim = false; // Added isClaim field
+-  final bool? isExtention = false; // Added isExtension field
+ 
+   Policy({
+     required this.id,
+@@ -306,26 +304,30 @@
+         'insuredItemId': insuredItemId,
+         'companyId': companyId,
+         'type': type.toJson(),
+-        'subtype': subtype!.toJson(),
+-        'coverageType': coverageType!.toJson(),
++        'subtype': subtype?.toJson(),
++        'coverageType': coverageType?.toJson(),
+         'status': status.name,
+         'expirationDate': endDate?.toIso8601String(),
+       };
+ 
+   factory Policy.fromJson(Map<String, dynamic> json) => Policy(
+-        id: json['id'],
+-        name: json['name'], // Add name from JSON
+-        insuredItemId: json['insuredItemId'],
+-        companyId: json['companyId'],
+-        type: PolicyType.fromJson(json['type']),
+-        subtype: PolicySubtype.fromJson(json['subtype']),
+-        coverageType: CoverageType.fromJson(json['coverageType']),
++        id: json['id'] as String? ?? '',
++        name: json['name'] as String? ?? '',
++        insuredItemId: json['insuredItemId'] as String? ?? '',
++        companyId: json['companyId'] as String? ?? '',
++        type: PolicyType.fromJson(json['type'] as Map<String, dynamic>? ?? {}),
++        subtype: json['subtype'] != null
++            ? PolicySubtype.fromJson(json['subtype'] as Map<String, dynamic>)
++            : null,
++        coverageType: json['coverageType'] != null
++            ? CoverageType.fromJson(json['coverageType'] as Map<String, dynamic>)
++            : null,
+         status: CoverStatus.values.firstWhere(
+-          (e) => e.name == json['status'],
++          (e) => e.name == (json['status'] as String? ?? ''),
+           orElse: () => CoverStatus.active,
+         ),
+         endDate: json['expirationDate'] != null
+-            ? DateTime.parse(json['expirationDate'])
++            ? DateTime.parse(json['expirationDate'] as String)
+             : null,
+       );
+ 
+@@ -349,7 +351,7 @@
+ 
+   @override
+   String toString() {
+-    return 'Policy(id: $id, name: $name, insuredItemId: $insuredItemId, companyId: $companyId, type: ${type.name}, subtype: ${subtype!.name}, coverageType: ${coverageType!.name}, status: ${status.name}, endDate: $endDate, )';
++    return 'Policy(id: $id, name: $name, insuredItemId: $insuredItemId, companyId: $companyId, type: ${type.name}, subtype: ${subtype?.name}, coverageType: ${coverageType?.name}, status: ${status.name}, endDate: $endDate, )';
+   }
+ 
+   static Future<Policy> fromCover(Cover updatedCover) async {
+diff -ru bima-guardian/my_app/lib/Screens/admin_panel.dart bima-guardian-fix/my_app/lib/Screens/admin_panel.dart
+--- bima-guardian/my_app/lib/Screens/admin_panel.dart	2026-06-24 18:09:40.360280482 +0000
++++ bima-guardian-fix/my_app/lib/Screens/admin_panel.dart	2026-06-25 06:29:41.299330285 +0000
+@@ -3,6 +3,7 @@
+ 
+ import 'package:cloud_firestore/cloud_firestore.dart';
+ import 'package:collection/collection.dart';
++import 'package:firebase_auth/firebase_auth.dart';
+ import 'package:firebase_messaging/firebase_messaging.dart';
+ import 'package:firebase_storage/firebase_storage.dart';
+ import 'package:fl_chart/fl_chart.dart' as charts;
+@@ -37,13 +38,65 @@
+   final TextEditingController _policyPromptController = TextEditingController();
+   String _userSearchTerm = '';
+ 
++  // ── Admin verification ──────────────────────────────────────────────────
++  //
++  // This screen must NEVER trust a role/flag handed to it by the caller —
++  // the only nav-button that links here is hidden for non-admins, but that
++  // is a UI convenience, not access control. Anyone who can call
++  // Navigator.pushNamed(context, '/admin') from anywhere in the app (or via
++  // a deep link / route table) would otherwise land here with full access.
++  // So we re-verify the *current* signed-in user's admin status directly
++  // against Firestore every time this screen is built, and refuse to render
++  // any admin content until that check has passed.
++  bool _isVerifyingAccess = true;
++  bool _isAuthorized = false;
++
+   @override
+   void initState() {
+     super.initState();
++    _verifyAdminAccess();
+     _loadPolicies();
+     _loadCachedPdfTemplates();
+   }
+ 
++  Future<void> _verifyAdminAccess() async {
++    try {
++      final currentUser = FirebaseAuth.instance.currentUser;
++      if (currentUser == null) {
++        if (mounted) {
++          setState(() {
++            _isAuthorized = false;
++            _isVerifyingAccess = false;
++          });
++        }
++        return;
++      }
++
++      final doc = await FirebaseFirestore.instance
++          .collection('users')
++          .doc(currentUser.uid)
++          .get();
++      final data = doc.data() ?? <String, dynamic>{};
++      final isAdmin = data['isAdmin'] == true || data['role'] == 'admin';
++
++      if (!mounted) return;
++      setState(() {
++        _isAuthorized = isAdmin;
++        _isVerifyingAccess = false;
++      });
++    } catch (e) {
++      if (kDebugMode) print('Admin verification error: $e');
++      // Fail closed: any error verifying access means we do NOT show
++      // admin content.
++      if (mounted) {
++        setState(() {
++          _isAuthorized = false;
++          _isVerifyingAccess = false;
++        });
++      }
++    }
++  }
++
+   @override
+   void dispose() {
+     _userSearchController.dispose();
+@@ -981,6 +1034,76 @@
+ 
+   @override
+   Widget build(BuildContext context) {
++    if (_isVerifyingAccess) {
++      return Scaffold(
++        appBar: AppBar(
++          title: Text(
++            'Admin Panel',
++            style: GoogleFonts.lora(
++              color: const Color(0xFF1B263B),
++              fontSize: 20,
++              fontWeight: FontWeight.w600,
++            ),
++          ),
++          backgroundColor: Colors.white,
++          elevation: 0,
++        ),
++        body: const Center(child: CircularProgressIndicator()),
++      );
++    }
++
++    if (!_isAuthorized) {
++      return Scaffold(
++        appBar: AppBar(
++          title: Text(
++            'Admin Panel',
++            style: GoogleFonts.lora(
++              color: const Color(0xFF1B263B),
++              fontSize: 20,
++              fontWeight: FontWeight.w600,
++            ),
++          ),
++          backgroundColor: Colors.white,
++          elevation: 0,
++        ),
++        body: Center(
++          child: Padding(
++            padding: const EdgeInsets.all(24.0),
++            child: Column(
++              mainAxisSize: MainAxisSize.min,
++              children: [
++                const Icon(Icons.lock_outline, size: 48, color: Colors.grey),
++                const SizedBox(height: 16),
++                Text(
++                  'Access Denied',
++                  style: GoogleFonts.lora(
++                    fontSize: 18,
++                    fontWeight: FontWeight.w700,
++                    color: const Color(0xFF1B263B),
++                  ),
++                ),
++                const SizedBox(height: 8),
++                Text(
++                  'You do not have permission to view this page.',
++                  textAlign: TextAlign.center,
++                  style: GoogleFonts.roboto(color: Colors.grey.shade700),
++                ),
++                const SizedBox(height: 20),
++                ElevatedButton(
++                  onPressed: () => Navigator.of(context).maybePop(),
++                  child: const Text('Go Back'),
++                ),
++              ],
++            ),
++          ),
++        ),
++      );
++    }
++
++    return _buildAdminContent(context);
++  }
++
++  Widget _buildAdminContent(BuildContext context) {
+     return Scaffold(
+       appBar: AppBar(
+         title: Text(
+diff -ru bima-guardian/my_app/lib/Screens/cover_screen.dart bima-guardian-fix/my_app/lib/Screens/cover_screen.dart
+--- bima-guardian/my_app/lib/Screens/cover_screen.dart	2026-06-24 18:09:40.360280482 +0000
++++ bima-guardian-fix/my_app/lib/Screens/cover_screen.dart	2026-06-25 06:31:22.322416352 +0000
+@@ -2,7 +2,7 @@
+ import 'package:file_picker/file_picker.dart';
+ import 'package:flutter/foundation.dart';
+ import 'package:flutter/material.dart';
+-import 'package:my_app/Models/Insured_item.dart';
++import 'package:my_app/Models/insured_item.dart';
+ import 'package:my_app/Models/company.dart';
+ import 'package:my_app/Models/field_definition.dart';
+ import 'dart:convert';
+diff -ru bima-guardian/my_app/lib/Services/auth_service.dart bima-guardian-fix/my_app/lib/Services/auth_service.dart
+--- bima-guardian/my_app/lib/Services/auth_service.dart	2026-06-24 18:09:40.360280482 +0000
++++ bima-guardian-fix/my_app/lib/Services/auth_service.dart	2026-06-25 06:28:57.316487501 +0000
+@@ -6,14 +6,28 @@
+ class AuthService {
+   AuthService._();
+ 
++  /// Initializes Firestore data for [user].
++  ///
++  /// Called on both signup AND every login path (see login.dart/signup.dart),
++  /// so this must be safe to call repeatedly without clobbering data that was
++  /// set after the user's account was first created — most importantly their
++  /// `isAdmin`/`role` fields, which an admin may have changed via the Admin
++  /// Panel. We only seed those fields (and the default sub-documents) the
++  /// FIRST time we see this user; on every subsequent call we just keep their
++  /// contact details fresh.
+   static Future<void> initializeUserData(User user) async {
+     final userDoc =
+         FirebaseFirestore.instance.collection('users').doc(user.uid);
+ 
++    final existing = await userDoc.get();
++    final isFirstTime = !existing.exists;
++
+     await userDoc.set({
+-      'createdAt': FieldValue.serverTimestamp(),
+-      'role': 'user',
+-      'isAdmin': false,
++      if (isFirstTime) 'createdAt': FieldValue.serverTimestamp(),
++      // Only seed role/isAdmin on first creation. Never overwrite them on
++      // subsequent logins — doing so silently undoes any admin promotion.
++      if (isFirstTime) 'role': 'user',
++      if (isFirstTime) 'isAdmin': false,
+       'details': {
+         'name': user.displayName ?? 'Anonymous',
+         'email': user.email ?? '',
+@@ -21,6 +35,8 @@
+       },
+     }, SetOptions(merge: true));
+ 
++    if (!isFirstTime) return;
++
+     await userDoc.collection('policies').doc('default').set({
+       'id': 'default',
+       'type': 'Motor',
+diff -ru bima-guardian/my_app/lib/Services/company_config_service.dart bima-guardian-fix/my_app/lib/Services/company_config_service.dart
+--- bima-guardian/my_app/lib/Services/company_config_service.dart	2026-06-24 18:09:40.363717122 +0000
++++ bima-guardian-fix/my_app/lib/Services/company_config_service.dart	2026-06-25 06:40:36.856392305 +0000
+@@ -2,7 +2,6 @@
+ 
+ import 'package:cloud_firestore/cloud_firestore.dart';
+ import 'package:flutter/foundation.dart';
+-import 'package:cloud_firestore/cloud_firestore.dart';
+ 
+ class CompanyRateCard {
+   final String companyId;
+diff -ru bima-guardian/my_app/lib/insurance_app.dart bima-guardian-fix/my_app/lib/insurance_app.dart
+--- bima-guardian/my_app/lib/insurance_app.dart	2026-06-24 18:09:40.432280487 +0000
++++ bima-guardian-fix/my_app/lib/insurance_app.dart	2026-06-25 06:41:31.223710614 +0000
+@@ -17,7 +17,7 @@
+ import 'package:flutter/foundation.dart';
+ import 'package:flutter/material.dart';
+ import 'package:flutter/scheduler.dart';
+-import 'package:my_app/Models/Insured_item.dart';
++import 'package:my_app/Models/insured_item.dart';
+ import 'package:my_app/Models/company.dart' as company_models;
+ import 'package:my_app/Models/cover.dart';
+ import 'package:my_app/Models/field_definition.dart';
+@@ -28,6 +28,7 @@
+ import 'package:my_app/Screens/cover_screen.dart';
+ import 'package:my_app/Screens/notifications_screen.dart';
+ import 'package:my_app/Screens/pdf_preview.dart';
++import 'package:my_app/Services/gemini_service.dart';
+ import 'package:my_app/Services/webview.dart';
+ import 'package:pdf/pdf.dart';
+ import 'package:pdf/pdf.dart' as pdfColors;
+@@ -391,13 +392,69 @@
+     }
+   }
+ 
++  /// Returns a persistent AES key/IV pair for on-device encryption,
++  /// creating and storing one in secure storage the first time it's needed.
++  ///
++  /// Previously, every call site that encrypted something (user details,
++  /// Paystack auto-billing config) generated a brand-new random key and IV
++  /// on the spot, encrypted with it, and then only saved the *ciphertext* —
++  /// the key itself was never persisted anywhere. That made the encrypted
++  /// data permanently undecryptable the instant the function returned.
++  /// By persisting one key/IV pair and reusing it, anything we encrypt here
++  /// can actually be decrypted again later.
++  Future<encrypt.Encrypted> _encryptPayload(String plaintext) async {
++    const keyStorageKey = 'app_encryption_key_v1';
++    const ivStorageKey = 'app_encryption_iv_v1';
++
++    var keyBase64 = await secureStorage.read(key: keyStorageKey);
++    var ivBase64 = await secureStorage.read(key: ivStorageKey);
++
++    encrypt.Key key;
++    encrypt.IV iv;
++
++    if (keyBase64 == null || ivBase64 == null) {
++      key = encrypt.Key.fromSecureRandom(32);
++      iv = encrypt.IV.fromSecureRandom(16);
++      await secureStorage.write(key: keyStorageKey, value: key.base64);
++      await secureStorage.write(key: ivStorageKey, value: iv.base64);
++    } else {
++      key = encrypt.Key.fromBase64(keyBase64);
++      iv = encrypt.IV.fromBase64(ivBase64);
++    }
++
++    final encrypter = encrypt.Encrypter(encrypt.AES(key));
++    return encrypter.encrypt(plaintext, iv: iv);
++  }
++
++  /// Decrypts a payload produced by [_encryptPayload]. Returns null if no
++  /// encryption key has ever been created on this device (nothing to
++  /// decrypt) or if decryption otherwise fails.
++  Future<String?> _decryptPayload(String base64Ciphertext) async {
++    const keyStorageKey = 'app_encryption_key_v1';
++    const ivStorageKey = 'app_encryption_iv_v1';
++
++    final keyBase64 = await secureStorage.read(key: keyStorageKey);
++    final ivBase64 = await secureStorage.read(key: ivStorageKey);
++    if (keyBase64 == null || ivBase64 == null) return null;
++
++    try {
++      final key = encrypt.Key.fromBase64(keyBase64);
++      final iv = encrypt.IV.fromBase64(ivBase64);
++      final encrypter = encrypt.Encrypter(encrypt.AES(key));
++      return encrypter.decrypt(
++        encrypt.Encrypted.fromBase64(base64Ciphertext),
++        iv: iv,
++      );
++    } catch (e) {
++      if (kDebugMode) print('Decryption error: $e');
++      return null;
++    }
++  }
++
+   Future<void> _saveUserDetails(Map<String, String> newDetails) async {
+     try {
+       userDetails.addAll(newDetails);
+-      final key       = encrypt.Key.fromLength(32);
+-      final iv        = encrypt.IV.fromLength(16);
+-      final encrypter = encrypt.Encrypter(encrypt.AES(key));
+-      final encrypted = encrypter.encrypt(jsonEncode(userDetails), iv: iv);
++      final encrypted = await _encryptPayload(jsonEncode(userDetails));
+       await secureStorage.write(key: 'user_details', value: encrypted.base64);
+       setState(() {
+         _nameController.text  = userDetails['name']  ?? '';
+@@ -457,17 +514,17 @@
+     try {
+       final userId = FirebaseAuth.instance.currentUser?.uid;
+       if (userId == null) {
+-        setState(() => userRole = UserRole.regular);
++        if (mounted) setState(() => userRole = UserRole.regular);
+         return;
+       }
+       final userDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+       final data = userDoc.data() ?? <String, dynamic>{};
+       final bool isAdmin = data['isAdmin'] == true || data['role'] == 'admin';
+       await secureStorage.write(key: 'user_role', value: isAdmin ? 'admin' : 'user');
+-      setState(() => userRole = isAdmin ? UserRole.admin : UserRole.regular);
++      if (mounted) setState(() => userRole = isAdmin ? UserRole.admin : UserRole.regular);
+     } catch (_) {
+       final role = await secureStorage.read(key: 'user_role');
+-      setState(() => userRole = role == 'admin' ? UserRole.admin : UserRole.regular);
++      if (mounted) setState(() => userRole = role == 'admin' ? UserRole.admin : UserRole.regular);
+     }
+   }
+ 
+@@ -637,35 +694,56 @@
+     setState(() => chatMessages.add({'sender': 'bot', 'text': formatted}));
+   }
+ 
++  /// Validates a filled PDF's extracted text using the Gemini service
++  /// (already configured elsewhere in this app — see GeminiService).
++  ///
++  /// This used to call OpenAI directly with a placeholder API key that was
++  /// never set, which meant every non-admin user's submission silently
++  /// failed validation and the form/PDF/email never actually went out.
++  ///
++  /// We now fail OPEN rather than closed: if the AI check itself can't run
++  /// (network issue, bad response, etc.) we let the submission proceed
++  /// rather than blocking it, since unlike admins, regular users never get
++  /// to see/approve the PDF themselves — blocking them on an AI hiccup
++  /// would silently strand their submission with no way to retry it.
+   Future<bool> _validatePdfWithChatGPT(File pdfFile) async {
+     try {
+       final doc  = await PDFDoc.fromPath(pdfFile.path);
+       final text = await doc.text;
+-      final response = await http.post(
+-        Uri.parse('https://api.openai.com/v1/chat/completions'),
+-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $openAiApiKey'},
+-        body: jsonEncode({
+-          'model': 'gpt-3.5-turbo',
+-          'messages': [
+-            {'role': 'system', 'content': 'Validate form fields. Return JSON with "valid" bool and "message".'},
+-            {'role': 'user', 'content': 'Validate:\n\n$text'},
+-          ],
+-          'max_tokens': 200,
+-        }),
+-      );
+-      if (response.statusCode == 200) {
+-        final data   = jsonDecode(response.body);
+-        final result = jsonDecode(data['choices'][0]['message']['content']);
+-        if (!result['valid']) {
++
++      if (text.trim().isEmpty) {
++        // Nothing to validate — likely a generation failure upstream.
++        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+-              SnackBar(content: Text('Validation Failed: ${result['message']}')));
++              const SnackBar(content: Text('Could not read the generated PDF; please try again.')));
+         }
+-        return result['valid'];
++        return false;
+       }
+-      return false;
++
++      final rawText = await GeminiService.generateText(
++        prompt: '''You are validating a filled insurance form PDF before it is submitted.
++Read the extracted text below and check whether it looks like a properly filled form
++(has recognizable field values, is not blank/garbled).
++Return ONLY a JSON object: {"valid": true|false, "message": "<short reason>"}.
++
++Extracted text:
++$text''',
++        maxOutputTokens: 150,
++        jsonResponse: true,
++      ).timeout(const Duration(seconds: 15));
++
++      final result = jsonDecode(GeminiService.cleanJsonText(rawText)) as Map<String, dynamic>;
++      final valid = result['valid'] == true;
++
++      if (!valid && mounted) {
++        ScaffoldMessenger.of(context).showSnackBar(
++            SnackBar(content: Text('Validation warning: ${result['message'] ?? 'Form may be incomplete.'}')));
++      }
++      return valid;
+     } catch (e) {
+-      if (kDebugMode) print('ChatGPT validation error: $e');
+-      return false;
++      if (kDebugMode) print('PDF validation error: $e');
++      // Fail OPEN — see method doc above.
++      return true;
+     }
+   }
+ 
+@@ -909,7 +987,7 @@
+             pdfFile, details['regno'] ?? '', details['vehicle_type'] ?? '', cover.id);
+       }
+ 
+-      final paymentStatus = await _initializePayment(cover.id, premium.toString(), '', context: context);
++      final paymentStatus = await _initializePayment(cover, premium.toString(), '', context: context);
+       await FirebaseFirestore.instance.collection('covers').doc(cover.id).update({
+         'status': paymentStatus == 'completed' ? CoverStatus.active.toString() : CoverStatus.pending.toString(),
+         'paymentStatus': paymentStatus,
+@@ -1022,23 +1100,52 @@
+     }
+   }
+ 
++  /// Initiates an M-Pesa STK push for [amount] to [phoneNumber].
++  ///
++  /// NOTE on the 'Password' field: Safaricom's Daraja API requires this to
++  /// be base64(Shortcode + Passkey + Timestamp) — it is NOT a literal
++  /// account password. The previous version sent the literal string
++  /// 'your-mpesa-password', which Safaricom would reject outright even once
++  /// a real API key was configured. We now compute it correctly, but you
++  /// still need to supply the real [mpesaShortcode]/[mpesaPasskey] (from
++  /// your Daraja app credentials) below.
++  ///
++  /// Also note: the 'Authorization: Bearer' header here needs a short-lived
++  /// OAuth access token (from POST .../oauth/v1/generate using your Consumer
++  /// Key/Secret), not a long-lived static API key — `mpesaApiKey` as
++  /// declared further up is not actually sufficient on its own. Fetching
++  /// and caching that token is a separate piece of work; this fix only
++  /// addresses the STK push request body itself.
+   Future<bool> _initiateMpesaPayment(String phoneNumber, double amount) async {
+     try {
++      const mpesaShortcode = '174379'; // Replace with your real shortcode.
++      const mpesaPasskey = 'your-mpesa-passkey-here'; // From Daraja app credentials.
++
++      final now = DateTime.now();
++      String pad2(int n) => n.toString().padLeft(2, '0');
++      final timestamp = '${now.year}${pad2(now.month)}${pad2(now.day)}'
++          '${pad2(now.hour)}${pad2(now.minute)}${pad2(now.second)}';
++      final password = base64Encode(
++        utf8.encode('$mpesaShortcode$mpesaPasskey$timestamp'),
++      );
++
+       final response = await http.post(
+         Uri.parse('https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest'),
+         headers: {'Authorization': 'Bearer $mpesaApiKey', 'Content-Type': 'application/json'},
+         body: jsonEncode({
+-          'BusinessShortCode': '174379', 'Password': 'your-mpesa-password',
+-          'Timestamp': DateTime.now().toIso8601String(),
++          'BusinessShortCode': mpesaShortcode, 'Password': password,
++          'Timestamp': timestamp,
+           'TransactionType': 'CustomerPayBillOnline', 'Amount': amount,
+-          'PartyA': phoneNumber, 'PartyB': '174379', 'PhoneNumber': phoneNumber,
++          'PartyA': phoneNumber, 'PartyB': mpesaShortcode, 'PhoneNumber': phoneNumber,
+           'CallBackURL': 'https://your-callback-url.com',
+           'AccountReference': 'InsurancePayment', 'TransactionDesc': 'Policy Payment',
+         }),
+       );
+       if (response.statusCode == 200) return true;
+-      ScaffoldMessenger.of(context).showSnackBar(
+-          SnackBar(content: Text('MPESA Payment Failed: ${response.body}')));
++      if (mounted) {
++        ScaffoldMessenger.of(context).showSnackBar(
++            SnackBar(content: Text('MPESA Payment Failed: ${response.body}')));
++      }
+       return false;
+     } catch (e) {
+       if (kDebugMode) print('MPESA payment error: $e');
+@@ -1086,12 +1193,14 @@
+           body: jsonEncode({'customer': customerId, 'plan': planId}));
+       if (sr.statusCode != 200) return;
+       final subId = jsonDecode(sr.body)['data']['id'];
+-      final k   = encrypt.Key.fromLength(32);
+-      final iv  = encrypt.IV.fromLength(16);
+-      final enc = encrypt.Encrypter(encrypt.AES(k));
+-      await secureStorage.write(key: 'billing_${cover.id}',
+-          value: enc.encrypt(jsonEncode({'coverId': cover.id, 'customerId': customerId,
+-              'subscriptionId': subId, 'amount': cover.premium, 'frequency': cover.billingFrequency}), iv: iv).base64);
++      final encrypted = await _encryptPayload(jsonEncode({
++        'coverId': cover.id,
++        'customerId': customerId,
++        'subscriptionId': subId,
++        'amount': cover.premium,
++        'frequency': cover.billingFrequency,
++      }));
++      await secureStorage.write(key: 'billing_${cover.id}', value: encrypted.base64);
+     } catch (e) {
+       if (kDebugMode) print('Paystack auto-billing error: $e');
+       ScaffoldMessenger.of(context).showSnackBar(
+@@ -1987,7 +2096,22 @@
+       await handleCoverSubmission(context, item.type, item.subtype, item.coverageType,
+           cover.companyId, tmplKey, details);
+       _genericControllers.forEach((_, c) => c.clear());
+-      cover.claimCount++;
++
++      // `claimCount` is immutable on Cover, so bump it via copyWith rather
++      // than mutating in place, then keep the in-memory list and Firestore
++      // in sync with the new value.
++      final updatedClaimCover = cover.copyWith(claimCount: cover.claimCount + 1);
++      if (mounted) {
++        setState(() {
++          covers = covers
++              .map((c) => c.id == cover.id ? updatedClaimCover : c)
++              .toList();
++        });
++      }
++      await FirebaseFirestore.instance
++          .collection('covers')
++          .doc(cover.id)
++          .update({'claimCount': updatedClaimCover.claimCount});
+     } catch (e) {
+       if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+           SnackBar(content: Text('Failed to process claim: $e')));
+@@ -2500,16 +2624,20 @@
+       final response = await http.get(Uri.parse(
+           'https://newsapi.org/v2/everything?q=insurance+Kenya+trending&apiKey=$apiKey'));
+       if (response.statusCode == 200) {
+-        setState(() => trendingTopics = (jsonDecode(response.body)['articles'] as List<dynamic>));
++        if (mounted) {
++          setState(() => trendingTopics = (jsonDecode(response.body)['articles'] as List<dynamic>));
++        }
+       } else {
+         throw Exception('Status ${response.statusCode}');
+       }
+     } catch (e) {
+-      setState(() => trendingTopics = [
+-        {'title': 'Insurance trends in Kenya: What you need to know', 'url': 'https://newsapi.org'},
+-        {'title': 'Top insurance companies in Kenya for 2025',         'url': 'https://newsapi.org'},
+-        {'title': 'How technology is transforming insurance in Kenya', 'url': 'https://newsapi.org'},
+-      ]);
++      if (mounted) {
++        setState(() => trendingTopics = [
++          {'title': 'Insurance trends in Kenya: What you need to know', 'url': 'https://newsapi.org'},
++          {'title': 'Top insurance companies in Kenya',                 'url': 'https://newsapi.org'},
++          {'title': 'How technology is transforming insurance in Kenya', 'url': 'https://newsapi.org'},
++        ]);
++      }
+     }
+   }
+ 
+@@ -2518,17 +2646,21 @@
+       final response = await http.get(Uri.parse(
+           'https://newsapi.org/v2/everything?q=insurance+Kenya+blog&apiKey=$apiKey'));
+       if (response.statusCode == 200) {
+-        setState(() => blogPosts = (jsonDecode(response.body)['articles'] as List<dynamic>)
+-            .map((a) => a['title']?.toString() ?? 'Untitled').toList());
++        if (mounted) {
++          setState(() => blogPosts = (jsonDecode(response.body)['articles'] as List<dynamic>)
++              .map((a) => a['title']?.toString() ?? 'Untitled').toList());
++        }
+       } else {
+         throw Exception('Status ${response.statusCode}');
+       }
+     } catch (e) {
+-      setState(() => blogPosts = [
+-        'Understanding Insurance Policies in Kenya',
+-        'How to Choose the Right Insurance Provider',
+-        'The Future of Insurance in Kenya',
+-      ]);
++      if (mounted) {
++        setState(() => blogPosts = [
++          'Understanding Insurance Policies in Kenya',
++          'How to Choose the Right Insurance Provider',
++          'The Future of Insurance in Kenya',
++        ]);
++      }
+     }
+   }
+ 
+@@ -2925,7 +3057,13 @@
+ 
+   // ── Payment dialogs ───────────────────────────────────────────────────────────
+ 
+-  Future<void> showPaymentDialog(BuildContext context) async {
++  /// Shows a payment dialog for [cover].
++  ///
++  /// Previously this used a hardcoded placeholder cover ID ('cover123')
++  /// instead of the actual cover being paid for. Since this method wasn't
++  /// being called from anywhere yet, we fix it forward by requiring a real
++  /// [Cover] so any future caller is forced to supply the correct one.
++  Future<void> showPaymentDialog(BuildContext context, Cover cover) async {
+     String paymentMethod = 'mpesa';
+     String phoneNumber   = '';
+     String amount        = '';
+@@ -2977,7 +3115,7 @@
+               onPressed: () async {
+                 if (formKey.currentState!.validate()) {
+                   formKey.currentState!.save();
+-                  final result = await _initializePayment('cover123', amount, paymentMethod,
++                  final result = await _initializePayment(cover, amount, paymentMethod,
+                       phoneNumber: phoneNumber, autoBilling: autoBilling, context: dialogContext);
+                   Navigator.pop(dialogContext);
+                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+@@ -3016,7 +3154,13 @@
+     );
+   }
+ 
+-  Future<String> _initializePayment(String coverId, String amount, String paymentMethod,
++  /// Initiates payment for [cover].
++  ///
++  /// Takes the full [Cover] (not just its id) so that, when auto-billing is
++  /// requested, we can schedule it against the real cover's actual data
++  /// instead of fabricating a near-empty placeholder Cover with blank
++  /// name/company/policy fields and a hardcoded fake customer name.
++  Future<String> _initializePayment(Cover cover, String amount, String paymentMethod,
+       {String? phoneNumber, bool autoBilling = false, required BuildContext context}) async {
+     try {
+       final parsed = double.tryParse(amount);
+@@ -3033,22 +3177,21 @@
+       } else if (paymentMethod == 'paystack') {
+         final ok = await _initiatePaystackPayment(parsed, autoBilling);
+         if (ok && autoBilling) {
+-          await _schedulePaystackAutoBilling(Cover(
+-            id: coverId, premium: parsed, billingFrequency: 'monthly',
+-            formData: {'email': userDetails['email'] ?? '', 'name': 'User Name'},
+-            name: '', insuredItemId: '', companyId: '',
+-            type: PolicyType(id: '', name: '', description: ''),
+-            subtype: PolicySubtype(id: '', name: '', policyTypeId: '', description: ''),
+-            coverageType: CoverageType(id: '', name: '', description: ''),
+-            status: CoverStatus.pending, pdfTemplateKey: '',
+-            paymentStatus: '', startDate: DateTime.now(),
++          await _schedulePaystackAutoBilling(cover.copyWith(
++            premium: parsed,
++            billingFrequency: 'monthly',
++            formData: {
++              ...?cover.formData?.map((k, v) => MapEntry(k, v.toString())),
++              'email': userDetails['email'] ?? cover.formData?['email'] ?? '',
++              'name': userDetails['name'] ?? cover.formData?['name'] ?? cover.name,
++            },
+           ));
+         }
+         return ok ? 'completed' : 'failed';
+       } else {
+         final r = await http.post(Uri.parse('https://api.payment-gateway.com/v1/payments'),
+             headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer your-payment-api-key'},
+-            body: jsonEncode({'coverId': coverId, 'amount': parsed, 'currency': 'KES', 'description': 'Insurance cover payment'}));
++            body: jsonEncode({'coverId': cover.id, 'amount': parsed, 'currency': 'KES', 'description': 'Insurance cover payment'}));
+         return r.statusCode == 200 ? 'completed' : 'failed';
+       }
+     } catch (e) {
+@@ -3368,30 +3511,34 @@
+ 
+   // ── OCR & autofill ────────────────────────────────────────────────────────────
+ 
++  /// Extracts structured data from a photographed/scanned document using
++  /// Gemini (the AI provider actually configured in this app — see
++  /// GeminiService). This used to call OpenAI GPT-4o Vision directly with a
++  /// hardcoded placeholder key that was never set, so this always silently
++  /// returned null. It now matches the working implementation already used
++  /// in cover_screen.dart's CompanySelectionDialog.
+   Future<Map<String, String>?> _performOCR(File file) async {
+     try {
+       setState(() => _isOcrLoading = true);
+       final bytes = await file.readAsBytes();
+-      final b64   = base64Encode(bytes);
+-      final response = await http.post(
+-        Uri.parse('https://api.openai.com/v1/chat/completions'),
+-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer YOUR_OPENAI_API_KEY'},
+-        body: jsonEncode({'model': 'gpt-4o', 'messages': [{'role': 'user', 'content': [
+-          {'type': 'text', 'text': 'Extract: name, email, phone, id_number, kra_pin, vehicle_value, regno, chassis_number, health_condition, travel_destination, employee_count, insurer. Return JSON only.'},
+-          {'type': 'image_url', 'image_url': {'url': 'data:image/jpeg;base64,$b64'}},
+-        ]}], 'max_tokens': 300}),
++      final base64Image = base64Encode(bytes);
++
++      final rawText = await GeminiService.generateFromImage(
++        prompt:
++            'Extract the following fields from the provided document: name, email, phone, id_number, kra_pin, vehicle_value, regno, chassis_number, health_condition, travel_destination, employee_count, insurer. Return ONLY a JSON object.',
++        base64Image: base64Image,
++        maxOutputTokens: 300,
++        jsonResponse: true,
+       );
+-      if (response.statusCode == 200) {
+-        final data = jsonDecode(response.body);
+-        return (jsonDecode(data['choices'][0]['message']['content']) as Map<String, dynamic>)
+-            .map((k, v) => MapEntry(k, v.toString()));
+-      }
+-      return null;
++
++      final extracted = jsonDecode(GeminiService.cleanJsonText(rawText))
++          as Map<String, dynamic>;
++      return extracted.map((key, value) => MapEntry(key, value.toString()));
+     } catch (e) {
+       if (kDebugMode) print('OCR Error: $e');
+       return null;
+     } finally {
+-      setState(() => _isOcrLoading = false);
++      if (mounted) setState(() => _isOcrLoading = false);
+     }
+   }
+ 

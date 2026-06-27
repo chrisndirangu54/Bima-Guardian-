@@ -30,6 +30,7 @@ environment:
 # versions available, run `flutter pub outdated`.
 dependencies:
   flutter:
+
     sdk: flutter
 
   # The following adds the Cupertino Icons font to your application.
@@ -45,14 +46,13 @@ dependencies:
   collection: ^1.19.1
   mailer: ^6.4.1
   path_provider: ^2.1.5
-  pdf_text: ^0.5.0
   file_picker: ^8.3.2 # Downgraded to avoid win32 conflict
-  http: ^0.13.6
+  http: 1.2.2
   fl_chart: ^1.0.0
   firebase_core: ^3.13.0
   shared_preferences: ^2.2.0
   native_pdf_renderer: ^3.1.0
-  google_fonts: ^4.0.4
+  google_fonts: ^6.3.2
   cloud_firestore: ^5.4.4
   firebase_auth: ^5.3.1
   firebase_storage: ^12.3.4
@@ -71,6 +71,8 @@ dependencies:
   googleapis: ^13.1.0
   webview_flutter_web: ^0.2.3+4
   flutter_dotenv: ^5.2.1
+  syncfusion_flutter_pdf: ^26.1.35
+  pdfrx: ^2.2.8
 
 dependency_overrides:
   uuid: ^4.5.1 # Force uuid 4.5.1 for native_pdf_renderer
