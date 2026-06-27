@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as web;
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 import 'package:async/async.dart';
 import 'package:file_picker/file_picker.dart';
@@ -3394,11 +3396,20 @@ $text''',
   }
 
   Future<bool> _hasNetwork() async {
-    if (kIsWeb) return web.window.navigator.onLine ?? true;
     try {
-      final r = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 2));
-      return r.isNotEmpty && r[0].rawAddress.isNotEmpty;
-    } catch (_) { return false; }
+      final results = await Connectivity().checkConnectivity();
+      return !results.contains(ConnectivityResult.none) && results.isNotEmpty;
+    } catch (_) {
+      // Fall back to a real reachability check on non-web platforms if
+      // connectivity_plus itself fails for some reason.
+      if (kIsWeb) return true;
+      try {
+        final r = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 2));
+        return r.isNotEmpty && r[0].rawAddress.isNotEmpty;
+      } catch (_) {
+        return false;
+      }
+    }
   }
 
   Future<void> _cacheUserDetails(String userId, Map<String, String> details) async {
@@ -3479,7 +3490,8 @@ $text''',
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(dialogContext);
-                if (context.mounted) Navigator.push(context, MaterialPageRoute(
+                if (context.mounted) {
+                  Navigator.push(context, MaterialPageRoute(
                   builder: (_) => CoverDetailScreen(
                     type: type.name.toLowerCase(), subtype: subtype.name.toLowerCase(),
                     coverageType: coverageType.name.toLowerCase(),
@@ -3497,6 +3509,7 @@ $text''',
                     preSelectedCompany: preSelectedCompany,
                   ),
                 ));
+                }
               },
               child: const Text('Next'),
             ),
@@ -4068,8 +4081,10 @@ Future<void> showInsuranceDialog(BuildContext context, String insuranceType,
             if (kDebugMode) print('[wizard] onSubmit: progress saved, popping dialog');
             Navigator.of(dialogContext).pop();
             if (currentStep + 1 < configList.length) {
-              if (context.mounted) showInsuranceDialog(context, normalizedType, step: currentStep + 1,
+              if (context.mounted) {
+                showInsuranceDialog(context, normalizedType, step: currentStep + 1,
                   onFinalSubmit: onFinalSubmit, scaffoldMessengerKey: scaffoldMessengerKey);
+              }
             } else {
               final subtype  = dialogState.responses['subtype']?.toString();
               final coverage = dialogState.responses['coverage_type']?.toString();

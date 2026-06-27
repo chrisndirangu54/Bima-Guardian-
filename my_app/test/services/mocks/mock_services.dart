@@ -1,3 +1,5 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:my_app/Services/interfaces/auth_service_interface.dart';
 import 'package:my_app/Services/interfaces/policy_service_interface.dart';
 import 'package:my_app/Models/policy.dart';
@@ -5,23 +7,30 @@ import 'package:my_app/Models/company.dart';
 import 'package:my_app/Models/pdf_template.dart';
 import 'package:my_app/Models/cover.dart';
 
-// Simple fake UserCredential for tests
-class FakeUserCredential {}
-
 class MockAuthService implements IAuthService {
   bool initializeCalled = false;
   bool signInCalled = false;
 
   @override
-  Future<void> initializeUserData(user) async {
+  Future<void> initializeUserData(User user) async {
     initializeCalled = true;
     return;
   }
 
   @override
-  Future<FakeUserCredential> signInWithGoogle() async {
+  Future<UserCredential> signInWithGoogle() async {
     signInCalled = true;
-    return FakeUserCredential();
+    final auth = MockFirebaseAuth(
+      mockUser: MockUser(
+        isAnonymous: false,
+        uid: 'test-uid',
+        email: 'test@example.com',
+        displayName: 'Test User',
+      ),
+    );
+    return auth.signInWithCredential(
+      GoogleAuthProvider.credential(idToken: 'fake-id-token', accessToken: 'fake-access-token'),
+    );
   }
 }
 

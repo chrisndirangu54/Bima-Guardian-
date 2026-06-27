@@ -5,12 +5,19 @@ import 'package:provider/provider.dart';
 import 'package:my_app/Providers/theme_provider.dart';
 import 'package:my_app/insurance_app.dart';
 
+// AFTER
+import 'package:my_app/main.dart';   // wherever MyApp is defined
+
 void main() {
   testWidgets('App builds successfully with theme provider', (WidgetTester tester) async {
     await tester.pumpWidget(
-      ChangeNotifierProvider(
-        create: (_) => ThemeProvider(),
-        child: const InsuranceApp(),
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => ThemeProvider()),
+          ChangeNotifierProvider(create: (_) => ColorProvider()),
+          ChangeNotifierProvider(create: (_) => DialogState()),
+        ],
+        child: const MyApp(),          // ✅ matches actual class name
       ),
     );
 
