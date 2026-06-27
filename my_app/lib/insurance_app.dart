@@ -10,7 +10,6 @@ import 'package:my_app/Screens/webview_page.dart';
 import 'package:my_app/Services/email_analyzer.dart';
 import 'package:my_app/Services/company_config_service.dart';
 import 'package:my_app/Services/policy_module_service.dart';
-import 'package:web/web.dart' as web;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:collection/collection.dart';
@@ -3480,36 +3479,24 @@ $text''',
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(dialogContext);
-                try {
-                  final selectedInsuredItem = insuredItemId != null
-                      ? insuredItems.where((i) => i.id == insuredItemId).firstOrNull
-                      : null;
-                  if (context.mounted) {
-                    Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => CoverDetailScreen(
-                      type: type.name.toLowerCase(), subtype: subtype.name.toLowerCase(),
-                      coverageType: coverageType.name.toLowerCase(),
-                      insuredItem: selectedInsuredItem,
-                      fields: fields,
-                      onSubmit: (_) {},
-                      onAutofillPreviousPolicy: autofillFromPreviousPolicy,
-                      onAutofillLogbook: autofillFromLogbook,
-                      showCompanyDialog: (ctx, t, s, c, details, {required String subtypeId,
-                          required String coverageTypeId, String? preSelectedCompany}) =>
-                          _showCompanyDialog(ctx, t, s, c, details,
-                              subtypeId: subtypeId, coverageTypeId: coverageTypeId,
-                              preSelectedCompany: preSelectedCompany),
-                      preSelectedCompany: preSelectedCompany,
-                    ),
-                  ));
-                  }
-                } catch (e, st) {
-                  if (kDebugMode) print('Error opening cover detail screen: $e\n$st');
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Something went wrong opening this form. Please try again.')));
-                  }
-                }
+                if (context.mounted) Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => CoverDetailScreen(
+                    type: type.name.toLowerCase(), subtype: subtype.name.toLowerCase(),
+                    coverageType: coverageType.name.toLowerCase(),
+                    insuredItem: insuredItemId != null
+                        ? insuredItems.firstWhere((i) => i.id == insuredItemId) : null,
+                    fields: fields,
+                    onSubmit: (_) {},
+                    onAutofillPreviousPolicy: autofillFromPreviousPolicy,
+                    onAutofillLogbook: autofillFromLogbook,
+                    showCompanyDialog: (ctx, t, s, c, details, {required String subtypeId,
+                        required String coverageTypeId, String? preSelectedCompany}) =>
+                        _showCompanyDialog(ctx, t, s, c, details,
+                            subtypeId: subtypeId, coverageTypeId: coverageTypeId,
+                            preSelectedCompany: preSelectedCompany),
+                    preSelectedCompany: preSelectedCompany,
+                  ),
+                ));
               },
               child: const Text('Next'),
             ),
@@ -4081,21 +4068,9 @@ Future<void> showInsuranceDialog(BuildContext context, String insuranceType,
             if (kDebugMode) print('[wizard] onSubmit: progress saved, popping dialog');
             Navigator.of(dialogContext).pop();
             if (currentStep + 1 < configList.length) {
-              if (kDebugMode) print('[wizard] onSubmit: advancing to step ${currentStep + 1}');
-              if (context.mounted) {
-                await showInsuranceDialog(context, normalizedType, step: currentStep + 1,
-                    onFinalSubmit: onFinalSubmit, scaffoldMessengerKey: scaffoldMessengerKey);
-              } else {
-                // Don't fail silently: scaffoldMessengerKey is independent
-                // of `context`, so it can still notify the user even if the
-                // context we were holding has been unmounted.
-                if (kDebugMode) print('[wizard] onSubmit: context unmounted, cannot advance to step ${currentStep + 1}');
-                scaffoldMessengerKey.currentState?.showSnackBar(const SnackBar(
-                    content: Text('Something interrupted the form. Please start again.')));
-              }
-              if (kDebugMode) print('[wizard] onSubmit: showInsuranceDialog for next step returned');
+              if (context.mounted) showInsuranceDialog(context, normalizedType, step: currentStep + 1,
+                  onFinalSubmit: onFinalSubmit, scaffoldMessengerKey: scaffoldMessengerKey);
             } else {
-              if (kDebugMode) print('[wizard] onSubmit: final step reached, looking up policy/coverage');
               final subtype  = dialogState.responses['subtype']?.toString();
               final coverage = dialogState.responses['coverage_type']?.toString();
               if (kDebugMode) print('[wizard] onSubmit: subtype=$subtype coverage=$coverage');
